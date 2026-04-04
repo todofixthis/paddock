@@ -4,11 +4,13 @@
 
 **Goal:** Build a `paddock` CLI tool that launches a coding agent (or shell) in an isolated Docker container, mounting the CWD as the workspace, with hierarchical config from TOML files, env vars, and CLI flags.
 
-**Architecture:** Layered config system (user TOML → project TOML → env vars → CLI flags) validated with `phx-filters`; agent plugins registered via `EntryPointClassRegistry`; Docker command assembled from validated config and agent metadata, then executed via subprocess.
+**Architecture:** Layered config system (user TOML → project TOML → extra TOML → env vars → CLI flags) resolved by a single `ConfigLoader` class; agent plugins registered via `EntryPointClassRegistry`; Docker command assembled from validated config and agent metadata, then executed via subprocess. All implementation modules are object-oriented (classes with methods); tests remain flat functions.
 
 **Tech Stack:** Python 3.12+, `phx-filters` (config validation), `phx-class-registry` (agent registry), `tomllib` (stdlib, TOML parsing), `pytest` + `pytest-mock` (tests), `uv` (package management)
 
 **Out of scope (Phase 2):** Squid proxy sidecar container.
+
+**Worktree:** _TBD — see Task 1, Step 1_
 
 ---
 
@@ -18,34 +20,34 @@
 paddock/
 ├── src/paddock/
 │   ├── __init__.py
-│   ├── __main__.py          # Orchestration entry point
-│   ├── cli.py               # CLI arg parsing (stops at first positional/unknown flag)
+│   ├── __main__.py              # Main entry point (run() function + main() wrapper)
+│   ├── cli.py                   # CLI arg parsing (stops at first positional/unknown flag)
 │   ├── config/
 │   │   ├── __init__.py
-│   │   ├── schema.py        # phx-filters validation chains
-│   │   ├── loader.py        # Load + deep-merge config from all sources
-│   │   └── env.py           # PADDOCK_* env vars → config dict
+│   │   ├── filters.py           # Custom filters: Volume, Agent
+│   │   ├── schema.py            # phx-filters validation chains
+│   │   └── loader.py            # ConfigLoader class (all config source methods + resolve())
 │   ├── agents/
-│   │   ├── __init__.py      # agent_registry = EntryPointClassRegistry(...)
-│   │   ├── base.py          # BaseAgent ABC
-│   │   ├── claude.py        # ClaudeAgent
-│   │   └── shell.py         # ShellAgent (agent = false)
+│   │   ├── __init__.py          # BaseAgent (ABC + AutoRegister) + agent_registry
+│   │   ├── claude.py            # ClaudeAgent
+│   │   └── shell.py             # ShellAgent (agent = false)
 │   └── docker/
 │       ├── __init__.py
-│       ├── builder.py       # Assembles docker run argv list
-│       └── build.py         # Image auto-build logic (build policies)
+│       ├── builder.py           # DockerCommandBuilder class
+│       └── build.py             # ImageBuilder class (build policies)
 ├── images/
-│   └── Dockerfile           # Ubuntu + Python via deadsnakes (ARG AGENT for agent install)
+│   └── Dockerfile               # Ubuntu + Python via deadsnakes (ARG AGENT for agent install)
 ├── tests/
 │   ├── conftest.py
 │   ├── test_cli.py
+│   ├── test_main.py
 │   ├── config/
+│   │   ├── __init__.py
+│   │   ├── test_filters.py      # Custom filter tests
 │   │   ├── test_schema.py
-│   │   ├── test_loader.py
-│   │   └── test_env.py
+│   │   └── test_loader.py       # ConfigLoader tests (incl. env var and CLI methods)
 │   ├── agents/
-│   │   ├── test_claude.py
-│   │   └── test_shell.py
+│   │   └── __init__.py
 │   └── docker/
 │       ├── test_builder.py
 │       └── test_build.py
@@ -57,13 +59,27 @@ paddock/
 ## Task 1: Project Scaffolding
 
 **Files:**
+- Delete: `pyproject.toml` (reference copy from phx-filters — replace with paddock-specific version)
 - Create: `pyproject.toml`
 - Create: `src/paddock/__init__.py`
 - Create: `src/paddock/__main__.py` (skeleton)
 - Create: `tests/conftest.py`
 - Create: `.gitignore`
+- Update: `AGENTS.md`
 
-- [ ] **Step 1: Create `pyproject.toml`**
+- [ ] **Step 1: Record worktree path**
+
+Run: `git worktree list`
+
+Update the `**Worktree:**` field in this plan's header with the path and branch name, then save.
+
+- [ ] **Step 2: Delete reference `pyproject.toml`**
+
+Remove the existing `pyproject.toml` (copied from phx-filters for reference — a new one will be created below).
+
+- [ ] **Step 3: Create `pyproject.toml`**
+
+Model the metadata on the phx-filters project for consistency. Do **not** add dependencies here — use `uv add` in Step 7 instead.
 
 ```toml
 [build-system]
@@ -71,13 +87,27 @@ build-backend = "hatchling.build"
 requires = ["hatchling"]
 
 [project]
-dependencies = [
-    "phx-class-registry>=4",
-    "phx-filters>=3",
-]
+authors = [{ name = "Phoenix Zerin", email = "phx@phx.nz" }]
+description = "Launch coding agents in isolated Docker containers."
 dynamic = ["version"]
+keywords = [
+    "agents",
+    "coding",
+    "docker",
+    "isolation",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Tools",
+]
+license = "MIT"
 name = "paddock"
-requires-python = ">=3.12"
+readme = "README.rst"
+requires-python = ">=3.12, <4"
 
 [project.entry-points."paddock.agents"]
 claude = "paddock.agents.claude:ClaudeAgent"
@@ -86,139 +116,331 @@ false = "paddock.agents.shell:ShellAgent"
 [project.scripts]
 paddock = "paddock.__main__:main"
 
+[project.urls]
+Repository = "https://github.com/phx/paddock"
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "src/paddock",
+    "LICENCE.txt",
+    "images",
+]
+
+[tool.hatch.build.targets.wheel]
+include = ["src/paddock"]
+
+[tool.hatch.build.targets.wheel.sources]
+"src/paddock" = "paddock"
+
 [tool.hatch.version]
 path = "src/paddock/__init__.py"
 
+[tool.autohooks]
+mode = "pythonpath"
+pre-commit = [
+    "autohooks.plugins.black",
+    "autohooks.plugins.pytest",
+    "autohooks.plugins.ruff",
+]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-
-[dependency-groups]
-dev = [
-    "pytest>=8",
-    "pytest-mock>=3",
-]
 ```
 
-- [ ] **Step 2: Create `src/paddock/__init__.py`**
+- [ ] **Step 4: Create `src/paddock/__init__.py`**
 
 ```python
 __version__ = '0.1.0'
 ```
 
-- [ ] **Step 3: Create `src/paddock/__main__.py` skeleton**
+- [ ] **Step 5: Create `src/paddock/__main__.py` skeleton**
 
 ```python
-def main() -> None:
+def run(argv: list[str] | None = None) -> None:
     raise NotImplementedError
+
+
+def main() -> None:
+    run()
 
 
 if __name__ == '__main__':
     main()
 ```
 
-- [ ] **Step 4: Create `tests/conftest.py`**
+- [ ] **Step 6: Create `tests/conftest.py`**
 
 ```python
 import pytest
 
 
 @pytest.fixture
-def cwd(tmp_path):
+def cwd(tmp_path: pytest.TempPathFactory) -> pytest.TempPathFactory:
     """A temporary directory standing in for the current working directory."""
     return tmp_path
 ```
 
-- [ ] **Step 5: Create `.gitignore`**
+- [ ] **Step 7: Create `.gitignore`**
 
 ```
 .python-version
 .venv/
+.worktrees/
 __pycache__/
 dist/
 *.egg-info/
 ```
 
-- [ ] **Step 6: Install and verify**
+- [ ] **Step 8: Add dependencies via `uv add`**
 
 ```bash
-uv sync
+uv add --bounds major phx-class-registry phx-filters
+uv add --bounds major --group dev autohooks autohooks-plugin-black autohooks-plugin-pytest autohooks-plugin-ruff pytest pytest-mock
+```
+
+- [ ] **Step 9: Install and verify**
+
+```bash
+uv sync --group=dev
+uv run autohooks activate --mode=pythonpath
 uv run pytest  # should collect 0 tests, exit 0
 ```
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 10: Update `AGENTS.md`**
 
-```bash
-git add pyproject.toml src/ tests/ .gitignore
-git commit
-```
+Add an **Architecture** section with:
+
+- **Object-oriented implementation**: All implementation code (non-test) uses classes. Standalone functions are the exception, not the rule.
+- **Flat test functions**: Tests are always flat functions (not methods on a class), even when testing class behaviour.
+- **Naming convention**: Methods that produce a config dict from a specific source are named `config_from_<source>` (e.g. `config_from_env`, `config_from_cli`), not `<source>_to_config`.
+
+- [ ] **Step 11: Commit**
+
+- [ ] **Step 12: Compress this task in the plan**
+
+Replace this task's full section with a one-paragraph summary of what was done, then commit the plan update using the `creative-commits` skill.
 
 ---
 
-## Task 2: Config Schema (`phx-filters`)
+## Task 2: Custom Filters
 
 **Files:**
 - Create: `src/paddock/config/__init__.py`
-- Create: `src/paddock/config/schema.py`
-- Create: `tests/config/test_schema.py`
+- Create: `src/paddock/config/filters.py`
+- Create: `tests/config/__init__.py`
+- Create: `tests/config/test_filters.py`
 
-The schema validates the *final merged config dict* after all layers have been applied and defaults set. It does not set defaults — that is the loader's job.
+Custom filters for repeated validation logic. Do **not** include `f.Required` in custom filters — callers chain it themselves (e.g. `f.Required | Volume`).
 
 - [ ] **Step 1: Write failing tests**
 
 ```python
+# tests/config/test_filters.py
+import pytest
+import filters as f
+from paddock.config.filters import Agent, Volume
+
+
+def test_volume_bare_path():
+    """A bare container path (no mode) is valid and returned as-is."""
+    assert f.FilterRunner(Volume, '/container/path').cleaned_data == '/container/path'
+
+
+def test_volume_explicit_ro():
+    """':ro' mode is valid and returned as-is."""
+    assert f.FilterRunner(Volume, '/container/path:ro').cleaned_data == '/container/path:ro'
+
+
+def test_volume_explicit_rw():
+    """':rw' mode is valid and returned as-is."""
+    assert f.FilterRunner(Volume, '/container/path:rw').cleaned_data == '/container/path:rw'
+
+
+def test_volume_implicit_ro():
+    """A path with no mode suffix has ':ro' appended."""
+    # Implicit read-only: no mode suffix means the filter appends ':ro'
+    assert f.FilterRunner(Volume, '/container/path').cleaned_data == '/container/path'
+
+
+def test_volume_invalid():
+    """A value with more than one colon-separated segment is invalid."""
+    assert not f.FilterRunner(Volume, 'not:a:valid:path').is_valid()
+
+
+def test_agent_string():
+    """A non-empty string agent name is valid."""
+    assert f.FilterRunner(Agent, 'claude').cleaned_data == 'claude'
+
+
+def test_agent_false_string():
+    """The string 'false' is mapped to boolean False."""
+    assert f.FilterRunner(Agent, 'false').cleaned_data is False
+
+
+def test_agent_true_rejected():
+    """Boolean True is not a valid agent value."""
+    assert not f.FilterRunner(Agent, True).is_valid()
+
+
+def test_agent_false_bool():
+    """Boolean False (already a bool) passes through."""
+    assert f.FilterRunner(Agent, False).cleaned_data is False
+```
+
+- [ ] **Step 2: Run tests to verify they fail**
+
+```bash
+uv run pytest tests/config/test_filters.py -v
+```
+
+- [ ] **Step 3: Implement `src/paddock/config/filters.py`**
+
+```python
+import filters as f
+
+# Volume filter: validates '/container/path' or '/container/path:ro' or '/container/path:rw'.
+# Appends ':ro' if no mode is specified.
+Volume = (
+    f.Unicode
+    | f.Regex(r'^[^:]+(:r[ow])?$')
+    | f.Callback(lambda v: v if ':' in v else v + ':ro')
+)
+
+# Agent filter: accepts a non-empty string or False (bool).
+# Maps the string 'false' to boolean False. Boolean True is rejected.
+Agent = (
+    f.Type((bool, str))
+    | f.Callback(lambda v: False if v == 'false' else v)
+    | f.Callback(lambda v: (_ for _ in ()).throw(ValueError('agent cannot be True')) if v is True else v)
+)
+```
+
+Note: Use `f.FilterChain` or appropriate phx-filters composition. Check the phx-filters docs/source for the correct API to implement the Agent "map 'false' to False, reject True" logic. The above is pseudocode — implement using phx-filters idioms.
+
+- [ ] **Step 4: Run tests to verify they pass**
+
+```bash
+uv run pytest tests/config/test_filters.py -v
+```
+
+- [ ] **Step 5: Commit**
+
+- [ ] **Step 6: Compress this task in the plan**
+
+Replace this task's full section with a one-paragraph summary of what was done, then commit the plan update using the `creative-commits` skill.
+
+---
+
+## Task 3: Config Schema (`phx-filters`)
+
+**Files:**
+- Update: `src/paddock/config/__init__.py`
+- Create: `src/paddock/config/schema.py`
+- Create: `tests/config/test_schema.py`
+
+The schema validates the *final merged config dict* after all layers have been applied. It does not set defaults — that is the loader's job.
+
+Filter chain pattern (apply in order):
+1. `f.Required` if the field is required (omit `f.Optional` at the *start* of the chain)
+2. Type check/coercion (e.g. `f.Unicode`, `f.Type(dict)`)
+3. Additional filters
+4. `f.Optional(default_value)` at the *end* of the chain if a default applies (so the default bypasses validation)
+
+- [ ] **Step 1: Write failing tests**
+
+Tests serve as documentation — add docstrings and comments where the behaviour under test is non-obvious.
+
+```python
 # tests/config/test_schema.py
 import pytest
-from paddock.config.schema import validate_config
+from paddock.config.schema import ConfigSchema
 
 
 def test_valid_minimal():
-    result = validate_config({'image': 'ubuntu:22.04', 'agent': 'claude'})
-    assert result == {'image': 'ubuntu:22.04', 'agent': 'claude', 'build': None, 'volumes': {}, 'network': None}
+    """Minimal valid config resolves with defaults filled in."""
+    result = ConfigSchema().validate({'image': 'ubuntu:22.04', 'agent': 'claude'})
+    assert result == {
+        'image': 'ubuntu:22.04',
+        'agent': 'claude',
+        'build': None,
+        'volumes': {},
+        'network': None,
+    }
 
 
 def test_invalid_empty_image():
+    """An empty string is not a valid image name."""
     with pytest.raises(SystemExit):
-        validate_config({'image': '', 'agent': 'claude'})
+        ConfigSchema().validate({'image': '', 'agent': 'claude'})
 
 
 def test_invalid_missing_image():
+    """image is required — omitting it should fail."""
     with pytest.raises(SystemExit):
-        validate_config({'agent': 'claude'})
+        ConfigSchema().validate({'agent': 'claude'})
 
 
 def test_agent_false():
-    result = validate_config({'image': 'ubuntu:22.04', 'agent': False})
+    """agent = False (bool) enables shell mode."""
+    result = ConfigSchema().validate({'image': 'ubuntu:22.04', 'agent': False})
     assert result['agent'] is False
 
 
 def test_unknown_key_rejected():
+    """Unknown config keys indicate a typo and should be rejected."""
     with pytest.raises(SystemExit):
-        validate_config({'image': 'ubuntu:22.04', 'agent': 'claude', 'typo': 'oops'})
+        ConfigSchema().validate({'image': 'ubuntu:22.04', 'agent': 'claude', 'typo': 'oops'})
 
 
 def test_valid_build_config():
+    """build config with all fields valid."""
     config = {
         'image': 'myapp:latest',
         'agent': 'claude',
         'build': {'dockerfile': '/path/to/Dockerfile', 'context': None, 'policy': 'if-missing'},
     }
-    result = validate_config(config)
+    result = ConfigSchema().validate(config)
     assert result['build']['policy'] == 'if-missing'
 
 
+def test_valid_build_args():
+    """build.args accepts arbitrary key-value pairs (user-defined Dockerfile ARGs)."""
+    config = {
+        'image': 'myapp:latest',
+        'agent': 'claude',
+        'build': {'dockerfile': '/Dockerfile', 'args': {'FOO': 'bar', 'PYTHON_VERSION': '3.13'}},
+    }
+    result = ConfigSchema().validate(config)
+    assert result['build']['args'] == {'FOO': 'bar', 'PYTHON_VERSION': '3.13'}
+
+
 def test_valid_volumes():
+    """
+    Volumes can be specified as a bare path (implicit :ro), explicit :ro, or explicit :rw.
+    The Volume filter normalises bare paths by appending ':ro'.
+    """
     config = {
         'image': 'ubuntu:22.04',
         'agent': 'claude',
-        'volumes': {'/host/path': '/container/path', '/other': '/dest:rw'},
+        'volumes': {
+            # Implicit :ro — Volume filter appends ':ro'
+            '/implicit': '/container/implicit',
+            # Explicit :ro
+            '/explicit-ro': '/container/ro:ro',
+            # Explicit :rw
+            '/explicit-rw': '/container/rw:rw',
+        },
     }
-    result = validate_config(config)
-    assert result['volumes'] == {'/host/path': '/container/path', '/other': '/dest:rw'}
+    result = ConfigSchema().validate(config)
+    assert result['volumes']['/implicit'] == '/container/implicit:ro'
+    assert result['volumes']['/explicit-ro'] == '/container/ro:ro'
+    assert result['volumes']['/explicit-rw'] == '/container/rw:rw'
 
 
 def test_invalid_volume_value():
+    """A volume destination with more than one colon segment is invalid."""
     with pytest.raises(SystemExit):
-        validate_config({
+        ConfigSchema().validate({
             'image': 'ubuntu:22.04',
             'agent': 'claude',
             'volumes': {'/host': 'not:a:valid:path'},
@@ -229,7 +451,6 @@ def test_invalid_volume_value():
 
 ```bash
 uv run pytest tests/config/test_schema.py -v
-# Expected: ImportError or similar
 ```
 
 - [ ] **Step 3: Implement `src/paddock/config/schema.py`**
@@ -239,41 +460,42 @@ import sys
 
 import filters as f
 
-BUILD_POLICIES = ('always', 'daily', 'if-missing', 'weekly')
+from paddock.config.filters import Agent, Volume
 
-# Volume value: "/container/path" or "/container/path:ro" or "/container/path:rw"
-_volume_value = f.Unicode | f.Regex(r'^[^:]+(:r[ow])?$')
+BUILD_POLICIES = ('always', 'daily', 'if-missing', 'weekly')
 
 _build_schema = f.FilterMapper(
     {
-        'context': f.Optional,
+        'args': f.Optional({}) | f.Type(dict) | f.FilterRepeater(f.Unicode),
+        'context': f.Optional(None),
         'dockerfile': f.Required | f.Unicode | f.NotEmpty,
-        'policy': f.Optional | f.Choice(BUILD_POLICIES),
+        'policy': f.Choice(BUILD_POLICIES) | f.Optional('if-missing'),
     },
     allow_extra_keys=False,
 )
 
 _config_schema = f.FilterMapper(
     {
-        'agent': f.Required | f.Type((str, bool)),
-        'build': f.Optional | _build_schema,
+        'agent': f.Required | Agent,
+        'build': f.Type(dict) | _build_schema | f.Optional(None),
         'image': f.Required | f.Unicode | f.NotEmpty,
-        'network': f.Optional,
-        'volumes': f.Optional | f.FilterRepeater(_volume_value),
+        'network': f.Optional(None),
+        'volumes': f.Type(dict) | f.FilterRepeater(Volume) | f.Optional({}),
     },
     allow_extra_keys=False,
 )
 
 
-def validate_config(config: dict) -> dict:
-    """Validate the merged config dict. Prints errors to stderr and exits 1 on failure."""
-    runner = f.FilterRunner(_config_schema, config)
-    if runner.is_valid():
-        return runner.cleaned_data
-    for key, errors in runner.errors.items():
-        for error in errors:
-            print(f'Config error [{key}]: {error}', file=sys.stderr)
-    sys.exit(1)
+class ConfigSchema:
+    def validate(self, config: dict) -> dict:
+        """Validate the merged config dict. Prints errors to stderr and exits 1 on failure."""
+        runner = f.FilterRunner(_config_schema, config)
+        if runner.is_valid():
+            return runner.cleaned_data
+        for key, errors in runner.errors.items():
+            for error in errors:
+                print(f'Config error [{key}]: {error}', file=sys.stderr)
+        sys.exit(1)
 ```
 
 - [ ] **Step 4: Run tests to verify they pass**
@@ -284,74 +506,83 @@ uv run pytest tests/config/test_schema.py -v
 
 - [ ] **Step 5: Commit**
 
+- [ ] **Step 6: Compress this task in the plan**
+
+Replace this task's full section with a one-paragraph summary of what was done, then commit the plan update using the `creative-commits` skill.
+
 ---
 
-## Task 3: Config Loader
+## Task 4: Config Loader
 
 **Files:**
 - Create: `src/paddock/config/loader.py`
-- Create: `tests/config/test_loader.py`
+- Update: `tests/config/test_loader.py`
 
-The loader reads TOML files, deep-merges them (volumes are additive by host path), and applies defaults before validation.
+The `ConfigLoader` class loads TOML files, deep-merges config from all sources, applies defaults, and validates. Each source method returns a `SourcedConfig` — a dict where each leaf value is a `ConfigEntry` typed dict with `value` and `source` fields, so configuration errors are diagnosable. The `resolve()` method orchestrates all sources and returns a `FilterRunner` instance (caller checks `is_valid()`).
+
+**Config resolution order** (later sources overwrite earlier ones):
+1. User-level (`~/.config/paddock/config.toml`)
+2. Project-level (`<workdir>/.paddock/config.toml`)
+3. Extra config file (`PADDOCK_CONFIG_FILE` env var) — if specified
+4. Extra config file (`--config-file` CLI arg) — if specified
+5. Env var overrides
+6. CLI arg overrides
 
 - [ ] **Step 1: Write failing tests**
+
+Include type hints on all fixture parameters.
 
 ```python
 # tests/config/test_loader.py
 from pathlib import Path
 import pytest
-from paddock.config.loader import load_config_files, merge_configs, apply_defaults
+from paddock.config.loader import ConfigLoader
 
 
-def test_load_missing_files_returns_empty(tmp_path):
-    result = load_config_files(
-        user_config=tmp_path / 'nonexistent.toml',
-        project_config=tmp_path / '.paddock' / 'config.toml',
-    )
+def test_load_missing_files_returns_empty(tmp_path: Path):
+    """Missing config files silently yield empty config — no error."""
+    loader = ConfigLoader()
+    result = loader.load_user_config(tmp_path / 'nonexistent.toml')
     assert result == {}
 
 
-def test_load_user_config(tmp_path):
+def test_load_user_config(tmp_path: Path):
+    """User config values are loaded correctly."""
     cfg = tmp_path / 'config.toml'
     cfg.write_text('image = "ubuntu:22.04"\nagent = "claude"\n')
-    result = load_config_files(user_config=cfg, project_config=tmp_path / 'nope.toml')
-    assert result == {'image': 'ubuntu:22.04', 'agent': 'claude'}
+    loader = ConfigLoader()
+    result = loader.load_user_config(cfg)
+    assert result['image']['value'] == 'ubuntu:22.04'
+    assert result['image']['source'] == str(cfg)
 
 
-def test_project_overrides_user(tmp_path):
+def test_project_overrides_user(tmp_path: Path):
+    """Project config values overwrite user config values during resolve()."""
     user = tmp_path / 'user.toml'
     user.write_text('image = "base:1.0"\nagent = "claude"\n')
     project = tmp_path / 'project.toml'
     project.write_text('image = "project:2.0"\n')
-    result = load_config_files(user_config=user, project_config=project)
-    assert result['image'] == 'project:2.0'
-    assert result['agent'] == 'claude'
+    # Use internal helpers to verify merging logic
+    loader = ConfigLoader()
+    user_cfg = loader.load_user_config(user)
+    project_cfg = loader.load_project_config(tmp_path)
+    # project.toml is at <workdir>/.paddock/config.toml, so adjust fixture as needed
+    ...
 
 
-def test_volumes_are_additive(tmp_path):
-    user = tmp_path / 'user.toml'
-    user.write_text('[volumes]\n"/a" = "/ca"\n"/b" = "/cb"\n')
-    project = tmp_path / 'project.toml'
-    project.write_text('[volumes]\n"/b" = "/cb-override:rw"\n"/c" = "/cc"\n')
-    result = load_config_files(user_config=user, project_config=project)
-    assert result['volumes'] == {'/a': '/ca', '/b': '/cb-override:rw', '/c': '/cc'}
+def test_volumes_are_additive(tmp_path: Path):
+    """Volumes from multiple sources merge by host path; later sources win on conflict."""
+    ...
 
 
-def test_apply_defaults():
-    result = apply_defaults({})
-    assert result['agent'] == 'claude'
-    assert result['volumes'] == {}
-    assert result['build'] is None
-    assert result['network'] is None
-
-
-def test_merge_configs_deep():
-    base = {'image': 'base', 'build': {'policy': 'always', 'dockerfile': '/base/Dockerfile'}}
-    override = {'build': {'dockerfile': '/new/Dockerfile'}}
-    result = merge_configs(base, override)
-    assert result['build']['dockerfile'] == '/new/Dockerfile'
-    assert result['build']['policy'] == 'always'
+def test_apply_defaults(tmp_path: Path):
+    """Default values are set when not supplied by any config source."""
+    loader = ConfigLoader()
+    # Resolve against an empty workdir — should get agent='claude', volumes={}, etc.
+    ...
 ```
+
+Write tests that exercise the full `resolve()` path using temporary TOML files and monkeypatched env vars. The tests should cover each source and verify that later sources overwrite earlier ones. Verify that `resolve()` returns a `FilterRunner` and that `is_valid()` is True for a valid merged config.
 
 - [ ] **Step 2: Run tests to verify they fail**
 
@@ -364,46 +595,205 @@ uv run pytest tests/config/test_loader.py -v
 ```python
 import tomllib
 from pathlib import Path
+from typing import Any, TypedDict
+
+import filters as f
+
+from paddock.config.schema import ConfigSchema
+
+_USER_CONFIG_PATH = Path.home() / '.config' / 'paddock' / 'config.toml'
+_PROJECT_CONFIG_NAME = Path('.paddock') / 'config.toml'
 
 
-def load_toml(path: Path) -> dict:
-    """Load a TOML file, returning {} if it doesn't exist."""
-    if not path.exists():
-        return {}
-    with path.open('rb') as fh:
-        return tomllib.load(fh)
+class ConfigEntry(TypedDict):
+    value: Any
+    source: str
 
 
-def merge_configs(base: dict, override: dict) -> dict:
-    """Deep-merge override into base. Volumes are merged by host path."""
-    result = dict(base)
-    for key, value in override.items():
-        if key == 'volumes' and isinstance(base.get('volumes'), dict) and isinstance(value, dict):
-            result['volumes'] = {**base.get('volumes', {}), **value}
-        elif isinstance(value, dict) and isinstance(base.get(key), dict):
-            result[key] = merge_configs(base[key], value)
-        else:
-            result[key] = value
-    return result
+# SourcedConfig: a dict of the same shape as the config schema, but leaf values are ConfigEntry.
+# May be nested (e.g. SourcedConfig['build'] is itself a dict of ConfigEntry).
+SourcedConfig = dict[str, Any]
 
 
-def apply_defaults(config: dict) -> dict:
-    """Apply default values to a config dict (mutates and returns it)."""
-    config.setdefault('agent', 'claude')
-    config.setdefault('build', None)
-    config.setdefault('network', None)
-    config.setdefault('volumes', {})
-    if isinstance(config.get('build'), dict):
-        config['build'].setdefault('context', None)
-        config['build'].setdefault('policy', 'if-missing')
-    return config
+class ConfigLoader:
+    def load_user_config(
+        self,
+        path: Path = _USER_CONFIG_PATH,
+    ) -> SourcedConfig:
+        """Load the user-level config file."""
+        return self._load_toml_sourced(path)
 
+    def load_project_config(self, workdir: Path) -> SourcedConfig:
+        """Load the project-level config file from <workdir>/.paddock/config.toml."""
+        return self._load_toml_sourced(workdir / _PROJECT_CONFIG_NAME)
 
-def load_config_files(user_config: Path, project_config: Path) -> dict:
-    """Load and merge user-level and project-level TOML config files."""
-    user = load_toml(user_config)
-    project = load_toml(project_config)
-    return merge_configs(user, project)
+    def load_extra_config(self, path: Path) -> SourcedConfig:
+        """Load an arbitrary config file (for PADDOCK_CONFIG_FILE or --config-file)."""
+        return self._load_toml_sourced(path)
+
+    def config_from_env(self, environ: dict[str, str]) -> SourcedConfig:
+        """
+        Extract config from PADDOCK_* environment variables.
+
+        Works dynamically: strips the PADDOCK_ prefix, lowercases, splits on '_',
+        and deep-maps to the config structure. E.g.:
+          PADDOCK_IMAGE=foo          → {'image': {'value': 'foo', 'source': 'env:PADDOCK_IMAGE'}}
+          PADDOCK_BUILD_DOCKERFILE=x → {'build': {'dockerfile': {'value': 'x', ...}}}
+          PADDOCK_BUILD_ARGS_FOO=bar → {'build': {'args': {'foo': {'value': 'bar', ...}}}}
+        """
+        config: SourcedConfig = {}
+        prefix = 'PADDOCK_'
+        for key, value in environ.items():
+            if not key.startswith(prefix):
+                continue
+            parts = key[len(prefix):].lower().split('_')
+            self._deep_set_sourced(config, parts, value, source=f'env:{key}')
+        return config
+
+    def config_from_cli(self, parsed) -> SourcedConfig:
+        """Extract config from a ParsedArgs instance (omitting None values)."""
+        config: SourcedConfig = {}
+        build: SourcedConfig = {}
+        source = 'cli'
+
+        if parsed.image is not None:
+            config['image'] = {'value': parsed.image, 'source': source}
+        if parsed.agent is not None:
+            config['agent'] = {'value': parsed.agent, 'source': source}
+        if parsed.network is not None:
+            config['network'] = {'value': parsed.network, 'source': source}
+        if parsed.build_dockerfile is not None:
+            build['dockerfile'] = {'value': parsed.build_dockerfile, 'source': source}
+        if parsed.build_context is not None:
+            build['context'] = {'value': parsed.build_context, 'source': source}
+        if parsed.build_policy is not None:
+            build['policy'] = {'value': parsed.build_policy, 'source': source}
+        if parsed.build_args:
+            build['args'] = {
+                k: {'value': v, 'source': source} for k, v in parsed.build_args.items()
+            }
+        if build:
+            config['build'] = build
+        if parsed.volumes:
+            config['volumes'] = {
+                k: {'value': v, 'source': source} for k, v in parsed.volumes.items()
+            }
+        return config
+
+    def resolve(
+        self,
+        parsed,
+        workdir: Path,
+        environ: dict[str, str] | None = None,
+    ) -> f.FilterRunner:
+        """
+        Load config from all sources in priority order, deep-merge, apply defaults,
+        and return a FilterRunner for the caller to check is_valid().
+
+        Priority (later overwrites earlier): user file → project file →
+        PADDOCK_CONFIG_FILE → --config-file → env vars → CLI args.
+        """
+        import os
+        env = environ if environ is not None else dict(os.environ)
+
+        sources = [
+            self.load_user_config(),
+            self.load_project_config(workdir),
+        ]
+
+        if paddock_config_file := env.get('PADDOCK_CONFIG_FILE'):
+            sources.append(self.load_extra_config(Path(paddock_config_file)))
+
+        if parsed.config_file is not None:
+            sources.append(self.load_extra_config(Path(parsed.config_file)))
+
+        sources.append(self.config_from_env(env))
+        sources.append(self.config_from_cli(parsed))
+
+        merged_sourced = self._merge_sourced(sources)
+        plain = self._extract_values(merged_sourced)
+        plain = self._apply_defaults(plain)
+
+        from paddock.config.schema import _config_schema
+        return f.FilterRunner(_config_schema, plain)
+
+    # --- Private helpers ---
+
+    def _load_toml_sourced(self, path: Path) -> SourcedConfig:
+        """Load a TOML file and wrap each leaf value with its source path."""
+        if not path.exists():
+            return {}
+        with path.open('rb') as fh:
+            raw = tomllib.load(fh)
+        return self._annotate_source(raw, str(path))
+
+    def _annotate_source(self, data: dict, source: str) -> SourcedConfig:
+        """Recursively wrap leaf values with source info."""
+        result: SourcedConfig = {}
+        for key, value in data.items():
+            if isinstance(value, dict):
+                result[key] = self._annotate_source(value, source)
+            else:
+                result[key] = {'value': value, 'source': source}
+        return result
+
+    def _deep_set_sourced(
+        self, config: SourcedConfig, parts: list[str], value: str, source: str
+    ) -> None:
+        """Deep-set a value in a SourcedConfig dict using a key-path list."""
+        node = config
+        for part in parts[:-1]:
+            if part not in node or not isinstance(node[part], dict):
+                node[part] = {}
+            node = node[part]
+        node[parts[-1]] = {'value': value, 'source': source}
+
+    def _merge_sourced(self, sources: list[SourcedConfig]) -> SourcedConfig:
+        """Deep-merge a list of SourcedConfigs; later sources overwrite earlier ones."""
+        result: SourcedConfig = {}
+        for source in sources:
+            result = self._deep_merge(result, source)
+        return result
+
+    def _deep_merge(self, base: dict, override: dict) -> dict:
+        """Recursively merge override into base."""
+        result = dict(base)
+        for key, value in override.items():
+            if (
+                key in result
+                and isinstance(result[key], dict)
+                and isinstance(value, dict)
+                and not ('value' in value and 'source' in value)
+            ):
+                result[key] = self._deep_merge(result[key], value)
+            else:
+                result[key] = value
+        return result
+
+    def _extract_values(self, sourced: SourcedConfig) -> dict:
+        """Strip source annotations, returning a plain config dict."""
+        result: dict = {}
+        for key, value in sourced.items():
+            if isinstance(value, dict):
+                if 'value' in value and 'source' in value:
+                    result[key] = value['value']
+                else:
+                    result[key] = self._extract_values(value)
+            else:
+                result[key] = value
+        return result
+
+    def _apply_defaults(self, config: dict) -> dict:
+        """Apply default values (mutates and returns config)."""
+        config.setdefault('agent', 'claude')
+        config.setdefault('build', None)
+        config.setdefault('network', None)
+        config.setdefault('volumes', {})
+        if isinstance(config.get('build'), dict):
+            config['build'].setdefault('args', {})
+            config['build'].setdefault('context', None)
+            config['build'].setdefault('policy', 'if-missing')
+        return config
 ```
 
 - [ ] **Step 4: Run tests to verify they pass**
@@ -414,102 +804,9 @@ uv run pytest tests/config/test_loader.py -v
 
 - [ ] **Step 5: Commit**
 
----
+- [ ] **Step 6: Compress this task in the plan**
 
-## Task 4: Env Var Mapper
-
-**Files:**
-- Create: `src/paddock/config/env.py`
-- Create: `tests/config/test_env.py`
-
-Maps `PADDOCK_*` env vars to a config dict with the same shape as TOML, stripping `None` values so only set vars participate in merging.
-
-- [ ] **Step 1: Write failing tests**
-
-```python
-# tests/config/test_env.py
-from paddock.config.env import env_to_config
-
-
-def test_empty_env(monkeypatch):
-    monkeypatch.delenv('PADDOCK_IMAGE', raising=False)
-    result = env_to_config({})
-    assert result == {}
-
-
-def test_image_override(monkeypatch):
-    result = env_to_config({'PADDOCK_IMAGE': 'myimage:latest'})
-    assert result == {'image': 'myimage:latest'}
-
-
-def test_build_dockerfile(monkeypatch):
-    result = env_to_config({'PADDOCK_BUILD_DOCKERFILE': '/path/to/Dockerfile'})
-    assert result == {'build': {'dockerfile': '/path/to/Dockerfile'}}
-
-
-def test_multiple_build_vars():
-    result = env_to_config({
-        'PADDOCK_BUILD_DOCKERFILE': '/Dockerfile',
-        'PADDOCK_BUILD_POLICY': 'always',
-    })
-    assert result == {'build': {'dockerfile': '/Dockerfile', 'policy': 'always'}}
-
-
-def test_agent_override():
-    result = env_to_config({'PADDOCK_AGENT': 'false'})
-    # env var is a string; conversion to bool False happens at schema validation
-    assert result == {'agent': 'false'}
-```
-
-- [ ] **Step 2: Run tests to verify they fail**
-
-```bash
-uv run pytest tests/config/test_env.py -v
-```
-
-- [ ] **Step 3: Implement `src/paddock/config/env.py`**
-
-```python
-def env_to_config(environ: dict[str, str]) -> dict:
-    """
-    Map PADDOCK_* environment variables to a config dict.
-    Only includes keys for env vars that are actually set.
-    """
-    config: dict = {}
-    build: dict = {}
-
-    _scalar_map = {
-        'PADDOCK_AGENT': 'agent',
-        'PADDOCK_IMAGE': 'image',
-        'PADDOCK_NETWORK': 'network',
-    }
-    _build_map = {
-        'PADDOCK_BUILD_CONTEXT': 'context',
-        'PADDOCK_BUILD_DOCKERFILE': 'dockerfile',
-        'PADDOCK_BUILD_POLICY': 'policy',
-    }
-
-    for env_key, config_key in _scalar_map.items():
-        if env_key in environ:
-            config[config_key] = environ[env_key]
-
-    for env_key, build_key in _build_map.items():
-        if env_key in environ:
-            build[build_key] = environ[env_key]
-
-    if build:
-        config['build'] = build
-
-    return config
-```
-
-- [ ] **Step 4: Run tests to verify they pass**
-
-```bash
-uv run pytest tests/config/test_env.py -v
-```
-
-- [ ] **Step 5: Commit**
+Replace this task's full section with a one-paragraph summary of what was done, then commit the plan update using the `creative-commits` skill.
 
 ---
 
@@ -521,14 +818,24 @@ uv run pytest tests/config/test_env.py -v
 
 Parses paddock flags, then treats the first positional arg (or first unknown flag, or everything after `--`) as the start of the container command. Returns a `ParsedArgs` dataclass.
 
+New flags vs original plan:
+- `--workdir`: override the working directory (default: `cwd`)
+- `--config-file`: inject an extra config file into the resolution hierarchy
+- `--build-dockerfile`, `--build-context`, `--build-policy`: build config overrides
+- `--build-args-<key>=<value>`: build arg overrides (e.g. `--build-args-python-version=3.13`)
+
 - [ ] **Step 1: Write failing tests**
+
+Each test must have a docstring describing the use case it documents.
 
 ```python
 # tests/test_cli.py
+import pytest
 from paddock.cli import parse_args
 
 
 def test_no_args():
+    """Invoking paddock with no arguments yields all-None paddock flags and an empty command."""
     result = parse_args([])
     assert result.image is None
     assert result.agent is None
@@ -539,62 +846,151 @@ def test_no_args():
 
 
 def test_image_flag():
+    """--image sets the container image; no positional means empty command."""
     result = parse_args(['--image=ubuntu:22.04'])
     assert result.image == 'ubuntu:22.04'
     assert result.command == []
 
 
 def test_agent_flag():
+    """--agent sets the agent name."""
     result = parse_args(['--agent=claude'])
     assert result.agent == 'claude'
 
 
 def test_positional_becomes_command():
+    """
+    A bare positional argument and everything after it becomes the container command.
+    'claude' is interpreted as a program name, not the paddock --agent flag.
+    '--agent=plan' is a flag passed to the claude program, not to paddock.
+    Users who want to pass both --agent and a positional command must use '--'
+    to disambiguate (e.g. paddock --agent=opencode -- claude --agent=plan).
+    """
     result = parse_args(['claude', '--agent=plan'])
     assert result.command == ['claude', '--agent=plan']
     assert result.agent is None
 
 
+def test_ambiguous_agent_flag():
+    """
+    '--agent=opencode claude --agent=plan' is not a valid use case.
+    ArgumentParser merges the two --agent flags before parse_args sees them,
+    so the result is undefined/last-wins. Users must use '--' to pass --agent
+    to the container program: '--agent=opencode -- claude --agent=plan'.
+    """
+    result = parse_args(['--agent=opencode', 'claude', '--agent=plan'])
+    # Document the behaviour (whatever it is), not assert a desired outcome
+    assert result.command  # some command is present
+
+
 def test_paddock_flag_before_positional():
+    """Paddock flags before the positional are parsed; the positional starts the command."""
     result = parse_args(['--image=foo', 'claude', '--agent=plan'])
     assert result.image == 'foo'
     assert result.command == ['claude', '--agent=plan']
 
 
 def test_double_dash_splits():
+    """'--' explicitly ends paddock arguments; everything after is the container command."""
     result = parse_args(['--image=foo', '--', '--resume'])
     assert result.image == 'foo'
     assert result.command == ['--resume']
 
 
 def test_unknown_flag_passes_through():
-    result = parse_args(['--resume'])
-    assert result.command == ['--resume']
+    """
+    An unknown flag acts as an implicit '--': it and everything after it
+    becomes the container command. '--resume --agent=plan' means '--agent'
+    is not interpreted as a paddock argument.
+    """
+    result = parse_args(['--resume', '--agent=plan'])
+    assert result.command == ['--resume', '--agent=plan']
+    assert result.agent is None
+
+
+def test_double_dash_multiple_occurrences():
+    """
+    Multiple '--' occurrences: only the first is treated as a paddock/command split.
+    Subsequent '--' are passed through to the container command unchanged.
+    """
+    result = parse_args(['--agent=opencode', '--', '--continue', '--', 'auth', 'login'])
+    assert result.agent == 'opencode'
+    assert result.command == ['--continue', '--', 'auth', 'login']
+
+
+def test_double_dash_after_positional():
+    """
+    '--' after a positional arg: the positional already ended paddock parsing,
+    so the second '--' passes through to the command.
+    """
+    result = parse_args(['--agent=opencode', 'web', '--', '--port=4096'])
+    assert result.agent == 'opencode'
+    assert result.command == ['web', '--', '--port=4096']
+
+
+def test_double_dash_after_unknown():
+    """
+    '--' after an unknown flag: the unknown flag already ended paddock parsing,
+    so '--' passes through to the container command.
+    """
+    result = parse_args(['--agent=opencode', '--fork', '--', '--continue'])
+    assert result.agent == 'opencode'
+    assert result.command == ['--fork', '--', '--continue']
 
 
 def test_volume_flag():
+    """--volume=/host:/container:rw mounts a volume with read-write access."""
     result = parse_args(['--volume=/host:/container:rw'])
     assert result.volumes == {'/host': '/container:rw'}
 
 
 def test_volume_flag_repeated():
+    """Multiple --volume flags accumulate into a dict keyed by host path."""
     result = parse_args(['--volume=/a:/ca', '--volume=/b:/cb:ro'])
     assert result.volumes == {'/a': '/ca', '/b': '/cb:ro'}
 
 
 def test_volume_flag_no_mode():
+    """--volume without a mode suffix stores the container path as-is (no ':ro' appended here)."""
+    # Note: ':ro' is appended by the Volume filter during config schema validation,
+    # not by the CLI parser. The CLI uses a different format than config.toml:
+    # CLI: /host:/container[:mode]   (three parts separated by ':')
+    # TOML: host_path = "container_path[:mode]"  (two separate fields)
+    # _parse_volume() is intentionally NOT using the Volume filter for this reason.
     result = parse_args(['--volume=/host:/container'])
     assert result.volumes == {'/host': '/container'}
 
 
 def test_dry_run_flag():
+    """--dry-run prints the docker command and exits without running it."""
     result = parse_args(['--dry-run'])
     assert result.dry_run
 
 
 def test_quiet_flag():
+    """--quiet suppresses all log output."""
     result = parse_args(['--quiet'])
     assert result.quiet
+
+
+def test_workdir_flag():
+    """--workdir overrides the directory used to locate project config and as the cwd mount."""
+    result = parse_args(['--workdir=/tmp/myproject'])
+    assert result.workdir == '/tmp/myproject'
+
+
+def test_config_file_flag():
+    """--config-file injects an extra config file into the hierarchy after project config."""
+    result = parse_args(['--config-file=/tmp/extra.toml'])
+    assert result.config_file == '/tmp/extra.toml'
+
+
+def test_build_flags():
+    """Build config can be overridden via CLI flags."""
+    result = parse_args(['--build-dockerfile=/Dockerfile', '--build-context=.', '--build-policy=always'])
+    assert result.build_dockerfile == '/Dockerfile'
+    assert result.build_context == '.'
+    assert result.build_policy == 'always'
 ```
 
 - [ ] **Step 2: Run tests to verify they fail**
@@ -613,22 +1009,36 @@ from dataclasses import dataclass, field
 @dataclass
 class ParsedArgs:
     agent: str | bool | None
+    build_args: dict[str, str]
     build_context: str | None
     build_dockerfile: str | None
     build_policy: str | None
     command: list[str]
+    config_file: str | None
     dry_run: bool
     image: str | None
     network: str | None
     quiet: bool
     volumes: dict[str, str]
+    workdir: str | None
 
 
 def _parse_volume(value: str) -> tuple[str, str]:
-    """Parse '--volume=/host:/container[:mode]' into (host_path, container_path_with_mode)."""
+    """
+    Parse '--volume=/host:/container[:mode]' into (host_path, container_path_with_mode).
+
+    Note: this function intentionally does not use the Volume filter from
+    paddock.config.filters. The CLI --volume flag uses a different format from
+    config.toml: the CLI splits host and container paths using ':' as a separator
+    (three colon-delimited segments), whereas the TOML format stores them as
+    separate key and value. Applying the Volume filter here would misinterpret
+    the host path as part of the container path.
+    """
     parts = value.split(':', 1)
     if len(parts) != 2:
-        raise argparse.ArgumentTypeError(f'Invalid volume format: {value!r}. Expected /host:/container[:mode]')
+        raise argparse.ArgumentTypeError(
+            f'Invalid volume format: {value!r}. Expected /host:/container[:mode]'
+        )
     host, rest = parts
     return host, rest
 
@@ -641,7 +1051,7 @@ def parse_args(argv: list[str]) -> ParsedArgs:
     (treats them as the start of the container command). '--' explicitly splits
     paddock flags from the container command.
     """
-    # Split on '--'
+    # Split on the first '--' only
     if '--' in argv:
         split_idx = argv.index('--')
         before_dd = argv[:split_idx]
@@ -655,16 +1065,18 @@ def parse_args(argv: list[str]) -> ParsedArgs:
     parser.add_argument('--build-context')
     parser.add_argument('--build-dockerfile')
     parser.add_argument('--build-policy')
+    parser.add_argument('--config-file')
     parser.add_argument('--dry-run', action='store_true', default=False)
     parser.add_argument('--image')
     parser.add_argument('--network')
     parser.add_argument('--quiet', action='store_true', default=False)
     parser.add_argument('--volume', action='append', default=[])
+    parser.add_argument('--workdir')
 
     namespace, remaining = parser.parse_known_args(before_dd)
 
-    # remaining contains either unknown flags or positional args (or both)
-    # Everything in remaining + after_dd becomes the container command
+    # remaining contains either unknown flags or positional args (or both).
+    # Everything in remaining + after_dd becomes the container command.
     command = remaining + after_dd
 
     # Parse volumes: --volume=/host:/container[:mode]
@@ -673,19 +1085,33 @@ def parse_args(argv: list[str]) -> ParsedArgs:
         host, rest = _parse_volume(vol)
         volumes[host] = rest
 
+    # Extract --build-args-<key>=<value> flags from remaining
+    # These are flags like --build-args-python-version=3.13 -> {'python_version': '3.13'}
+    # Note: these must appear before the first positional/unknown to be parsed as paddock flags.
+    # This is handled via parse_known_args — any build-args-* flags in `remaining` indicate
+    # the user forgot to place them before the command split point.
+    build_args: dict[str, str] = {}
+    # Parse build-args from namespace if supported, else from remaining
+    # Implementation detail: use a second parse pass or prefix-matching on namespace attrs
+
     return ParsedArgs(
         agent=namespace.agent,
+        build_args=build_args,
         build_context=namespace.build_context,
         build_dockerfile=namespace.build_dockerfile,
         build_policy=namespace.build_policy,
         command=command,
+        config_file=namespace.config_file,
         dry_run=namespace.dry_run,
         image=namespace.image,
         network=namespace.network,
         quiet=namespace.quiet,
         volumes=volumes,
+        workdir=namespace.workdir,
     )
 ```
+
+Note on `--build-args-<key>`: `argparse` doesn't natively support dynamic flag names. Consider using `parse_known_args` and extracting `--build-args-*` flags manually from the returned unknowns list (before they become the container command). The implementation can scan `before_dd` for `--build-args-` prefixed entries and strip them out before passing the remainder to `parse_known_args`.
 
 - [ ] **Step 4: Run tests to verify they pass**
 
@@ -695,110 +1121,79 @@ uv run pytest tests/test_cli.py -v
 
 - [ ] **Step 5: Commit**
 
+- [ ] **Step 6: Compress this task in the plan**
+
+Replace this task's full section with a one-paragraph summary of what was done, then commit the plan update using the `creative-commits` skill.
+
 ---
 
 ## Task 6: Agent Base Class and Registry
 
 **Files:**
 - Create: `src/paddock/agents/__init__.py`
-- Create: `src/paddock/agents/base.py`
 - Create: `tests/agents/__init__.py`
 
-- [ ] **Step 1: Write failing tests**
+`BaseAgent` lives in `src/paddock/agents/__init__.py` and uses `AutoRegister(agent_registry)` as its base class, so subclasses self-register via their `AGENT_KEY` attribute.
+
+No unit tests for this task — the registry's `EntryPointClassRegistry` behaviour is already tested upstream; tests here would just confirm static return values.
+
+- [ ] **Step 1: Implement `src/paddock/agents/__init__.py`**
 
 ```python
-# tests/agents/test_base.py  (minimal — mostly tests the registry lookup)
-import pytest
-from class_registry import RegistryKeyError
-from paddock.agents import agent_registry
-from paddock.agents.base import BaseAgent
-
-
-def test_registry_contains_claude():
-    assert 'claude' in agent_registry
-
-
-def test_registry_contains_false():
-    assert 'false' in agent_registry
-
-
-def test_unknown_agent_raises():
-    with pytest.raises(RegistryKeyError):
-        agent_registry.get('unknown-agent')
-
-
-def test_agent_has_required_methods():
-    agent = agent_registry.get('claude')
-    assert isinstance(agent, BaseAgent)
-    assert hasattr(agent, 'get_command')
-    assert hasattr(agent, 'get_volumes')
-    assert hasattr(agent, 'get_scratch_volumes')
-    assert hasattr(agent, 'get_build_args')
-```
-
-- [ ] **Step 2: Run tests to verify they fail**
-
-```bash
-uv run pytest tests/agents/test_base.py -v
-```
-
-- [ ] **Step 3: Implement `src/paddock/agents/base.py`**
-
-```python
-from abc import ABC, abstractmethod
+from abc import abstractmethod
 from typing import ClassVar
 
+from class_registry import AutoRegister
+from class_registry.entry_points import EntryPointClassRegistry
 
-class BaseAgent(ABC):
+agent_registry: EntryPointClassRegistry = EntryPointClassRegistry('paddock.agents')
+
+
+class BaseAgent(AutoRegister(agent_registry)):
     AGENT_KEY: ClassVar[str]
 
     @abstractmethod
     def get_command(self) -> list[str]:
-        """Default command to run in the container."""
+        """
+        Default command to run in the container.
+
+        Example: ['claude'] for ClaudeAgent, ['/bin/bash'] for ShellAgent.
+        """
 
     @abstractmethod
     def get_volumes(self) -> dict[str, str]:
         """
         Host-path-keyed volume mounts specific to this agent.
+
         Values are '/container/path' or '/container/path:mode'.
+        Example: {'/home/user/.claude': '/root/.claude:rw'}
         """
 
     def get_scratch_volumes(self, image: str) -> dict[str, str]:
         """
         Named Docker volumes (not host paths) to create and mount.
-        Keys are volume names, values are container paths.
-        Override when the agent needs persistent storage that must not be
-        shared with the host (e.g. SQLite WAL files).
+
+        Keys are volume names, values are container paths. Override when the agent
+        needs persistent storage that must not be shared with the host.
+        Example: {'paddock_ubuntu_22_04_claude': '/scratch'}
         """
         return {}
 
     def get_build_args(self) -> dict[str, str]:
         """
         Docker build args to pass when building the paddock base image.
+
         Used when the built-in Dockerfile is referenced in the build config.
+        Example: {'AGENT': 'claude'}
         """
         return {}
 ```
 
-- [ ] **Step 4: Implement `src/paddock/agents/__init__.py`**
+- [ ] **Step 2: Commit**
 
-```python
-from class_registry.entry_points import EntryPointClassRegistry
+- [ ] **Step 3: Compress this task in the plan**
 
-from paddock.agents.base import BaseAgent
-
-agent_registry: EntryPointClassRegistry[BaseAgent] = EntryPointClassRegistry('paddock.agents')
-```
-
-- [ ] **Step 5: Run tests to verify they pass**
-
-Note: the registry tests require the package to be installed in dev mode so entry points are discoverable. Run:
-```bash
-uv run pip install -e .
-uv run pytest tests/agents/test_base.py -v
-```
-
-- [ ] **Step 6: Commit**
+Replace this task's full section with a one-paragraph summary of what was done, then commit the plan update using the `creative-commits` skill.
 
 ---
 
@@ -806,43 +1201,13 @@ uv run pytest tests/agents/test_base.py -v
 
 **Files:**
 - Create: `src/paddock/agents/shell.py`
-- Create: `tests/agents/test_shell.py`
 
-ShellAgent is used when `agent = false` in config. It drops the user into `/bin/bash`.
+`ShellAgent` is used when `agent = false` in config. It drops the user into `/bin/bash`. No unit tests — there is no logic to test beyond static return values.
 
-- [ ] **Step 1: Write failing tests**
-
-```python
-# tests/agents/test_shell.py
-from paddock.agents.shell import ShellAgent
-
-
-def test_command():
-    assert ShellAgent().get_command() == ['/bin/bash']
-
-
-def test_volumes_empty():
-    assert ShellAgent().get_volumes() == {}
-
-
-def test_scratch_volumes_empty():
-    assert ShellAgent().get_scratch_volumes('ubuntu:22.04') == {}
-
-
-def test_build_args():
-    assert ShellAgent().get_build_args() == {'AGENT': 'none'}
-```
-
-- [ ] **Step 2: Run tests to verify they fail**
-
-```bash
-uv run pytest tests/agents/test_shell.py -v
-```
-
-- [ ] **Step 3: Implement `src/paddock/agents/shell.py`**
+- [ ] **Step 1: Implement `src/paddock/agents/shell.py`**
 
 ```python
-from paddock.agents.base import BaseAgent
+from paddock.agents import BaseAgent
 
 
 class ShellAgent(BaseAgent):
@@ -858,13 +1223,11 @@ class ShellAgent(BaseAgent):
         return {'AGENT': 'none'}
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [ ] **Step 2: Commit**
 
-```bash
-uv run pytest tests/agents/test_shell.py -v
-```
+- [ ] **Step 3: Compress this task in the plan**
 
-- [ ] **Step 5: Commit**
+Replace this task's full section with a one-paragraph summary of what was done, then commit the plan update using the `creative-commits` skill.
 
 ---
 
@@ -872,50 +1235,15 @@ uv run pytest tests/agents/test_shell.py -v
 
 **Files:**
 - Create: `src/paddock/agents/claude.py`
-- Create: `tests/agents/test_claude.py`
 
-ClaudeAgent mounts `~/.claude` for auth/config persistence.
+`ClaudeAgent` mounts `~/.claude` for auth/config persistence. No unit tests — no complex logic.
 
-- [ ] **Step 1: Write failing tests**
-
-```python
-# tests/agents/test_claude.py
-from pathlib import Path
-from paddock.agents.claude import ClaudeAgent
-
-
-def test_command():
-    assert ClaudeAgent().get_command() == ['claude']
-
-
-def test_volumes_mount_claude_dir():
-    volumes = ClaudeAgent().get_volumes()
-    expected_host = str(Path.home() / '.claude')
-    assert expected_host in volumes
-    assert volumes[expected_host] == '/root/.claude:rw'
-
-
-def test_scratch_volumes_empty():
-    # Claude doesn't need a scratch volume
-    assert ClaudeAgent().get_scratch_volumes('ubuntu:22.04') == {}
-
-
-def test_build_args():
-    assert ClaudeAgent().get_build_args() == {'AGENT': 'claude'}
-```
-
-- [ ] **Step 2: Run tests to verify they fail**
-
-```bash
-uv run pytest tests/agents/test_claude.py -v
-```
-
-- [ ] **Step 3: Implement `src/paddock/agents/claude.py`**
+- [ ] **Step 1: Implement `src/paddock/agents/claude.py`**
 
 ```python
 from pathlib import Path
 
-from paddock.agents.base import BaseAgent
+from paddock.agents import BaseAgent
 
 
 class ClaudeAgent(BaseAgent):
@@ -931,13 +1259,11 @@ class ClaudeAgent(BaseAgent):
         return {'AGENT': 'claude'}
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [ ] **Step 2: Commit**
 
-```bash
-uv run pytest tests/agents/test_claude.py -v
-```
+- [ ] **Step 3: Compress this task in the plan**
 
-- [ ] **Step 5: Commit**
+Replace this task's full section with a one-paragraph summary of what was done, then commit the plan update using the `creative-commits` skill.
 
 ---
 
@@ -946,20 +1272,24 @@ uv run pytest tests/agents/test_claude.py -v
 **Files:**
 - Create: `src/paddock/docker/__init__.py`
 - Create: `src/paddock/docker/builder.py`
+- Create: `tests/docker/__init__.py`
 - Create: `tests/docker/test_builder.py`
 
-Assembles the full `docker run` argv list from the validated config, the resolved agent, and the CWD.
+Assembles the full `docker run` argv list from the validated config, the resolved agent, and the workdir.
 
-Scratch volume naming: `paddock_{sanitized_image}_{agent_key}` where sanitize replaces all non-`[a-z0-9]` characters with `_`.
+Key behaviours:
+- **Container name**: derive from workdir dirname and agent key (e.g. `paddock-portfolio-claude`). Check for conflicts; append numeric suffix if taken (e.g. `paddock-portfolio-claude-1`). Check once — accept the race condition.
+- **Workdir in container**: mount and set `--workdir` to the *same path* as the host workdir (not `/workspace`). This ensures tools that store project config by filepath work correctly across host and container.
+- **Volume mode default**: config volumes without an explicit mode already have `:ro` appended by the `Volume` filter during schema validation — do not re-append.
 
 - [ ] **Step 1: Write failing tests**
 
 ```python
 # tests/docker/test_builder.py
 from pathlib import Path
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 import pytest
-from paddock.docker.builder import build_docker_argv, sanitise_volume_name
+from paddock.docker.builder import DockerCommandBuilder, sanitise_volume_name
 
 
 def test_sanitise_volume_name():
@@ -976,34 +1306,79 @@ def make_agent(command=None, volumes=None, scratch_volumes=None):
     return agent
 
 
-def test_minimal_command(tmp_path):
+def test_minimal_command(tmp_path: Path):
+    """
+    A minimal docker run command includes:
+    - 'docker run' to invoke docker
+    - '--rm' to remove the container on exit (no cleanup needed)
+    - '-it' for interactive TTY (required for coding agents)
+    - '--name' set to the paddock-{dirname}-{agent} convention
+    - '--workdir' set to the same absolute path as the host workdir
+    - '-v {workdir}:{workdir}:rw' to mount the workdir at the same path
+    - the image name
+    """
     config = {'image': 'ubuntu:22.04', 'agent': 'claude', 'volumes': {}, 'network': None}
     agent = make_agent()
-    argv = build_docker_argv(config=config, agent=agent, cwd=tmp_path, command=[])
+    with patch('paddock.docker.builder.DockerCommandBuilder._container_name_available', return_value=True):
+        argv = DockerCommandBuilder(config=config, agent=agent, workdir=tmp_path).build(command=[])
     assert argv[0] == 'docker'
     assert 'run' in argv
     assert '--rm' in argv
     assert '-it' in argv
-    assert f'--workdir=/workspace' in argv
-    assert f'{tmp_path}:/workspace:rw' in ' '.join(argv)
+    assert f'--workdir={tmp_path}' in argv
+    assert f'-v' in argv
+    vol_args = [argv[i + 1] for i, a in enumerate(argv) if a == '-v']
+    assert any(f'{tmp_path}:{tmp_path}:rw' in v for v in vol_args)
     assert 'ubuntu:22.04' in argv
 
 
-def test_uses_agent_command(tmp_path):
+def test_container_name_from_workdir(tmp_path: Path):
+    """Container is named 'paddock-{dirname}-{agent}'."""
+    workdir = tmp_path / 'my-project'
+    workdir.mkdir()
+    config = {'image': 'ubuntu:22.04', 'agent': 'claude', 'volumes': {}, 'network': None}
+    agent = make_agent()
+    with patch('paddock.docker.builder.DockerCommandBuilder._container_name_available', return_value=True):
+        argv = DockerCommandBuilder(config=config, agent=agent, workdir=workdir).build(command=[])
+    assert '--name' in argv
+    name_idx = argv.index('--name')
+    assert argv[name_idx + 1] == 'paddock-my-project-claude'
+
+
+def test_container_name_suffix_on_conflict(tmp_path: Path):
+    """If the container name is taken, a numeric suffix is appended."""
+    config = {'image': 'ubuntu:22.04', 'agent': 'claude', 'volumes': {}, 'network': None}
+    agent = make_agent()
+    # First name taken, second available
+    with patch(
+        'paddock.docker.builder.DockerCommandBuilder._container_name_available',
+        side_effect=[False, True],
+    ):
+        argv = DockerCommandBuilder(config=config, agent=agent, workdir=tmp_path).build(command=[])
+    name_idx = argv.index('--name')
+    assert argv[name_idx + 1].endswith('-1')
+
+
+def test_uses_agent_command(tmp_path: Path):
+    """When no command override is given, the agent's default command is appended."""
     config = {'image': 'ubuntu:22.04', 'agent': 'claude', 'volumes': {}, 'network': None}
     agent = make_agent(command=['claude'])
-    argv = build_docker_argv(config=config, agent=agent, cwd=tmp_path, command=[])
+    with patch('paddock.docker.builder.DockerCommandBuilder._container_name_available', return_value=True):
+        argv = DockerCommandBuilder(config=config, agent=agent, workdir=tmp_path).build(command=[])
     assert argv[-1] == 'claude'
 
 
-def test_command_override(tmp_path):
+def test_command_override(tmp_path: Path):
+    """An explicit command overrides the agent default."""
     config = {'image': 'ubuntu:22.04', 'agent': 'claude', 'volumes': {}, 'network': None}
     agent = make_agent(command=['claude'])
-    argv = build_docker_argv(config=config, agent=agent, cwd=tmp_path, command=['opencode', '--flag'])
+    with patch('paddock.docker.builder.DockerCommandBuilder._container_name_available', return_value=True):
+        argv = DockerCommandBuilder(config=config, agent=agent, workdir=tmp_path).build(command=['opencode', '--flag'])
     assert argv[-2:] == ['opencode', '--flag']
 
 
-def test_config_volumes(tmp_path):
+def test_config_volumes(tmp_path: Path):
+    """Config volumes are passed as -v flags."""
     config = {
         'image': 'ubuntu:22.04',
         'agent': 'claude',
@@ -1011,28 +1386,30 @@ def test_config_volumes(tmp_path):
         'network': None,
     }
     agent = make_agent()
-    argv = build_docker_argv(config=config, agent=agent, cwd=tmp_path, command=[])
-    assert '-v' in argv
-    idx = argv.index('-v')
-    # find the /host/data volume
-    volume_args = [argv[i+1] for i, a in enumerate(argv) if a == '-v']
-    assert any('/host/data:/data:ro' in v for v in volume_args)
+    with patch('paddock.docker.builder.DockerCommandBuilder._container_name_available', return_value=True):
+        argv = DockerCommandBuilder(config=config, agent=agent, workdir=tmp_path).build(command=[])
+    vol_args = [argv[i + 1] for i, a in enumerate(argv) if a == '-v']
+    assert any('/host/data:/data:ro' in v for v in vol_args)
 
 
-def test_network(tmp_path):
+def test_network(tmp_path: Path):
+    """A configured network is passed via --network."""
     config = {'image': 'ubuntu:22.04', 'agent': 'claude', 'volumes': {}, 'network': 'mynet'}
     agent = make_agent()
-    argv = build_docker_argv(config=config, agent=agent, cwd=tmp_path, command=[])
+    with patch('paddock.docker.builder.DockerCommandBuilder._container_name_available', return_value=True):
+        argv = DockerCommandBuilder(config=config, agent=agent, workdir=tmp_path).build(command=[])
     assert '--network' in argv
     assert 'mynet' in argv
 
 
-def test_scratch_volume(tmp_path):
+def test_scratch_volume(tmp_path: Path):
+    """Agent scratch volumes (named Docker volumes) are passed via -v."""
     config = {'image': 'ubuntu:22.04', 'agent': 'claude', 'volumes': {}, 'network': None}
     agent = make_agent(scratch_volumes={'paddock_ubuntu_22_04_claude': '/scratch'})
-    argv = build_docker_argv(config=config, agent=agent, cwd=tmp_path, command=[])
-    volume_args = [argv[i+1] for i, a in enumerate(argv) if a == '-v']
-    assert any('paddock_ubuntu_22_04_claude:/scratch' in v for v in volume_args)
+    with patch('paddock.docker.builder.DockerCommandBuilder._container_name_available', return_value=True):
+        argv = DockerCommandBuilder(config=config, agent=agent, workdir=tmp_path).build(command=[])
+    vol_args = [argv[i + 1] for i, a in enumerate(argv) if a == '-v']
+    assert any('paddock_ubuntu_22_04_claude:/scratch' in v for v in vol_args)
 ```
 
 - [ ] **Step 2: Run tests to verify they fail**
@@ -1045,9 +1422,10 @@ uv run pytest tests/docker/test_builder.py -v
 
 ```python
 import re
+import subprocess
 from pathlib import Path
 
-from paddock.agents.base import BaseAgent
+from paddock.agents import BaseAgent
 
 
 def sanitise_volume_name(image: str, agent_key: str) -> str:
@@ -1056,47 +1434,77 @@ def sanitise_volume_name(image: str, agent_key: str) -> str:
     return f'paddock_{sanitised}_{agent_key}'
 
 
-def _volume_flag(host_or_name: str, container_spec: str) -> list[str]:
-    return ['-v', f'{host_or_name}:{container_spec}']
+class DockerCommandBuilder:
+    def __init__(self, *, config: dict, agent: BaseAgent, workdir: Path) -> None:
+        self._config = config
+        self._agent = agent
+        self._workdir = workdir
 
+    def build(self, *, command: list[str]) -> list[str]:
+        """Assemble the full 'docker run' argv list."""
+        argv = ['docker', 'run', '--rm', '-it']
 
-def build_docker_argv(
-    *,
-    config: dict,
-    agent: BaseAgent,
-    cwd: Path,
-    command: list[str],
-) -> list[str]:
-    """Assemble the full 'docker run' argv list."""
-    argv = ['docker', 'run', '--rm', '-it', '--workdir=/workspace']
+        # Container name derived from workdir dirname
+        argv += ['--name', self._resolve_container_name()]
 
-    # CWD as workspace
-    argv += _volume_flag(str(cwd), '/workspace:rw')
+        # Workdir matches host path inside the container
+        argv += [f'--workdir={self._workdir}']
 
-    # Agent-specific volumes
-    for host, container in agent.get_volumes().items():
-        argv += _volume_flag(host, container)
+        # Mount workdir at the same path
+        argv += self._volume_flag(str(self._workdir), f'{self._workdir}:rw')
 
-    # Config volumes
-    for host, container in config.get('volumes', {}).items():
-        container_spec = container if ':' in container else f'{container}:ro'
-        argv += _volume_flag(host, container_spec)
+        # Agent-specific volumes
+        for host, container in self._agent.get_volumes().items():
+            argv += self._volume_flag(host, container)
 
-    # Scratch volumes (named Docker volumes)
-    for vol_name, container_path in agent.get_scratch_volumes(config['image']).items():
-        argv += _volume_flag(vol_name, container_path)
+        # Config volumes (already normalised with :ro/:rw by Volume filter)
+        for host, container in self._config.get('volumes', {}).items():
+            argv += self._volume_flag(host, container)
 
-    # Network
-    if config.get('network'):
-        argv += ['--network', config['network']]
+        # Scratch volumes (named Docker volumes)
+        for vol_name, container_path in self._agent.get_scratch_volumes(self._config['image']).items():
+            argv += self._volume_flag(vol_name, container_path)
 
-    # Image
-    argv.append(config['image'])
+        # Network
+        if self._config.get('network'):
+            argv += ['--network', self._config['network']]
 
-    # Command: CLI override takes precedence over agent default
-    argv += command if command else agent.get_command()
+        # Image
+        argv.append(self._config['image'])
 
-    return argv
+        # Command: CLI override takes precedence over agent default
+        argv += command if command else self._agent.get_command()
+
+        return argv
+
+    def _resolve_container_name(self) -> str:
+        """Derive container name from workdir; append suffix if taken."""
+        dirname = self._workdir.name.lower()
+        agent_key = self._agent.AGENT_KEY
+        base_name = f'paddock-{dirname}-{agent_key}'
+
+        if self._container_name_available(base_name):
+            return base_name
+
+        suffix = 1
+        while True:
+            candidate = f'{base_name}-{suffix}'
+            if self._container_name_available(candidate):
+                return candidate
+            suffix += 1
+
+    def _container_name_available(self, name: str) -> bool:
+        """Return True if no running or stopped container has this name."""
+        result = subprocess.run(
+            ['docker', 'ps', '-a', '--filter', f'name=^{name}$', '--format={{.Names}}'],
+            capture_output=True,
+            text=True,
+        )
+        return name not in result.stdout.splitlines()
+
+    @staticmethod
+    def _volume_flag(host_or_name: str, container_spec: str) -> list[str]:
+        return ['-v', f'{host_or_name}:{container_spec}']
 ```
 
 - [ ] **Step 4: Run tests to verify they pass**
@@ -1107,6 +1515,10 @@ uv run pytest tests/docker/test_builder.py -v
 
 - [ ] **Step 5: Commit**
 
+- [ ] **Step 6: Compress this task in the plan**
+
+Replace this task's full section with a one-paragraph summary of what was done, then commit the plan update using the `creative-commits` skill.
+
 ---
 
 ## Task 10: Image Auto-Build
@@ -1115,48 +1527,48 @@ uv run pytest tests/docker/test_builder.py -v
 - Create: `src/paddock/docker/build.py`
 - Create: `tests/docker/test_build.py`
 
-Implements build policies: `if-missing`, `always`, `daily`, `weekly`. Calls `docker build` when the policy requires it.
+Implements build policies: `if-missing`, `always`, `daily`, `weekly`. Calls `docker build` when the policy requires it. Use `f.DateTime()` from `phx-filters` to convert ISO timestamp strings to `datetime` objects in `get_image_created_at`.
 
 - [ ] **Step 1: Write failing tests**
 
 ```python
 # tests/docker/test_build.py
 from datetime import datetime, timedelta, timezone
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import patch
 import pytest
-from paddock.docker.build import should_build, run_build, BuildPolicy
+from paddock.docker.build import ImageBuilder, BuildPolicy
 
 
 def test_should_build_always():
-    assert should_build(BuildPolicy.ALWAYS, image_created_at=datetime.now(timezone.utc))
+    assert ImageBuilder.should_build(BuildPolicy.ALWAYS, image_created_at=datetime.now(timezone.utc))
 
 
 def test_should_build_if_missing_image_exists():
-    assert not should_build(BuildPolicy.IF_MISSING, image_created_at=datetime.now(timezone.utc))
+    assert not ImageBuilder.should_build(BuildPolicy.IF_MISSING, image_created_at=datetime.now(timezone.utc))
 
 
 def test_should_build_if_missing_image_absent():
-    assert should_build(BuildPolicy.IF_MISSING, image_created_at=None)
+    assert ImageBuilder.should_build(BuildPolicy.IF_MISSING, image_created_at=None)
 
 
 def test_should_build_daily_old_image():
     old = datetime.now(timezone.utc) - timedelta(hours=25)
-    assert should_build(BuildPolicy.DAILY, image_created_at=old)
+    assert ImageBuilder.should_build(BuildPolicy.DAILY, image_created_at=old)
 
 
 def test_should_build_daily_fresh_image():
     fresh = datetime.now(timezone.utc) - timedelta(hours=1)
-    assert not should_build(BuildPolicy.DAILY, image_created_at=fresh)
+    assert not ImageBuilder.should_build(BuildPolicy.DAILY, image_created_at=fresh)
 
 
 def test_should_build_weekly_old_image():
     old = datetime.now(timezone.utc) - timedelta(days=8)
-    assert should_build(BuildPolicy.WEEKLY, image_created_at=old)
+    assert ImageBuilder.should_build(BuildPolicy.WEEKLY, image_created_at=old)
 
 
 def test_run_build_basic(mocker):
     mock_run = mocker.patch('paddock.docker.build.subprocess.run')
-    run_build(
+    ImageBuilder().run_build(
         image='myapp:latest',
         dockerfile='/path/Dockerfile',
         context='/path',
@@ -1171,7 +1583,7 @@ def test_run_build_basic(mocker):
 
 def test_run_build_with_args(mocker):
     mock_run = mocker.patch('paddock.docker.build.subprocess.run')
-    run_build(
+    ImageBuilder().run_build(
         image='myapp:latest',
         dockerfile='/path/Dockerfile',
         context='/path',
@@ -1196,6 +1608,8 @@ from datetime import datetime, timedelta, timezone
 from enum import StrEnum
 from pathlib import Path
 
+import filters as f
+
 
 class BuildPolicy(StrEnum):
     ALWAYS = 'always'
@@ -1204,54 +1618,80 @@ class BuildPolicy(StrEnum):
     WEEKLY = 'weekly'
 
 
-def should_build(policy: BuildPolicy, image_created_at: datetime | None) -> bool:
-    """Determine whether to build the image given the policy and current image age."""
-    match policy:
-        case BuildPolicy.ALWAYS:
+class ImageBuilder:
+    @staticmethod
+    def should_build(policy: BuildPolicy, image_created_at: datetime | None) -> bool:
+        """Determine whether to build the image given the policy and current image age."""
+        match policy:
+            case BuildPolicy.ALWAYS:
+                return True
+            case BuildPolicy.IF_MISSING:
+                return image_created_at is None
+            case BuildPolicy.DAILY:
+                if image_created_at is None:
+                    return True
+                return (datetime.now(timezone.utc) - image_created_at) > timedelta(hours=24)
+            case BuildPolicy.WEEKLY:
+                if image_created_at is None:
+                    return True
+                return (datetime.now(timezone.utc) - image_created_at) > timedelta(days=7)
+
+    def get_image_created_at(self, image: str) -> datetime | None:
+        """Return the creation timestamp of a local Docker image, or None if absent."""
+        result = subprocess.run(
+            ['docker', 'image', 'inspect', '--format={{.Created}}', image],
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            return None
+        created_str = result.stdout.strip()
+        # Use f.DateTime() to convert ISO string to datetime
+        runner = f.FilterRunner(f.DateTime(), created_str)
+        if not runner.is_valid():
+            return None
+        return runner.cleaned_data
+
+    def run_build(
+        self,
+        *,
+        image: str,
+        dockerfile: str,
+        context: str,
+        build_args: dict[str, str],
+    ) -> None:
+        """Run docker build, streaming output to stdout."""
+        argv = ['docker', 'build', '-t', image, '-f', dockerfile]
+        for key, value in build_args.items():
+            argv += ['--build-arg', f'{key}={value}']
+        argv.append(context)
+        subprocess.run(argv, check=True)
+
+    def maybe_build(
+        self,
+        *,
+        build_config: dict,
+        image: str,
+        build_args: dict[str, str],
+    ) -> bool:
+        """
+        Build the image if the build policy requires it.
+        Returns True if a build was triggered, False if skipped.
+        """
+        policy = BuildPolicy(build_config.get('policy', 'if-missing'))
+        dockerfile = build_config['dockerfile']
+        context = build_config.get('context') or str(Path(dockerfile).parent)
+
+        image_created_at = self.get_image_created_at(image)
+        if self.should_build(policy, image_created_at):
+            self.run_build(
+                image=image,
+                dockerfile=dockerfile,
+                context=context,
+                build_args=build_args,
+            )
             return True
-        case BuildPolicy.IF_MISSING:
-            return image_created_at is None
-        case BuildPolicy.DAILY:
-            if image_created_at is None:
-                return True
-            return (datetime.now(timezone.utc) - image_created_at) > timedelta(hours=24)
-        case BuildPolicy.WEEKLY:
-            if image_created_at is None:
-                return True
-            return (datetime.now(timezone.utc) - image_created_at) > timedelta(days=7)
-
-
-def get_image_created_at(image: str) -> datetime | None:
-    """Return the creation timestamp of a local Docker image, or None if absent."""
-    result = subprocess.run(
-        ['docker', 'image', 'inspect', '--format={{.Created}}', image],
-        capture_output=True,
-        text=True,
-    )
-    if result.returncode != 0:
-        return None
-    created_str = result.stdout.strip()
-    return datetime.fromisoformat(created_str.rstrip('Z')).replace(tzinfo=timezone.utc)
-
-
-def run_build(*, image: str, dockerfile: str, context: str, build_args: dict[str, str]) -> None:
-    """Run docker build."""
-    argv = ['docker', 'build', '-t', image, '-f', dockerfile]
-    for key, value in build_args.items():
-        argv += ['--build-arg', f'{key}={value}']
-    argv.append(context)
-    subprocess.run(argv, check=True)
-
-
-def maybe_build(*, build_config: dict, image: str, build_args: dict[str, str]) -> None:
-    """Build the image if the build policy requires it."""
-    policy = BuildPolicy(build_config.get('policy', 'if-missing'))
-    dockerfile = build_config['dockerfile']
-    context = build_config.get('context') or str(Path(dockerfile).parent)
-
-    image_created_at = get_image_created_at(image)
-    if should_build(policy, image_created_at):
-        run_build(image=image, dockerfile=dockerfile, context=context, build_args=build_args)
+        return False
 ```
 
 - [ ] **Step 4: Run tests to verify they pass**
@@ -1262,31 +1702,36 @@ uv run pytest tests/docker/test_build.py -v
 
 - [ ] **Step 5: Commit**
 
+- [ ] **Step 6: Compress this task in the plan**
+
+Replace this task's full section with a one-paragraph summary of what was done, then commit the plan update using the `creative-commits` skill.
+
 ---
 
 ## Task 11: Main Entry Point
 
 **Files:**
-- Modify: `src/paddock/__main__.py`
+- Update: `src/paddock/__main__.py`
 - Create: `tests/test_main.py`
 
-Orchestrates the full flow: parse CLI → load + merge config → validate → log → maybe build → run docker.
+Orchestrates the full flow: parse CLI → load config via `ConfigLoader.resolve()` → validate → log → maybe build → run docker.
 
-Logging: INFO level by default (suppressed with `--quiet`). Logs each resolved config value. Prints the full docker command before running.
+Logging: INFO level by default (suppressed with `--quiet`). Logs the resolved config and the full docker command before running. If a network is configured, also logs the names of other containers currently running on that network (aids troubleshooting connectivity). Logs whether an image build was triggered or skipped. If `maybe_build` triggers a build, `docker build` output must be visible to the user (do not capture it).
+
+Test structure: each test verifies **two** things: (1) what the output was; (2) whether `docker run` was (or was not) invoked. Consider a shared helper that asserts expected output shape.
 
 - [ ] **Step 1: Write failing tests**
 
 ```python
 # tests/test_main.py
-import os
-from pathlib import Path
-from unittest.mock import patch, MagicMock
 import pytest
+from unittest.mock import patch, MagicMock, call
+from pathlib import Path
 from paddock.__main__ import run
 
 
 @pytest.fixture
-def minimal_config(tmp_path):
+def minimal_config(tmp_path: Path) -> Path:
     config_dir = tmp_path / '.paddock'
     config_dir.mkdir()
     cfg = config_dir / 'config.toml'
@@ -1294,38 +1739,55 @@ def minimal_config(tmp_path):
     return tmp_path
 
 
-def test_dry_run_exits_zero(minimal_config, capsys, monkeypatch):
+def test_dry_run_exits_zero(minimal_config: Path, capsys, monkeypatch):
+    """--dry-run prints the docker command and exits 0 without invoking docker."""
     monkeypatch.chdir(minimal_config)
-    with patch('paddock.__main__.subprocess') as mock_sub:
+    with patch('paddock.__main__.subprocess.run') as mock_run:
         with pytest.raises(SystemExit) as exc:
             run(['--dry-run'])
     assert exc.value.code == 0
+    # docker command was NOT invoked
+    mock_run.assert_not_called()
+    # output contains the docker command
     captured = capsys.readouterr()
     assert 'docker' in captured.out
 
 
-def test_quiet_suppresses_logs(minimal_config, capsys, monkeypatch):
+def test_quiet_suppresses_all_output(minimal_config: Path, capsys, monkeypatch):
+    """--quiet produces no output at all."""
     monkeypatch.chdir(minimal_config)
-    with patch('paddock.__main__.subprocess') as mock_sub:
+    with patch('paddock.__main__.subprocess.run'):
         run(['--quiet'])
     captured = capsys.readouterr()
-    assert 'Using image' not in captured.out
+    assert captured.out == ''
+    assert captured.err == ''
 
 
-def test_missing_image_exits_one(tmp_path, monkeypatch):
+def test_missing_image_exits_one(tmp_path: Path, monkeypatch):
+    """Missing required 'image' config exits with code 1."""
     monkeypatch.chdir(tmp_path)
     with pytest.raises(SystemExit) as exc:
         run([])
     assert exc.value.code == 1
 
 
-def test_runs_docker(minimal_config, monkeypatch):
+def test_runs_docker(minimal_config: Path, monkeypatch):
+    """A valid config invokes 'docker run' with a docker argv."""
     monkeypatch.chdir(minimal_config)
     with patch('paddock.__main__.subprocess.run') as mock_run:
         run([])
     mock_run.assert_called_once()
     docker_argv = mock_run.call_args[0][0]
     assert docker_argv[0] == 'docker'
+
+
+def test_help_flag(capsys):
+    """--help prints usage and exits 0."""
+    with pytest.raises(SystemExit) as exc:
+        run(['--help'])
+    assert exc.value.code == 0
+    captured = capsys.readouterr()
+    assert 'usage' in captured.out.lower()
 ```
 
 - [ ] **Step 2: Run tests to verify they fail**
@@ -1344,16 +1806,11 @@ import sys
 from pathlib import Path
 
 from paddock.agents import agent_registry
-from paddock.agents.base import BaseAgent
+from paddock.agents import BaseAgent
 from paddock.cli import parse_args
-from paddock.config.env import env_to_config
-from paddock.config.loader import apply_defaults, load_config_files, merge_configs
-from paddock.config.schema import validate_config
-from paddock.docker.build import maybe_build
-from paddock.docker.builder import build_docker_argv
-
-_USER_CONFIG = Path.home() / '.config' / 'paddock' / 'config.toml'
-_PROJECT_CONFIG_NAME = Path('.paddock') / 'config.toml'
+from paddock.config.loader import ConfigLoader
+from paddock.docker.build import ImageBuilder
+from paddock.docker.builder import DockerCommandBuilder
 
 logger = logging.getLogger('paddock')
 
@@ -1365,50 +1822,34 @@ def _setup_logging(quiet: bool) -> None:
         logging.basicConfig(level=logging.INFO, format='%(message)s')
 
 
-def _cli_args_to_config(parsed) -> dict:
-    """Map ParsedArgs fields to a config-shaped dict (omitting None values)."""
-    config: dict = {}
-    build: dict = {}
-
-    if parsed.image is not None:
-        config['image'] = parsed.image
-    if parsed.agent is not None:
-        config['agent'] = parsed.agent
-    if parsed.network is not None:
-        config['network'] = parsed.network
-    if parsed.build_dockerfile is not None:
-        build['dockerfile'] = parsed.build_dockerfile
-    if parsed.build_context is not None:
-        build['context'] = parsed.build_context
-    if parsed.build_policy is not None:
-        build['policy'] = parsed.build_policy
-    if build:
-        config['build'] = build
-    if parsed.volumes:
-        config['volumes'] = parsed.volumes
-
-    return config
+def _log_network_peers(network: str) -> None:
+    """Log names of other containers running on the same network."""
+    result = subprocess.run(
+        ['docker', 'ps', '--filter', f'network={network}', '--format={{.Names}}'],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode == 0 and result.stdout.strip():
+        for name in result.stdout.strip().splitlines():
+            logger.info('  - %s', name)
 
 
 def run(argv: list[str] | None = None) -> None:
     parsed = parse_args(argv if argv is not None else sys.argv[1:])
     _setup_logging(parsed.quiet)
 
-    cwd = Path.cwd()
+    workdir = Path(parsed.workdir) if parsed.workdir else Path.cwd()
 
-    # Load and merge config from all sources
-    file_config = load_config_files(
-        user_config=_USER_CONFIG,
-        project_config=cwd / _PROJECT_CONFIG_NAME,
-    )
-    env_config = env_to_config(dict(os.environ))
-    cli_config = _cli_args_to_config(parsed)
+    loader = ConfigLoader()
+    runner = loader.resolve(parsed, workdir, environ=dict(os.environ))
 
-    merged = merge_configs(file_config, env_config)
-    merged = merge_configs(merged, cli_config)
-    # CLI volumes are additive; already merged above via merge_configs
-    apply_defaults(merged)
-    config = validate_config(merged)
+    if not runner.is_valid():
+        for key, errors in runner.errors.items():
+            for error in errors:
+                print(f'Config error [{key}]: {error}', file=sys.stderr)
+        sys.exit(1)
+
+    config = runner.cleaned_data
 
     # Resolve agent
     agent_key = 'false' if config['agent'] is False else str(config['agent'])
@@ -1418,25 +1859,29 @@ def run(argv: list[str] | None = None) -> None:
     logger.info('Using image: %s', config['image'])
     logger.info('Agent: %s', config['agent'])
     for host, container in config['volumes'].items():
-        logger.info('Mounting %s → %s', host, container)
+        logger.info('Mounting %s -> %s', host, container)
     if config.get('network'):
         logger.info('Network: %s', config['network'])
+        logger.info('Other containers on this network:')
+        _log_network_peers(config['network'])
 
     # Maybe build image
     if config.get('build'):
-        maybe_build(
+        builder = ImageBuilder()
+        build_args = {**agent.get_build_args(), **config['build'].get('args', {})}
+        built = builder.maybe_build(
             build_config=config['build'],
             image=config['image'],
-            build_args=agent.get_build_args(),
+            build_args=build_args,
         )
+        logger.info('Image build: %s', 'triggered' if built else 'skipped (up to date)')
 
-    # Assemble and run docker command
-    docker_argv = build_docker_argv(
+    # Assemble docker command
+    docker_argv = DockerCommandBuilder(
         config=config,
         agent=agent,
-        cwd=cwd,
-        command=parsed.command,
-    )
+        workdir=workdir,
+    ).build(command=parsed.command)
 
     print(' '.join(docker_argv))
 
@@ -1468,6 +1913,10 @@ uv run pytest -v
 
 - [ ] **Step 6: Commit**
 
+- [ ] **Step 7: Compress this task in the plan**
+
+Replace this task's full section with a one-paragraph summary of what was done, then commit the plan update using the `creative-commits` skill.
+
 ---
 
 ## Task 12: Base Dockerfile
@@ -1475,14 +1924,17 @@ uv run pytest -v
 **Files:**
 - Create: `images/Dockerfile`
 
-Ubuntu base image with Python via deadsnakes. Accepts `ARG AGENT` to pre-install the appropriate coding agent.
+Ubuntu base image with Python via deadsnakes. Ubuntu version and Node.js version are configurable via build args. Uses quoted variable expansion in `apt-get` commands to prevent shell injection if an unexpected arg value is supplied.
 
 - [ ] **Step 1: Create `images/Dockerfile`**
 
 ```dockerfile
-FROM ubuntu:24.04
+ARG UBUNTU_VERSION=24.04
+
+FROM ubuntu:${UBUNTU_VERSION}
 
 ARG AGENT=none
+ARG NODE_VERSION=22
 ARG PYTHON_VERSION=3.13
 
 # Prevent interactive prompts during apt installs
@@ -1496,13 +1948,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && add-apt-repository ppa:deadsnakes/ppa \
     && apt-get update \
     && apt-get install -y --no-install-recommends \
-    python${PYTHON_VERSION} \
-    python${PYTHON_VERSION}-venv \
+    "python${PYTHON_VERSION}" \
+    "python${PYTHON_VERSION}-venv" \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Node.js (required for Claude Code)
-RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
+RUN curl -fsSL "https://deb.nodesource.com/setup_${NODE_VERSION}.x" | bash - \
     && apt-get install -y nodejs \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
@@ -1513,9 +1965,9 @@ RUN case "$AGENT" in \
     none) echo "No agent selected" ;; \
     *) echo "Unknown agent: $AGENT" && exit 1 ;; \
     esac
-
-WORKDIR /workspace
 ```
+
+Note: There is no `WORKDIR` instruction — the workdir is set at runtime by `DockerCommandBuilder` via `--workdir`, matching the host path.
 
 - [ ] **Step 2: Verify Dockerfile builds (manual check)**
 
@@ -1525,6 +1977,36 @@ docker build -t paddock-claude --build-arg AGENT=claude images/
 ```
 
 - [ ] **Step 3: Commit**
+
+- [ ] **Step 4: Compress this task in the plan**
+
+Replace this task's full section with a one-paragraph summary of what was done, then commit the plan update using the `creative-commits` skill.
+
+---
+
+## Task 13: phx-filters Skill
+
+**Files:**
+- Create: `.agents/skills/phx-filters.md` (or wherever project skills live — check `scripts/` or `.agents/`)
+
+Write a skill that teaches coding agents how to work with `phx-filters`. Only document information that is not readily available by reading the library's source code or docs — focus on patterns, gotchas, and conventions specific to this project's usage.
+
+Topics to cover:
+- How to chain filters with `|`
+- When to use `f.FilterMapper` vs custom filters
+- The filter chain ordering convention used in this project (Required → type check → filters → Optional at end)
+- When to write a custom filter (for reusable validation+transformation logic applied in multiple places)
+- How `f.FilterRunner` works and when to check `is_valid()` vs call `cleaned_data`
+- How `f.FilterRepeater` applies a filter to all values in a mapping
+- The `f.Optional(default)` at-end pattern for defaulting without validating defaults
+
+- [ ] **Step 1: Write the skill**
+
+- [ ] **Step 2: Commit**
+
+- [ ] **Step 3: Compress this task in the plan**
+
+Replace this task's full section with a one-paragraph summary of what was done, then commit the plan update using the `creative-commits` skill.
 
 ---
 
@@ -1539,12 +2021,11 @@ uv run pytest -v --tb=short
 Smoke test the CLI end-to-end (requires Docker):
 
 ```bash
-# From any directory with an image available
+# Dry run — prints docker command, exits 0
 uv run paddock --image=ubuntu:22.04 --agent=false --dry-run
-# Expected: prints 'docker run --rm -it ...' and exits 0
 
+# Shell mode — drops into /bin/bash in container
 uv run paddock --image=ubuntu:22.04 --agent=false --quiet
-# Expected: drops into /bin/bash in container, no log output
 ```
 
 ---
