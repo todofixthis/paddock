@@ -1287,7 +1287,7 @@ Key behaviours:
 ```python
 # tests/docker/test_builder.py
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 import pytest
 from paddock.docker.builder import DockerCommandBuilder, sanitise_volume_name
 
@@ -1306,7 +1306,7 @@ def make_agent(command=None, volumes=None, scratch_volumes=None):
     return agent
 
 
-def test_minimal_command(tmp_path: Path):
+def test_minimal_command(mocker, tmp_path: Path):
     """
     A minimal docker run command includes:
     - 'docker run' to invoke docker
@@ -1319,8 +1319,11 @@ def test_minimal_command(tmp_path: Path):
     """
     config = {'image': 'ubuntu:22.04', 'agent': 'claude', 'volumes': {}, 'network': None}
     agent = make_agent()
-    with patch('paddock.docker.builder.DockerCommandBuilder._container_name_available', return_value=True):
-        argv = DockerCommandBuilder(config=config, agent=agent, workdir=tmp_path).build(command=[])
+    mocker.patch(
+        'paddock.docker.builder.DockerCommandBuilder._container_name_available',
+        return_value=True,
+    )
+    argv = DockerCommandBuilder(config=config, agent=agent, workdir=tmp_path).build(command=[])
     assert argv[0] == 'docker'
     assert 'run' in argv
     assert '--rm' in argv
@@ -1332,52 +1335,61 @@ def test_minimal_command(tmp_path: Path):
     assert 'ubuntu:22.04' in argv
 
 
-def test_container_name_from_workdir(tmp_path: Path):
+def test_container_name_from_workdir(mocker, tmp_path: Path):
     """Container is named 'paddock-{dirname}-{agent}'."""
     workdir = tmp_path / 'my-project'
     workdir.mkdir()
     config = {'image': 'ubuntu:22.04', 'agent': 'claude', 'volumes': {}, 'network': None}
     agent = make_agent()
-    with patch('paddock.docker.builder.DockerCommandBuilder._container_name_available', return_value=True):
-        argv = DockerCommandBuilder(config=config, agent=agent, workdir=workdir).build(command=[])
+    mocker.patch(
+        'paddock.docker.builder.DockerCommandBuilder._container_name_available',
+        return_value=True,
+    )
+    argv = DockerCommandBuilder(config=config, agent=agent, workdir=workdir).build(command=[])
     assert '--name' in argv
     name_idx = argv.index('--name')
     assert argv[name_idx + 1] == 'paddock-my-project-claude'
 
 
-def test_container_name_suffix_on_conflict(tmp_path: Path):
+def test_container_name_suffix_on_conflict(mocker, tmp_path: Path):
     """If the container name is taken, a numeric suffix is appended."""
     config = {'image': 'ubuntu:22.04', 'agent': 'claude', 'volumes': {}, 'network': None}
     agent = make_agent()
     # First name taken, second available
-    with patch(
+    mocker.patch(
         'paddock.docker.builder.DockerCommandBuilder._container_name_available',
         side_effect=[False, True],
-    ):
-        argv = DockerCommandBuilder(config=config, agent=agent, workdir=tmp_path).build(command=[])
+    )
+    argv = DockerCommandBuilder(config=config, agent=agent, workdir=tmp_path).build(command=[])
     name_idx = argv.index('--name')
     assert argv[name_idx + 1].endswith('-1')
 
 
-def test_uses_agent_command(tmp_path: Path):
+def test_uses_agent_command(mocker, tmp_path: Path):
     """When no command override is given, the agent's default command is appended."""
     config = {'image': 'ubuntu:22.04', 'agent': 'claude', 'volumes': {}, 'network': None}
     agent = make_agent(command=['claude'])
-    with patch('paddock.docker.builder.DockerCommandBuilder._container_name_available', return_value=True):
-        argv = DockerCommandBuilder(config=config, agent=agent, workdir=tmp_path).build(command=[])
+    mocker.patch(
+        'paddock.docker.builder.DockerCommandBuilder._container_name_available',
+        return_value=True,
+    )
+    argv = DockerCommandBuilder(config=config, agent=agent, workdir=tmp_path).build(command=[])
     assert argv[-1] == 'claude'
 
 
-def test_command_override(tmp_path: Path):
+def test_command_override(mocker, tmp_path: Path):
     """An explicit command overrides the agent default."""
     config = {'image': 'ubuntu:22.04', 'agent': 'claude', 'volumes': {}, 'network': None}
     agent = make_agent(command=['claude'])
-    with patch('paddock.docker.builder.DockerCommandBuilder._container_name_available', return_value=True):
-        argv = DockerCommandBuilder(config=config, agent=agent, workdir=tmp_path).build(command=['opencode', '--flag'])
+    mocker.patch(
+        'paddock.docker.builder.DockerCommandBuilder._container_name_available',
+        return_value=True,
+    )
+    argv = DockerCommandBuilder(config=config, agent=agent, workdir=tmp_path).build(command=['opencode', '--flag'])
     assert argv[-2:] == ['opencode', '--flag']
 
 
-def test_config_volumes(tmp_path: Path):
+def test_config_volumes(mocker, tmp_path: Path):
     """Config volumes are passed as -v flags."""
     config = {
         'image': 'ubuntu:22.04',
@@ -1386,28 +1398,37 @@ def test_config_volumes(tmp_path: Path):
         'network': None,
     }
     agent = make_agent()
-    with patch('paddock.docker.builder.DockerCommandBuilder._container_name_available', return_value=True):
-        argv = DockerCommandBuilder(config=config, agent=agent, workdir=tmp_path).build(command=[])
+    mocker.patch(
+        'paddock.docker.builder.DockerCommandBuilder._container_name_available',
+        return_value=True,
+    )
+    argv = DockerCommandBuilder(config=config, agent=agent, workdir=tmp_path).build(command=[])
     vol_args = [argv[i + 1] for i, a in enumerate(argv) if a == '-v']
     assert any('/host/data:/data:ro' in v for v in vol_args)
 
 
-def test_network(tmp_path: Path):
+def test_network(mocker, tmp_path: Path):
     """A configured network is passed via --network."""
     config = {'image': 'ubuntu:22.04', 'agent': 'claude', 'volumes': {}, 'network': 'mynet'}
     agent = make_agent()
-    with patch('paddock.docker.builder.DockerCommandBuilder._container_name_available', return_value=True):
-        argv = DockerCommandBuilder(config=config, agent=agent, workdir=tmp_path).build(command=[])
+    mocker.patch(
+        'paddock.docker.builder.DockerCommandBuilder._container_name_available',
+        return_value=True,
+    )
+    argv = DockerCommandBuilder(config=config, agent=agent, workdir=tmp_path).build(command=[])
     assert '--network' in argv
     assert 'mynet' in argv
 
 
-def test_scratch_volume(tmp_path: Path):
+def test_scratch_volume(mocker, tmp_path: Path):
     """Agent scratch volumes (named Docker volumes) are passed via -v."""
     config = {'image': 'ubuntu:22.04', 'agent': 'claude', 'volumes': {}, 'network': None}
     agent = make_agent(scratch_volumes={'paddock_ubuntu_22_04_claude': '/scratch'})
-    with patch('paddock.docker.builder.DockerCommandBuilder._container_name_available', return_value=True):
-        argv = DockerCommandBuilder(config=config, agent=agent, workdir=tmp_path).build(command=[])
+    mocker.patch(
+        'paddock.docker.builder.DockerCommandBuilder._container_name_available',
+        return_value=True,
+    )
+    argv = DockerCommandBuilder(config=config, agent=agent, workdir=tmp_path).build(command=[])
     vol_args = [argv[i + 1] for i, a in enumerate(argv) if a == '-v']
     assert any('paddock_ubuntu_22_04_claude:/scratch' in v for v in vol_args)
 ```
@@ -1724,9 +1745,8 @@ Test structure: each test verifies **two** things: (1) what the output was; (2) 
 
 ```python
 # tests/test_main.py
-import pytest
-from unittest.mock import patch, MagicMock, call
 from pathlib import Path
+import pytest
 from paddock.__main__ import run
 
 
@@ -1739,12 +1759,12 @@ def minimal_config(tmp_path: Path) -> Path:
     return tmp_path
 
 
-def test_dry_run_exits_zero(minimal_config: Path, capsys, monkeypatch):
+def test_dry_run_exits_zero(capsys, minimal_config: Path, mocker, monkeypatch):
     """--dry-run prints the docker command and exits 0 without invoking docker."""
     monkeypatch.chdir(minimal_config)
-    with patch('paddock.__main__.subprocess.run') as mock_run:
-        with pytest.raises(SystemExit) as exc:
-            run(['--dry-run'])
+    mock_run = mocker.patch('paddock.__main__.subprocess.run')
+    with pytest.raises(SystemExit) as exc:
+        run(['--dry-run'])
     assert exc.value.code == 0
     # docker command was NOT invoked
     mock_run.assert_not_called()
@@ -1753,17 +1773,17 @@ def test_dry_run_exits_zero(minimal_config: Path, capsys, monkeypatch):
     assert 'docker' in captured.out
 
 
-def test_quiet_suppresses_all_output(minimal_config: Path, capsys, monkeypatch):
+def test_quiet_suppresses_all_output(capsys, minimal_config: Path, mocker, monkeypatch):
     """--quiet produces no output at all."""
     monkeypatch.chdir(minimal_config)
-    with patch('paddock.__main__.subprocess.run'):
-        run(['--quiet'])
+    mocker.patch('paddock.__main__.subprocess.run')
+    run(['--quiet'])
     captured = capsys.readouterr()
     assert captured.out == ''
     assert captured.err == ''
 
 
-def test_missing_image_exits_one(tmp_path: Path, monkeypatch):
+def test_missing_image_exits_one(monkeypatch, tmp_path: Path):
     """Missing required 'image' config exits with code 1."""
     monkeypatch.chdir(tmp_path)
     with pytest.raises(SystemExit) as exc:
@@ -1771,11 +1791,11 @@ def test_missing_image_exits_one(tmp_path: Path, monkeypatch):
     assert exc.value.code == 1
 
 
-def test_runs_docker(minimal_config: Path, monkeypatch):
+def test_runs_docker(minimal_config: Path, mocker, monkeypatch):
     """A valid config invokes 'docker run' with a docker argv."""
     monkeypatch.chdir(minimal_config)
-    with patch('paddock.__main__.subprocess.run') as mock_run:
-        run([])
+    mock_run = mocker.patch('paddock.__main__.subprocess.run')
+    run([])
     mock_run.assert_called_once()
     docker_argv = mock_run.call_args[0][0]
     assert docker_argv[0] == 'docker'
