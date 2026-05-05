@@ -2047,9 +2047,3 @@ uv run paddock --image=ubuntu:22.04 --agent=false --dry-run
 # Shell mode — drops into /bin/bash in container
 uv run paddock --image=ubuntu:22.04 --agent=false --quiet
 ```
-
----
-
-## Phase 2 (Future)
-
-Squid proxy sidecar: a second container started alongside the paddock container that routes all outbound internet traffic through a configurable proxy. The paddock container reaches the internet only via the proxy. Web UI for monitoring traffic. Policy file support. Paddock must not be able to reach the sidecar's admin interfaces.
