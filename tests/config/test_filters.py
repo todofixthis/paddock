@@ -4,8 +4,10 @@ from paddock.config.filters import Agent, Volume
 
 
 def test_volume_bare_path():
-    """A bare container path (no mode) is valid and returned as-is."""
-    assert f.FilterRunner(Volume, "/container/path").cleaned_data == "/container/path"
+    """A bare container path (no mode) is normalised by appending ':ro'."""
+    assert (
+        f.FilterRunner(Volume, "/container/path").cleaned_data == "/container/path:ro"
+    )
 
 
 def test_volume_explicit_ro():
@@ -26,8 +28,9 @@ def test_volume_explicit_rw():
 
 def test_volume_implicit_ro():
     """A path with no mode suffix has ':ro' appended."""
-    # Implicit read-only: no mode suffix means the filter appends ':ro'
-    assert f.FilterRunner(Volume, "/container/path").cleaned_data == "/container/path"
+    assert (
+        f.FilterRunner(Volume, "/container/path").cleaned_data == "/container/path:ro"
+    )
 
 
 def test_volume_invalid():

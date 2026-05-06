@@ -64,4 +64,8 @@ class Volume(BaseFilter):
         if len(parts) == 2 and parts[1] not in ("ro", "rw"):
             return self._invalid_value(value, self.CODE_INVALID)
 
+        # Bare paths (no mode suffix) are normalised to read-only.
+        if len(parts) == 1:
+            return value + ":ro"
+
         return value
