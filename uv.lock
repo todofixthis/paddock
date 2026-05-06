@@ -354,40 +354,6 @@ wheels = [
 ]
 
 [[package]]
-name = "paddock"
-source = { editable = "." }
-dependencies = [
-    { name = "phx-class-registry" },
-    { name = "phx-filters" },
-]
-
-[package.dev-dependencies]
-dev = [
-    { name = "autohooks" },
-    { name = "autohooks-plugin-black" },
-    { name = "autohooks-plugin-pytest" },
-    { name = "autohooks-plugin-ruff" },
-    { name = "pytest" },
-    { name = "pytest-mock" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "phx-class-registry", specifier = ">=5.2.1,<6.0.0" },
-    { name = "phx-filters", specifier = ">=3.5.1,<4.0.0" },
-]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "autohooks", specifier = ">=26.2.0,<27.0.0" },
-    { name = "autohooks-plugin-black", specifier = ">=23.10.0,<24.0.0" },
-    { name = "autohooks-plugin-pytest", specifier = ">=23.10.0,<24.0.0" },
-    { name = "autohooks-plugin-ruff", specifier = ">=25.3.1,<26.0.0" },
-    { name = "pytest", specifier = ">=9.0.3,<10.0.0" },
-    { name = "pytest-mock", specifier = ">=3.15.1,<4.0.0" },
-]
-
-[[package]]
 name = "pathspec"
 version = "1.1.1"
 source = { registry = "https://pypi.org/simple" }
@@ -418,6 +384,40 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/3a/84/bc2b3ed4626adf61439b05c6ad9fcb038387ef1c555fce9e95ed5d243ac2/phx_filters-3.5.1.tar.gz", hash = "sha256:f892628fc701fdd507269efb0d51d56e2ea96e58088ece1209be5819b4b266c9", size = 94069, upload-time = "2026-03-09T19:15:20.297Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/1b/61/d0081a0cdb88b6c042ca2acb797c2b0c3d4d7272fddfef37194fe9fa1930/phx_filters-3.5.1-py3-none-any.whl", hash = "sha256:37cd0a6dc5d1dd784f256e6100453ae1ceab5a68613bb71503a431865b77d429", size = 43224, upload-time = "2026-03-09T19:15:21.682Z" },
+]
+
+[[package]]
+name = "phx-paddock"
+source = { editable = "." }
+dependencies = [
+    { name = "phx-class-registry" },
+    { name = "phx-filters" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "autohooks" },
+    { name = "autohooks-plugin-black" },
+    { name = "autohooks-plugin-pytest" },
+    { name = "autohooks-plugin-ruff" },
+    { name = "pytest" },
+    { name = "pytest-mock" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "phx-class-registry", specifier = ">=5.2.1,<6.0.0" },
+    { name = "phx-filters", specifier = ">=3.5.1,<4.0.0" },
+]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "autohooks", specifier = ">=26.2.0,<27.0.0" },
+    { name = "autohooks-plugin-black", specifier = ">=23.10.0,<24.0.0" },
+    { name = "autohooks-plugin-pytest", specifier = ">=23.10.0,<24.0.0" },
+    { name = "autohooks-plugin-ruff", specifier = ">=25.3.1,<26.0.0" },
+    { name = "pytest", specifier = ">=9.0.3,<10.0.0" },
+    { name = "pytest-mock", specifier = ">=3.15.1,<4.0.0" },
 ]
 
 [[package]]
