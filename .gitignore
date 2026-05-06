@@ -1,6 +1,10 @@
+# Python metas
+*.egg-info/
 .python-version
 .venv/
-.worktrees/
 __pycache__/
 dist/
-*.egg-info/
+
+# Coding agent stuffs
+.agents/settings.local.json
+.worktrees/
