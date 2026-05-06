@@ -4,9 +4,9 @@
 
 Before writing code, check:
 
-- `docs/plans/` — current implementation plan
 - `docs/adr/INDEX.md` — prior decisions (don't re-litigate)
 - `docs/future/` — deferred features (don't re-discuss)
+- `docs/superpowers/plans/` — current implementation plan
 
 ## Architecture Decision Records
 
