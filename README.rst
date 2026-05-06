@@ -140,7 +140,7 @@ name and prefixing with ``PADDOCK_``.  Nested keys are joined with ``_``:
 
 .. code-block:: bash
 
-   PADDOCK_IMAGE=ubuntu:24.04
+   PADDOCK_IMAGE=my-claude-image
    PADDOCK_AGENT=claude
    PADDOCK_BUILD_DOCKERFILE=images/Dockerfile
    PADDOCK_BUILD_POLICY=daily
@@ -171,7 +171,9 @@ as the container command:
 
 .. code-block:: bash
 
-   paddock --image=ubuntu:24.04 --agent=false -- bash -c "echo hello"
+   paddock claude --allow-dangerously-skip-permissions --continue
+   paddock --image=my-claude-image -- --allow-dangerously-skip-permissions --continue
+
 
 Agents
 ------
