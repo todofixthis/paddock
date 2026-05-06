@@ -136,6 +136,14 @@ rm release-<version>.md release-<version>.md.asc release-<version>-body.md
 ## Enhancements
 ## Bug fixes
 
+> [!NOTE]
+> **Verifying release artefacts**
+> 1. Import the signing key: `curl https://github.com/todofixthis.gpg | gpg --import`
+> 2. Download the `.whl` or `.tar.gz` and its matching `.sig` file from the release assets
+> 3. Verify: `gpg --verify phx_paddock-<version>-py3-none-any.whl.sig phx_paddock-<version>-py3-none-any.whl`
+>
+> Key fingerprint: `457997A2A506270F918D7BD1925CC6E316680401`
+
 # SHA256 Checksums
 ```
 
