@@ -86,7 +86,7 @@ Created the `src/paddock/config/` package and implemented two `BaseFilter` subcl
 - Create: `src/paddock/cli.py`
 - Create: `tests/test_cli.py`
 
-Parses paddock flags, then treats the first positional arg (or first unknown flag, or everything after `--`) as the start of the container command. Returns a `ParsedArgs` dataclass.
+Parses paddock flags, then treats the first positional arg (or everything after `--`) as the start of the container command. Unknown flags are treated as errors — users must provide a positional arg or `--` to disambiguate. Returns a `ParsedArgs` dataclass.
 
 New flags vs original plan:
 - `--workdir`: override the working directory (default: `cwd`)
@@ -101,6 +101,7 @@ Each test must have a docstring describing the use case it documents.
 ```python
 # tests/test_cli.py
 import pytest
+
 from paddock.cli import parse_args
 
 
@@ -141,19 +142,7 @@ def test_positional_becomes_command():
     assert result.agent is None
 
 
-def test_ambiguous_agent_flag():
-    """
-    '--agent=opencode claude --agent=plan' is not a valid use case.
-    ArgumentParser merges the two --agent flags before parse_args sees them,
-    so the result is undefined/last-wins. Users must use '--' to pass --agent
-    to the container program: '--agent=opencode -- claude --agent=plan'.
-    """
-    result = parse_args(['--agent=opencode', 'claude', '--agent=plan'])
-    # Document the behaviour (whatever it is), not assert a desired outcome
-    assert result.command  # some command is present
-
-
-def test_paddock_flag_before_positional():
+def test_paddock_flags_before_positional():
     """Paddock flags before the positional are parsed; the positional starts the command."""
     result = parse_args(['--image=foo', 'claude', '--agent=plan'])
     assert result.image == 'foo'
@@ -165,17 +154,6 @@ def test_double_dash_splits():
     result = parse_args(['--image=foo', '--', '--resume'])
     assert result.image == 'foo'
     assert result.command == ['--resume']
-
-
-def test_unknown_flag_passes_through():
-    """
-    An unknown flag acts as an implicit '--': it and everything after it
-    becomes the container command. '--resume --agent=plan' means '--agent'
-    is not interpreted as a paddock argument.
-    """
-    result = parse_args(['--resume', '--agent=plan'])
-    assert result.command == ['--resume', '--agent=plan']
-    assert result.agent is None
 
 
 def test_double_dash_multiple_occurrences():
@@ -191,21 +169,17 @@ def test_double_dash_multiple_occurrences():
 def test_double_dash_after_positional():
     """
     '--' after a positional arg: the positional already ended paddock parsing,
-    so the second '--' passes through to the command.
+    so '--' passes through to the container command.
     """
     result = parse_args(['--agent=opencode', 'web', '--', '--port=4096'])
     assert result.agent == 'opencode'
     assert result.command == ['web', '--', '--port=4096']
 
 
-def test_double_dash_after_unknown():
-    """
-    '--' after an unknown flag: the unknown flag already ended paddock parsing,
-    so '--' passes through to the container command.
-    """
-    result = parse_args(['--agent=opencode', '--fork', '--', '--continue'])
-    assert result.agent == 'opencode'
-    assert result.command == ['--fork', '--', '--continue']
+def test_unknown_flag_is_error():
+    """An unrecognised flag before any positional or '--' exits non-zero."""
+    with pytest.raises(SystemExit):
+        parse_args(['--not-a-paddock-flag'])
 
 
 def test_volume_flag():
@@ -224,7 +198,7 @@ def test_volume_flag_no_mode():
     """--volume without a mode suffix stores the container path as-is (no ':ro' appended here)."""
     # Note: ':ro' is appended by the Volume filter during config schema validation,
     # not by the CLI parser. The CLI uses a different format than config.toml:
-    # CLI: /host:/container[:mode]   (three parts separated by ':')
+    # CLI: /host:/container[:mode]   (colon-separated host and container spec)
     # TOML: host_path = "container_path[:mode]"  (two separate fields)
     # _parse_volume() is intentionally NOT using the Volume filter for this reason.
     result = parse_args(['--volume=/host:/container'])
@@ -257,7 +231,9 @@ def test_config_file_flag():
 
 def test_build_flags():
     """Build config can be overridden via CLI flags."""
-    result = parse_args(['--build-dockerfile=/Dockerfile', '--build-context=.', '--build-policy=always'])
+    result = parse_args(
+        ['--build-dockerfile=/Dockerfile', '--build-context=.', '--build-policy=always']
+    )
     assert result.build_dockerfile == '/Dockerfile'
     assert result.build_context == '.'
     assert result.build_policy == 'always'
@@ -271,117 +247,25 @@ uv run pytest tests/test_cli.py -v
 
 - [ ] **Step 3: Implement `src/paddock/cli.py`**
 
-```python
-import argparse
-from dataclasses import dataclass, field
+**Design:** Maintain a set of known paddock flags. Scan `argv` left-to-right: collect known flags (and their values) into `paddock_argv`; stop at `--` (consumed) or the first non-flag token (positional). Unknown flags (start with `--` but not in the known set) are left in `paddock_argv` so `argparse` reports them as errors. Everything from the stop-point onward becomes the container command (preserving any subsequent `--`).
 
+`ParsedArgs` dataclass fields (alphabetical): `agent`, `build_args`, `build_context`, `build_dockerfile`, `build_policy`, `command`, `config_file`, `dry_run`, `image`, `network`, `quiet`, `volumes`, `workdir`.
 
-@dataclass
-class ParsedArgs:
-    agent: str | bool | None
-    build_args: dict[str, str]
-    build_context: str | None
-    build_dockerfile: str | None
-    build_policy: str | None
-    command: list[str]
-    config_file: str | None
-    dry_run: bool
-    image: str | None
-    network: str | None
-    quiet: bool
-    volumes: dict[str, str]
-    workdir: str | None
+For `--build-args-<key>=<value>`: extract these from `paddock_argv` before passing to `argparse` (argparse cannot handle dynamic flag names). Strip the `--build-args-` prefix, replace `-` with `_` in the key.
 
+`_parse_volume(value)` splits on the first `:` to separate host path from container spec. Does **not** use the `Volume` filter (different format from TOML).
 
-def _parse_volume(value: str) -> tuple[str, str]:
-    """
-    Parse '--volume=/host:/container[:mode]' into (host_path, container_path_with_mode).
+- [ ] **Step 4: Run tests to verify they pass**
 
-    Note: this function intentionally does not use the Volume filter from
-    paddock.config.filters. The CLI --volume flag uses a different format from
-    config.toml: the CLI splits host and container paths using ':' as a separator
-    (three colon-delimited segments), whereas the TOML format stores them as
-    separate key and value. Applying the Volume filter here would misinterpret
-    the host path as part of the container path.
-    """
-    parts = value.split(':', 1)
-    if len(parts) != 2:
-        raise argparse.ArgumentTypeError(
-            f'Invalid volume format: {value!r}. Expected /host:/container[:mode]'
-        )
-    host, rest = parts
-    return host, rest
-
-
-def parse_args(argv: list[str]) -> ParsedArgs:
-    """
-    Parse paddock CLI arguments.
-
-    Stops consuming paddock flags at the first positional arg or first unknown flag
-    (treats them as the start of the container command). '--' explicitly splits
-    paddock flags from the container command.
-    """
-    # Split on the first '--' only
-    if '--' in argv:
-        split_idx = argv.index('--')
-        before_dd = argv[:split_idx]
-        after_dd = argv[split_idx + 1:]
-    else:
-        before_dd = argv
-        after_dd = []
-
-    parser = argparse.ArgumentParser(prog='paddock', add_help=True)
-    parser.add_argument('--agent')
-    parser.add_argument('--build-context')
-    parser.add_argument('--build-dockerfile')
-    parser.add_argument('--build-policy')
-    parser.add_argument('--config-file')
-    parser.add_argument('--dry-run', action='store_true', default=False)
-    parser.add_argument('--image')
-    parser.add_argument('--network')
-    parser.add_argument('--quiet', action='store_true', default=False)
-    parser.add_argument('--volume', action='append', default=[])
-    parser.add_argument('--workdir')
-
-    namespace, remaining = parser.parse_known_args(before_dd)
-
-    # remaining contains either unknown flags or positional args (or both).
-    # Everything in remaining + after_dd becomes the container command.
-    command = remaining + after_dd
-
-    # Parse volumes: --volume=/host:/container[:mode]
-    volumes: dict[str, str] = {}
-    for vol in namespace.volume:
-        host, rest = _parse_volume(vol)
-        volumes[host] = rest
-
-    # Extract --build-args-<key>=<value> flags from remaining
-    # These are flags like --build-args-python-version=3.13 -> {'python_version': '3.13'}
-    # Note: these must appear before the first positional/unknown to be parsed as paddock flags.
-    # This is handled via parse_known_args — any build-args-* flags in `remaining` indicate
-    # the user forgot to place them before the command split point.
-    build_args: dict[str, str] = {}
-    # Parse build-args from namespace if supported, else from remaining
-    # Implementation detail: use a second parse pass or prefix-matching on namespace attrs
-
-    return ParsedArgs(
-        agent=namespace.agent,
-        build_args=build_args,
-        build_context=namespace.build_context,
-        build_dockerfile=namespace.build_dockerfile,
-        build_policy=namespace.build_policy,
-        command=command,
-        config_file=namespace.config_file,
-        dry_run=namespace.dry_run,
-        image=namespace.image,
-        network=namespace.network,
-        quiet=namespace.quiet,
-        volumes=volumes,
-        workdir=namespace.workdir,
-    )
+```bash
+uv run pytest tests/test_cli.py -v
 ```
 
-Note on `--build-args-<key>`: `argparse` doesn't natively support dynamic flag names. Consider using `parse_known_args` and extracting `--build-args-*` flags manually from the returned unknowns list (before they become the container command). The implementation can scan `before_dd` for `--build-args-` prefixed entries and strip them out before passing the remainder to `parse_known_args`.
+- [ ] **Step 5: Commit**
+
+- [ ] **Step 6: Compress this task in the plan**
+
+Replace this task's full section with a one-paragraph summary of what was done, then commit the plan update using the `creative-commits` skill.
 
 - [ ] **Step 4: Run tests to verify they pass**
 
