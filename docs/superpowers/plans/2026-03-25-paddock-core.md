@@ -10,7 +10,7 @@
 
 **Out of scope (Phase 2):** Squid proxy sidecar container.
 
-**Worktree:** _TBD — see Task 1, Step 1_
+**Worktree:** `/Users/phx/Documents/paddock` [main]
 
 ---
 

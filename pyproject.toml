@@ -1,0 +1,78 @@
+[build-system]
+build-backend = "hatchling.build"
+requires = ["hatchling"]
+
+[project]
+authors = [{ name = "Phoenix Zerin", email = "phx@phx.nz" }]
+description = "Launch coding agents in isolated Docker containers."
+dynamic = ["version"]
+keywords = [
+    "agents",
+    "coding",
+    "docker",
+    "isolation",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Software Development :: Build Tools",
+]
+license = "MIT"
+name = "paddock"
+readme = "README.rst"
+requires-python = ">=3.12, <4"
+dependencies = [
+    "phx-class-registry>=5.2.1,<6.0.0",
+    "phx-filters>=3.5.1,<4.0.0",
+]
+
+[project.entry-points."paddock.agents"]
+claude = "paddock.agents.claude:ClaudeAgent"
+false = "paddock.agents.shell:ShellAgent"
+
+[project.scripts]
+paddock = "paddock.__main__:main"
+
+[project.urls]
+Repository = "https://github.com/phx/paddock"
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "src/paddock",
+    "LICENCE.txt",
+    "images",
+]
+
+[tool.hatch.build.targets.wheel]
+include = ["src/paddock"]
+
+[tool.hatch.build.targets.wheel.sources]
+"src/paddock" = "paddock"
+
+[tool.hatch.version]
+path = "src/paddock/__init__.py"
+
+[tool.autohooks]
+mode = "pythonpath"
+pre-commit = [
+    "autohooks.plugins.black",
+    "autohooks.plugins.pytest",
+    "autohooks.plugins.ruff",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[dependency-groups]
+dev = [
+    "autohooks>=26.2.0,<27.0.0",
+    "autohooks-plugin-black>=23.10.0,<24.0.0",
+    "autohooks-plugin-pytest>=23.10.0,<24.0.0",
+    "autohooks-plugin-ruff>=25.3.1,<26.0.0",
+    "pytest>=9.0.3,<10.0.0",
+    "pytest-mock>=3.15.1,<4.0.0",
+]
