@@ -1,13 +1,12 @@
-from abc import abstractmethod
+from abc import ABC, abstractmethod
 from typing import ClassVar
 
-from class_registry import AutoRegister
 from class_registry.entry_points import EntryPointClassRegistry
 
 agent_registry: EntryPointClassRegistry = EntryPointClassRegistry("paddock.agents")
 
 
-class BaseAgent(AutoRegister(agent_registry)):
+class BaseAgent(ABC):
     AGENT_KEY: ClassVar[str]
 
     @abstractmethod
