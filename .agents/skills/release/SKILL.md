@@ -1,6 +1,6 @@
 ---
 name: release
-description: Use when preparing or publishing a new release of phx-filters — covers release notes, version bump, build, PyPI upload, and GitHub release creation
+description: Use when preparing or publishing a new release of phx-paddock — covers release notes, version bump, build, PyPI upload, and GitHub release creation
 ---
 # Release
 
@@ -40,10 +40,7 @@ Based on the changes, recommend a semver bump:
 ## Phase 2 — Publish (after confirmation)
 
 ### 5. Bump version on `develop`
-```bash
-uv version <version>
-```
-This updates `pyproject.toml` and re-locks `uv.lock` in one step. Commit both files and push to `develop`.
+Edit `__version__` in `src/paddock/__init__.py` directly (Hatch reads the version from there). Commit the file and push to `develop`.
 
 ### 6. Open release PR
 ```bash
@@ -75,14 +72,14 @@ git push origin <version>
 **a. Append checksums to the release notes file:**
 ```bash
 echo -e "\n# SHA256 Checksums" >> release-<version>.md
-sha256sum dist/phx_filters-* >> release-<version>.md
+sha256sum dist/phx_paddock-* >> release-<version>.md
 ```
 
 **b. GPG-sign the document and each build artefact:**
 ```bash
 GPG_KEY=$(git config user.email)
 gpg --local-user "$GPG_KEY" --clearsign release-<version>.md   # → release-<version>.md.asc
-for f in dist/phx_filters-*; do gpg --local-user "$GPG_KEY" --detach-sign "$f"; done
+for f in dist/phx_paddock-*; do gpg --local-user "$GPG_KEY" --detach-sign "$f"; done
 # Creates dist/phx_filters-*.sig alongside each artefact
 ```
 
@@ -101,7 +98,7 @@ Write this to `release-<version>-body.md`.
 **e. Create the release and upload all artefacts:**
 ```bash
 gh release create <version> dist/* \
-  --title "Filters v<version>" \
+  --title "Paddock v<version>" \
   --notes-file release-<version>-body.md
 ```
 `dist/*` picks up the `.whl`, `.tar.gz`, and `.sig` files.
@@ -114,7 +111,6 @@ uv publish --username __token__
 ### 12. Clean up
 ```bash
 rm release-<version>.md release-<version>.md.asc release-<version>-body.md
-git checkout develop && git pull
 ```
 
 ---
@@ -123,8 +119,12 @@ git checkout develop && git pull
 
 ### Structure
 ```markdown
-# Filters v<version>
+# Paddock v<version>
 <one-sentence summary of the release character>
+
+> [!CAUTION]
+> **Alpha software — here be dragons**
+> This is an early release. APIs, configuration formats, and CLI flags may change without notice in future versions.
 
 > [!WARNING]
 > **Breaking changes**
@@ -139,7 +139,7 @@ git checkout develop && git pull
 # SHA256 Checksums
 ```
 
-Only include the `[!WARNING]` block if there are breaking changes. Omit any section that has no entries.
+Only include the `[!CAUTION]` block for pre-1.0 / alpha releases. Only include the `[!WARNING]` block if there are breaking changes. Omit any section that has no entries.
 
 ### Grouping related items
 - **2–4 related bullets:** nest as a hierarchical sublist under the parent bullet
