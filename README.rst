@@ -4,11 +4,11 @@ paddock
 Launch coding agents (or a plain shell) in isolated Docker containers,
 with the current working directory mounted as the workspace.
 
-.. image:: https://img.shields.io/pypi/v/paddock.svg
-   :target: https://pypi.org/project/paddock/
+.. image:: https://img.shields.io/pypi/v/phx-paddock.svg
+   :target: https://pypi.org/project/phx-paddock/
    :alt: PyPI version
 
-.. image:: https://img.shields.io/pypi/pyversions/paddock.svg
+.. image:: https://img.shields.io/pypi/pyversions/phx-paddock.svg
    :alt: Python versions
 
 .. image:: https://img.shields.io/badge/licence-MIT-blue.svg
@@ -40,13 +40,13 @@ Installation
 
 .. code-block:: bash
 
-   pip install paddock
+   pip install phx-paddock
 
 Or with `uv <https://github.com/astral-sh/uv>`_:
 
 .. code-block:: bash
 
-   uv tool install paddock
+   uv tool install phx-paddock
 
 Quick Start
 -----------
