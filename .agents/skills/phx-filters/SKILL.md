@@ -82,6 +82,48 @@ else:
 
 Never access `cleaned_data` without first checking `is_valid()` — it raises if validation failed.
 
+## Testing custom filters
+
+phx-filters ships a pytest plugin (`filters.pytest`) that is registered automatically — no
+import or configuration required. Use it for all custom filter tests.
+
+### Fixtures
+
+```python
+def test_my_filter_passes(assert_filter_passes):
+    # Omit expected_output when the output equals the input.
+    assert_filter_passes(MyFilter(), input_value)
+    # Supply it when the filter transforms the value.
+    assert_filter_passes(MyFilter(), input_value, expected_output)
+
+def test_my_filter_fails(assert_filter_errors):
+    assert_filter_errors(MyFilter(), input_value, ["error_code"])
+```
+
+`assert_filter_errors` accepts either a list (checks the `""` key) or a full `{key: [codes]}` dict.
+
+Use `from filters.pytest import skip_value_check` when a simple equality check is not practical —
+omit the expected value and add manual assertions instead.
+
+### Naming convention
+
+Follow the phx-filters convention for all custom filter tests:
+
+- `test_pass_none` — **always the first test** for a custom filter; confirms `None` is a pass-through (handled by `BaseFilter` before `_apply` is called)
+- `test_pass_<sub_group>_<scenario>` — passing cases grouped by behaviour
+- `test_fail_<sub_group>_<scenario>` — failing cases grouped by behaviour
+- Omit `<sub_group>` when there is only one test in that group (e.g. `test_fail_wrong_type`)
+
+### Multi-type input with `f.Type`
+
+To assert that a value is one of several types (without coercing), pass a tuple:
+
+```python
+value = self._filter(value, f.Type((str, Path)))
+```
+
+The error code is `f.Type.CODE_WRONG_TYPE` = `"wrong_type"`.
+
 ## API gotchas discovered in this project
 
 - **`f.Datetime`** (not `f.DateTime`) — phx-filters uses `Datetime` (lowercase 't').
