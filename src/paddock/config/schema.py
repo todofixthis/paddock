@@ -29,6 +29,22 @@ _config_schema = f.FilterMapper(
     allow_extra_keys=False,
 )
 
+# Flat schema for PADDOCK_* environment variables, validated before mapping.
+_env_schema = f.FilterMapper(
+    {
+        "PADDOCK_AGENT": Agent,
+        "PADDOCK_BUILD_ARGS": f.Unicode,
+        "PADDOCK_BUILD_CONTEXT": f.Unicode | Filepath,
+        "PADDOCK_BUILD_DOCKERFILE": f.Unicode | Filepath,
+        "PADDOCK_BUILD_POLICY": f.Choice(BUILD_POLICIES),
+        "PADDOCK_CONFIG_FILE": f.Unicode | Filepath,
+        "PADDOCK_IMAGE": f.Unicode | f.NotEmpty,
+        "PADDOCK_NETWORK": f.Unicode,
+    },
+    allow_extra_keys=True,
+    allow_missing_keys=True,
+)
+
 
 class ConfigSchema:
     """Validates a merged paddock config dict.
