@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import filters as f
+from filters.pytest import skip_value_check
 
 from paddock.config.loader import ConfigLoader
 from paddock.config.schema import _env_schema
@@ -136,48 +137,71 @@ def test_resolve_returns_valid_runner(tmp_path: Path, monkeypatch):
 # ---------------------------------------------------------------------------
 
 
-def test_env_schema_expands_tilde_in_config_file(monkeypatch, tmp_path):
+def test_env_schema_expands_tilde_in_config_file(
+    assert_filter_passes, monkeypatch, tmp_path
+):
     """PADDOCK_CONFIG_FILE with a leading tilde is expanded by the env schema."""
     monkeypatch.setenv("HOME", str(tmp_path))
     config_file = tmp_path / "extra.toml"
     config_file.write_text("")
-    runner = f.FilterRunner(_env_schema, {"PADDOCK_CONFIG_FILE": "~/extra.toml"})
-    assert runner.is_valid()
+    runner = assert_filter_passes(
+        _env_schema,
+        {"PADDOCK_CONFIG_FILE": "~/extra.toml"},
+        skip_value_check,
+    )
     assert runner.cleaned_data["PADDOCK_CONFIG_FILE"] == config_file.resolve()
 
 
-def test_env_schema_expands_tilde_in_dockerfile(monkeypatch, tmp_path):
+def test_env_schema_expands_tilde_in_dockerfile(
+    assert_filter_passes, monkeypatch, tmp_path
+):
     """PADDOCK_BUILD_DOCKERFILE with a leading tilde is expanded by the env schema."""
     monkeypatch.setenv("HOME", str(tmp_path))
     dockerfile = tmp_path / "Dockerfile"
     dockerfile.write_text("")
-    runner = f.FilterRunner(_env_schema, {"PADDOCK_BUILD_DOCKERFILE": "~/Dockerfile"})
-    assert runner.is_valid()
+    runner = assert_filter_passes(
+        _env_schema,
+        {"PADDOCK_BUILD_DOCKERFILE": "~/Dockerfile"},
+        skip_value_check,
+    )
     assert runner.cleaned_data["PADDOCK_BUILD_DOCKERFILE"] == dockerfile.resolve()
 
 
-def test_env_schema_rejects_empty_dockerfile():
+def test_env_schema_rejects_empty_dockerfile(assert_filter_errors):
     """PADDOCK_BUILD_DOCKERFILE="" is rejected — empty string would silently resolve to CWD."""
-    runner = f.FilterRunner(_env_schema, {"PADDOCK_BUILD_DOCKERFILE": ""})
-    assert not runner.is_valid()
+    assert_filter_errors(
+        _env_schema,
+        {"PADDOCK_BUILD_DOCKERFILE": ""},
+        {"PADDOCK_BUILD_DOCKERFILE": [f.NotEmpty.CODE_EMPTY]},
+        skip_value_check,
+    )
 
 
-def test_env_schema_rejects_empty_context():
+def test_env_schema_rejects_empty_context(assert_filter_errors):
     """PADDOCK_BUILD_CONTEXT="" is rejected — empty string would silently resolve to CWD."""
-    runner = f.FilterRunner(_env_schema, {"PADDOCK_BUILD_CONTEXT": ""})
-    assert not runner.is_valid()
+    assert_filter_errors(
+        _env_schema,
+        {"PADDOCK_BUILD_CONTEXT": ""},
+        {"PADDOCK_BUILD_CONTEXT": [f.NotEmpty.CODE_EMPTY]},
+        skip_value_check,
+    )
 
 
-def test_env_schema_rejects_invalid_policy():
+def test_env_schema_rejects_invalid_policy(assert_filter_errors):
     """PADDOCK_BUILD_POLICY with an unrecognised value is invalid."""
-    runner = f.FilterRunner(_env_schema, {"PADDOCK_BUILD_POLICY": "never"})
-    assert not runner.is_valid()
+    assert_filter_errors(
+        _env_schema,
+        {"PADDOCK_BUILD_POLICY": "never"},
+        {"PADDOCK_BUILD_POLICY": [f.Choice.CODE_INVALID]},
+        skip_value_check,
+    )
 
 
-def test_env_schema_ignores_non_paddock_vars():
+def test_env_schema_ignores_non_paddock_vars(assert_filter_passes):
     """Non-PADDOCK_* vars in the env are silently ignored."""
-    runner = f.FilterRunner(_env_schema, {"PATH": "/usr/bin", "HOME": "/home/user"})
-    assert runner.is_valid()
+    assert_filter_passes(
+        _env_schema, {"PATH": "/usr/bin", "HOME": "/home/user"}, skip_value_check
+    )
 
 
 def test_env_build_args_not_mapped(tmp_path):
