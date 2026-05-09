@@ -50,6 +50,37 @@ called), so `f.Optional(None)` is always redundant. Only use `f.Optional` when y
 substitute a specific non-`None` fallback, and place it at the end so the default bypasses
 all preceding validation.
 
+**Exception — `FilterMapper` with `f.Optional`:** the placement of `f.Optional(callable)`
+relative to a `FilterMapper` determines whether the sub-schema is applied to the default
+value:
+
+```python
+sub = f.FilterMapper({"x": f.Unicode, "y": f.Unicode}, allow_missing_keys=True)
+
+# f.Optional(dict) BEFORE FilterMapper:
+#   None → {} → FilterMapper applies sub-chains → {'x': None, 'y': None}
+f.Optional(dict) | sub
+
+# f.Optional(dict) AFTER FilterMapper:
+#   None → FilterMapper passes None through → None → f.Optional(dict) → {}
+sub | f.Optional(dict)
+```
+
+Put `f.Optional(callable)` *before* `FilterMapper` when you want the sub-schema to run
+(e.g. to populate missing-key defaults). Put it *after* when you want a plain empty dict
+with no sub-schema applied.
+
+For `FilterRepeater`, ordering does not matter — both placements produce `{}` for `None`
+input, since an empty dict has no values to repeat over. Prefer placing `f.Optional(dict)`
+before `FilterRepeater` for consistency with the `FilterMapper` convention:
+
+```python
+'volumes': f.Optional(dict) | f.FilterRepeater(Volume)
+```
+
+`f.Optional(dict)` works because `f.Optional` calls its argument when it is callable,
+producing `dict()` → `{}`.
+
 ## `f.FilterMapper`
 
 Validates a dict against a schema. Each key maps to a filter chain.
@@ -79,7 +110,7 @@ Applies a filter to every **value** in a mapping (dict). Keys are left unchanged
 
 ```python
 # Apply Volume filter to each value in the volumes dict
-'volumes': f.Type(dict) | f.FilterRepeater(Volume) | f.Optional({})
+'volumes': f.Optional(dict) | f.FilterRepeater(Volume)
 ```
 
 ## `f.FilterRunner`
