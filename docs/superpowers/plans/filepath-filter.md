@@ -86,7 +86,7 @@ def _apply(self, value):
   ```
   Then:
   ```bash
-  cd .worktrees/filepath-filter && uv run autohooks activate --mode=pythonpath
+  uv run --directory .worktrees/filepath-filter autohooks activate --mode=pythonpath
   ```
   Update the `**Worktree:**` field in this plan's header with the path and branch name.
 
@@ -119,44 +119,70 @@ conventions: `test_pass_<sub_group>_<scenario>` / `test_fail_<sub_group>_<scenar
   # Filepath
   # ---------------------------------------------------------------------------
 
+  @pytest.fixture(autouse=True)
+  def _filepath_set_home(monkeypatch, tmp_path):
+      """Set HOME to tmp_path for every test in this file.
+
+      autouse=True means this applies to all tests in test_filters.py, not
+      just the Filepath section. That is intentional and harmless — no other
+      filter in this file reads HOME — but if a future filter does, move this
+      fixture to a conftest scoped to a Filepath-only subdirectory or convert
+      it to an explicit fixture.
+      """
+      monkeypatch.setenv("HOME", str(tmp_path))
+
+
   def test_pass_none(assert_filter_passes):
       """None is always a pass-through."""
-      assert_filter_passes(Filepath(home_dir="/h"), None, None)
+      assert_filter_passes(Filepath, None, None)
 
 
-  # -- tilde expansion: applied -----------------------------------------------
+  # -- tilde expansion --------------------------------------------------------
 
-  @pytest.mark.parametrize(
-      "value,expected",
-      [
-          ("~", Path("/home/testuser")),
-          ("~/", Path("/home/testuser")),
-          ("~/foo", Path("/home/testuser/foo")),
-          (Path("~"), Path("/home/testuser")),
-          (Path("~/foo"), Path("/home/testuser/foo")),
-      ],
-  )
-  def test_pass_tilde_expansion_applied(assert_filter_passes, value, expected):
-      """Tilde prefix is expanded using the provided home dir (Path or str input)."""
-      assert_filter_passes(Filepath(home_dir="/home/testuser"), value, expected)
+  def test_pass_tilde_expansion_applied_tilde_only(assert_filter_passes, tmp_path):
+      """Bare ~ expands to HOME."""
+      assert_filter_passes(Filepath, "~", tmp_path.resolve())
 
 
-  # -- tilde expansion: not applied -------------------------------------------
-
-  @pytest.mark.parametrize(
-      "value",
-      [
-          "/abs/path/file",
-          "relative/path",
-          "/path/~in/middle",
-      ],
-  )
-  def test_pass_tilde_expansion_not_applied(assert_filter_passes, value):
-      """Paths without a leading tilde are returned as-is (as Path objects)."""
-      assert_filter_passes(Filepath(home_dir="/h"), value, Path(value))
+  def test_pass_tilde_expansion_applied_tilde_slash(assert_filter_passes, tmp_path):
+      """~/ expands to HOME."""
+      assert_filter_passes(Filepath, "~/", tmp_path.resolve())
 
 
-  # -- tilde expansion: custom home dir ---------------------------------------
+  def test_pass_tilde_expansion_applied_str(assert_filter_passes, tmp_path):
+      """~/foo expands to HOME/foo (str input)."""
+      target = tmp_path / "foo"
+      target.mkdir()
+      assert_filter_passes(Filepath, "~/foo", target.resolve())
+
+
+  def test_pass_tilde_expansion_applied_path_tilde_only(assert_filter_passes, tmp_path):
+      """Path("~") expands to HOME."""
+      assert_filter_passes(Filepath, Path("~"), tmp_path.resolve())
+
+
+  def test_pass_tilde_expansion_applied_path_with_segment(assert_filter_passes, tmp_path):
+      """Path("~/foo") expands to HOME/foo."""
+      target = tmp_path / "foo"
+      target.mkdir()
+      assert_filter_passes(Filepath, Path("~/foo"), target.resolve())
+
+
+  def test_pass_tilde_expansion_not_applied_abs(assert_filter_passes, tmp_path):
+      """An absolute path without a leading tilde is returned as a Path object."""
+      target = tmp_path / "file.txt"
+      target.write_text("")
+      assert_filter_passes(Filepath, str(target), target.resolve())
+
+
+  def test_pass_tilde_expansion_not_applied_tilde_in_middle(assert_filter_passes, tmp_path):
+      """A tilde not at the start of a path is treated as a literal character."""
+      tilde_dir = tmp_path / "~in"
+      tilde_dir.mkdir()
+      target = tilde_dir / "middle"
+      target.write_text("")
+      assert_filter_passes(Filepath, str(target), target.resolve())
+
 
   def test_pass_tilde_expansion_custom_home_dir(assert_filter_passes):
       """A custom home_dir overrides Path.home() for tilde expansion."""
@@ -176,122 +202,191 @@ conventions: `test_pass_<sub_group>_<scenario>` / `test_fail_<sub_group>_<scenar
 
   # -- resolve ----------------------------------------------------------------
 
-  def test_pass_resolve_dot_segment(tmp_path, assert_filter_passes):
+  def test_pass_resolve_dot_segment(assert_filter_passes, tmp_path):
       """resolve=True resolves '.' segments in paths."""
-      target = tmp_path / "file.txt"
+      target = tmp_path / "target.txt"
       target.write_text("")
+
+      # Use an f-string so the '.' reaches the filter as a string — Path() would
+      # normalise it away before the filter sees it.
       assert_filter_passes(
-          Filepath(),
-          str(tmp_path / "." / "file.txt"),
+          Filepath(home_dir=tmp_path, resolve=True),
+          f"{tmp_path}/./target.txt",
           target.resolve(),
       )
 
 
-  def test_pass_resolve_dotdot_segment(tmp_path, assert_filter_passes):
+  def test_pass_resolve_dotdot_segment(assert_filter_passes, tmp_path):
       """resolve=True resolves '..' segments in paths."""
       subdir = tmp_path / "sub"
       subdir.mkdir()
-      target = tmp_path / "file.txt"
+      target = tmp_path / "target.txt"
       target.write_text("")
+
       assert_filter_passes(
-          Filepath(),
-          str(subdir / ".." / "file.txt"),
+          Filepath(home_dir=tmp_path, resolve=True),
+          str(subdir / ".." / "target.txt"),
           target.resolve(),
       )
 
 
-  def test_pass_resolve_symlink(tmp_path, assert_filter_passes):
+  def test_pass_resolve_symlink(assert_filter_passes, tmp_path):
       """resolve=True follows symlinks to their real target."""
       target = tmp_path / "target.txt"
       target.write_text("")
+
       link = tmp_path / "link.txt"
       link.symlink_to(target)
-      assert_filter_passes(Filepath(), str(link), target.resolve())
+
+      assert_filter_passes(
+          Filepath(home_dir=tmp_path, resolve=True),
+          link,
+          target.resolve(),
+      )
 
 
-  def test_fail_resolve_broken_symlink(tmp_path, assert_filter_errors):
+  def test_fail_resolve_broken_symlink(assert_filter_errors, tmp_path):
       """A broken symlink is invalid when must_exist is effective (default)."""
       link = tmp_path / "link.txt"
-      link.symlink_to(tmp_path / "ghost.txt")
-      assert_filter_errors(Filepath(), str(link), [Filepath.CODE_DOES_NOT_EXIST])
+      link.symlink_to(tmp_path / "target.txt")
+
+      assert_filter_errors(
+          Filepath(home_dir=tmp_path, resolve=True),
+          link,
+          [Filepath.CODE_DOES_NOT_EXIST],
+      )
 
 
   # -- resolve: behaviour when home_dir is not set ----------------------------
 
-  def test_pass_resolve_default_home_dir_activates(tmp_path, assert_filter_passes):
+  def test_pass_resolve_default_home_dir_activates(assert_filter_passes, tmp_path):
       """When home_dir is not set, resolve is enabled automatically."""
-      target = tmp_path / "file.txt"
+      subdir = tmp_path / "sub"
+      subdir.mkdir()
+      target = tmp_path / "target.txt"
       target.write_text("")
+
       assert_filter_passes(
-          Filepath(),
-          str(tmp_path / "." / "file.txt"),
+          Filepath,
+          "~/sub/../target.txt",
           target.resolve(),
       )
 
 
-  def test_pass_resolve_tilde_default_home_dir(
-      tmp_path, monkeypatch, assert_filter_passes
-  ):
-      """When home_dir is not set, '~' expands via Path.home() and the result is resolved."""
-      monkeypatch.setenv("HOME", str(tmp_path))
-      (tmp_path / "file.txt").write_text("")
+  def test_pass_resolve_false_skips_resolution(assert_filter_passes, tmp_path):
+      """Explicit resolve=False returns the tilde-expanded Path without resolution."""
+      subdir = tmp_path / "sub"
+      subdir.mkdir()
+      target = tmp_path / "target.txt"
+      target.write_text("")
+
       assert_filter_passes(
-          Filepath(),
-          "~/file.txt",
-          (tmp_path / "file.txt").resolve(),
+          Filepath(resolve=False),
+          "~/sub/../target.txt",
+          tmp_path / "sub" / ".." / "target.txt",
       )
 
 
-  def test_pass_resolve_false_skips_resolution(tmp_path, assert_filter_passes):
-      """Explicit resolve=False returns the tilde-expanded Path without resolution."""
+  # -- resolve: behaviour when home_dir is set --------------------------------
+
+  def test_pass_resolve_defaults_off_with_home_dir(assert_filter_passes, tmp_path):
+      """When home_dir is set, resolve is disabled by default."""
+      subdir = tmp_path / "sub"
+      subdir.mkdir()
+
       assert_filter_passes(
-          Filepath(home_dir=str(tmp_path), resolve=False),
-          "~/sub",
-          Path(tmp_path) / "sub",
+          Filepath(home_dir=tmp_path),
+          "~/sub/../target.txt",
+          tmp_path / "sub" / ".." / "target.txt",
+      )
+
+
+  def test_pass_resolve_explicit_true_with_home_dir(assert_filter_passes, tmp_path):
+      """Explicit resolve=True resolves paths even when home_dir is set."""
+      subdir = tmp_path / "sub"
+      subdir.mkdir()
+
+      assert_filter_passes(
+          Filepath(home_dir=tmp_path, resolve=True),
+          "~/sub/../target.txt",
+          (tmp_path / "target.txt").resolve(),
       )
 
 
   # -- must_exist -------------------------------------------------------------
 
-  def test_pass_must_exist_default_valid(tmp_path, assert_filter_passes):
-      """Default Filepath() passes when the path exists."""
-      target = tmp_path / "real.txt"
+  def test_pass_must_exist_explicit_true_valid(assert_filter_passes, tmp_path):
+      """must_exist=True passes when the path exists."""
+      target = tmp_path / "target.txt"
       target.write_text("")
-      assert_filter_passes(Filepath(), str(target), target.resolve())
+
+      assert_filter_passes(Filepath(home_dir=tmp_path, must_exist=True), target)
 
 
-  def test_fail_must_exist_default_invalid(tmp_path, assert_filter_errors):
-      """Default Filepath() is invalid when the path does not exist."""
+  def test_fail_must_exist_explicit_true_invalid(assert_filter_errors, tmp_path):
+      """must_exist=True is invalid when the path does not exist."""
       assert_filter_errors(
-          Filepath(),
-          str(tmp_path / "ghost.txt"),
+          Filepath(home_dir=tmp_path, must_exist=True),
+          tmp_path / "target.txt",
           [Filepath.CODE_DOES_NOT_EXIST],
       )
 
 
-  def test_pass_must_exist_false_missing(tmp_path, assert_filter_passes):
-      """must_exist=False skips the existence check; missing path still resolves."""
-      missing = tmp_path / "ghost.txt"
-      assert_filter_passes(Filepath(must_exist=False), str(missing), missing.resolve())
-
-
-  def test_pass_must_exist_resolve_false_valid(tmp_path, assert_filter_passes):
-      """must_exist=True with resolve=False: explicit .exists() check passes."""
-      target = tmp_path / "real.txt"
-      target.write_text("")
+  def test_pass_must_exist_false_missing(assert_filter_passes, tmp_path):
+      """must_exist=False skips the existence check."""
       assert_filter_passes(
-          Filepath(home_dir=str(tmp_path), resolve=False, must_exist=True),
-          "~/real.txt",
-          Path(tmp_path) / "real.txt",
+          Filepath(home_dir=tmp_path, must_exist=False),
+          "~/./target.txt",
+          tmp_path / "target.txt",
       )
 
 
-  def test_fail_must_exist_resolve_false_invalid(tmp_path, assert_filter_errors):
-      """must_exist=True with resolve=False: explicit .exists() check fails."""
+  def test_pass_must_exist_resolve_false_valid(assert_filter_passes, tmp_path):
+      """must_exist=True with resolve=False: explicit .exists() check passes."""
+      target = tmp_path / "target.txt"
+      target.write_text("")
+
+      assert_filter_passes(
+          Filepath(home_dir=tmp_path, must_exist=True, resolve=False),
+          "~/./target.txt",
+          tmp_path / "." / "target.txt",
+      )
+
+
+  def test_fail_must_exist_resolve_false_invalid(assert_filter_errors, tmp_path):
+      """must_exist=True with resolve=False: .exists() check rejects a missing path."""
       assert_filter_errors(
-          Filepath(home_dir=str(tmp_path), resolve=False, must_exist=True),
-          "~/ghost.txt",
+          Filepath(home_dir=tmp_path, must_exist=True, resolve=False),
+          "~/./target.txt",
           [Filepath.CODE_DOES_NOT_EXIST],
+      )
+
+
+  # -- must_exist: behaviour when home_dir is not set -------------------------
+
+  def test_pass_must_exist_default_activates(assert_filter_passes, tmp_path):
+      """When home_dir is not set, must_exist is enabled automatically."""
+      target = tmp_path / "target.txt"
+      target.write_text("")
+
+      assert_filter_passes(Filepath, "~/target.txt", target.resolve())
+
+
+  def test_fail_must_exist_default_activates_missing(assert_filter_errors, tmp_path):
+      """When home_dir is not set, missing paths are rejected automatically."""
+      assert_filter_errors(
+          Filepath,
+          "~/missing.txt",
+          [Filepath.CODE_DOES_NOT_EXIST],
+      )
+
+
+  def test_pass_must_exist_false_overrides_default(assert_filter_passes, tmp_path):
+      """Explicit must_exist=False bypasses the default existence check."""
+      assert_filter_passes(
+          Filepath(must_exist=False, resolve=False),
+          "~/missing.txt",
+          tmp_path / "missing.txt",
       )
   ```
 
@@ -453,7 +548,7 @@ conventions: `test_pass_<sub_group>_<scenario>` / `test_fail_<sub_group>_<scenar
   in `tmp_path` because `Filepath()` checks existence by default.
 
   ```python
-  def test_build_dockerfile_tilde_expanded(tmp_path, monkeypatch):
+  def test_build_dockerfile_tilde_expanded(monkeypatch, tmp_path):
       """'~/Dockerfile' is expanded using Path.home()."""
       monkeypatch.setenv("HOME", str(tmp_path))
       dockerfile = tmp_path / "Dockerfile"
@@ -470,7 +565,7 @@ conventions: `test_pass_<sub_group>_<scenario>` / `test_fail_<sub_group>_<scenar
       assert not str(result.cleaned_data["build"]["dockerfile"]).startswith("~")
 
 
-  def test_build_context_tilde_expanded(tmp_path, monkeypatch):
+  def test_build_context_tilde_expanded(monkeypatch, tmp_path):
       """A tilde in build.context is expanded and resolved."""
       monkeypatch.setenv("HOME", str(tmp_path))
       context_dir = tmp_path / "myproject"
@@ -581,7 +676,7 @@ nested (`build.dockerfile`). Validate the raw `env` dict against a flat-key sche
   things cleaner):
 
   ```python
-  def test_env_schema_expands_tilde_in_config_file(tmp_path, monkeypatch):
+  def test_env_schema_expands_tilde_in_config_file(monkeypatch, tmp_path):
       """PADDOCK_CONFIG_FILE with a leading tilde is expanded by the env schema."""
       monkeypatch.setenv("HOME", str(tmp_path))
       config_file = tmp_path / "extra.toml"
@@ -591,7 +686,7 @@ nested (`build.dockerfile`). Validate the raw `env` dict against a flat-key sche
       assert runner.cleaned_data["PADDOCK_CONFIG_FILE"] == config_file.resolve()
 
 
-  def test_env_schema_expands_tilde_in_dockerfile(tmp_path, monkeypatch):
+  def test_env_schema_expands_tilde_in_dockerfile(monkeypatch, tmp_path):
       """PADDOCK_BUILD_DOCKERFILE with a leading tilde is expanded by the env schema."""
       monkeypatch.setenv("HOME", str(tmp_path))
       dockerfile = tmp_path / "Dockerfile"
@@ -615,8 +710,24 @@ nested (`build.dockerfile`). Validate the raw `env` dict against a flat-key sche
       assert runner.is_valid()
   ```
 
-  Also add a test confirming that validated env values flow through to the resolved config (an
-  integration test through `ConfigLoader.resolve()`).
+  Also add a test confirming that validated env values flow through to the resolved config
+  (an integration test through `ConfigLoader.resolve()`). Verify the exact call signature
+  against the implementation before writing — the sketch below assumes `resolve()` reads
+  `os.environ` by default:
+
+  ```python
+  def test_loader_resolve_env_dockerfile_tilde_expanded(monkeypatch, tmp_path):
+      """A tilde in PADDOCK_BUILD_DOCKERFILE is expanded through ConfigLoader.resolve()."""
+      monkeypatch.setenv("HOME", str(tmp_path))
+      dockerfile = tmp_path / "Dockerfile"
+      dockerfile.write_text("")
+      monkeypatch.setenv("PADDOCK_BUILD_DOCKERFILE", "~/Dockerfile")
+      monkeypatch.setenv("PADDOCK_IMAGE", "myimage")
+      monkeypatch.setenv("PADDOCK_AGENT", "claude")
+
+      config = ConfigLoader().resolve()
+      assert config["build"]["dockerfile"] == dockerfile.resolve()
+  ```
 
 - [ ] **Step 4: Run full test suite**
 
