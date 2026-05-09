@@ -16,6 +16,17 @@ Chaining filters with `|` creates a `FilterChain`. The chain applies filters lef
 'image': f.Required | f.Unicode | f.NotEmpty
 ```
 
+When adding a filter to a chain using its default arguments, the brackets can be omitted — the class and a no-arg instance are equivalent in this context:
+
+```python
+# These two lines are equivalent
+f.Unicode | Filepath()
+f.Unicode | Filepath
+
+# Non-default args always require brackets
+f.Unicode | Filepath(home_dir="...")
+```
+
 ## When to use a custom `BaseFilter` subclass
 
 Write a custom filter (subclass `filters.base.BaseFilter`, override `_apply`) when:

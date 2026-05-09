@@ -410,8 +410,8 @@ conventions: `test_pass_<sub_group>_<scenario>` / `test_fail_<sub_group>_<scenar
   _build_schema = f.FilterMapper(
       {
           "args": f.FilterRepeater(f.Unicode),
-          "context": f.Unicode | Filepath(),
-          "dockerfile": f.Required | f.Unicode | f.NotEmpty | Filepath(),
+          "context": f.Unicode | Filepath,
+          "dockerfile": f.Required | f.Unicode | f.NotEmpty | Filepath,
           "policy": f.Choice(BUILD_POLICIES),
       },
       allow_extra_keys=False,
@@ -545,10 +545,10 @@ nested (`build.dockerfile`). Validate the raw `env` dict against a flat-key sche
       {
           "PADDOCK_AGENT": Agent,
           "PADDOCK_BUILD_ARGS": f.Unicode,
-          "PADDOCK_BUILD_CONTEXT": f.Unicode | Filepath(),
-          "PADDOCK_BUILD_DOCKERFILE": f.Unicode | Filepath(),
+          "PADDOCK_BUILD_CONTEXT": f.Unicode | Filepath,
+          "PADDOCK_BUILD_DOCKERFILE": f.Unicode | Filepath,
           "PADDOCK_BUILD_POLICY": f.Choice(BUILD_POLICIES),
-          "PADDOCK_CONFIG_FILE": f.Unicode | Filepath(),
+          "PADDOCK_CONFIG_FILE": f.Unicode | Filepath,
           "PADDOCK_IMAGE": f.Unicode | f.NotEmpty,
           "PADDOCK_NETWORK": f.Unicode,
       },
