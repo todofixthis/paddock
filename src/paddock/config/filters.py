@@ -66,8 +66,8 @@ class Filepath(BaseFilter):
 
             When ``True``, or when ``None`` and ``home_dir`` was not
             supplied, the path must exist. If ``resolve`` is also effective,
-            this sets ``strict=True`` on ``.resolve()``; otherwise an
-            explicit ``.exists()`` check is used.
+            this sets ``strict=True`` on ``.resolve()``; if ``resolve`` is
+            not effective, an explicit ``.exists()`` check is used instead.
 
         resolve:
 
@@ -229,7 +229,7 @@ class VolumeMap(BaseFilter):
                     sub_key=sub_key,
                 ),
             )
-            if host_path is not None:
+            if host_path is not None and container_spec is not None:
                 result[str(host_path)] = container_spec
 
         return result if not self._has_errors else None

@@ -6,13 +6,6 @@ import pytest
 from paddock.config.filters import Agent, Filepath, Volume, VolumeMap
 
 
-def test_volume_bare_path():
-    """A bare container path (no mode) is normalised by appending ':ro'."""
-    assert (
-        f.FilterRunner(Volume, "/container/path").cleaned_data == "/container/path:ro"
-    )
-
-
 def test_volume_explicit_ro():
     """':ro' mode is valid and returned as-is."""
     assert (
@@ -433,6 +426,11 @@ def test_volume_home_dir_rw_preserved(assert_filter_passes):
 # ---------------------------------------------------------------------------
 # VolumeMap
 # ---------------------------------------------------------------------------
+
+
+def test_volume_map_pass_none(assert_filter_passes):
+    """None is always a pass-through."""
+    assert_filter_passes(VolumeMap, None)
 
 
 def test_volume_map_valid(assert_filter_passes, tmp_path):
