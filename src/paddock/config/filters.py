@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import filters as f
 from filters.base import BaseFilter
 
@@ -69,3 +71,76 @@ class Volume(BaseFilter):
             return value + ":ro"
 
         return value
+
+
+class Filepath(BaseFilter):
+    """Expands a tilde prefix and returns a ``Path``.
+
+    Accepts ``str`` or ``Path`` input. Place after ``f.Unicode`` in a chain
+    — this filter asserts the type without coercing it.
+
+    The ``resolve`` and ``must_exist`` parameters default to ``None``, which
+    activates them automatically when no custom ``home_dir`` is supplied (host
+    paths). Providing a ``home_dir`` disables both by default, because
+    container paths cannot be resolved or checked from the host.
+
+    Args:
+        home_dir:
+
+            Home directory to substitute for ``~``. When ``None``,
+            ``Path.home()`` is used at apply time.
+
+        resolve:
+
+            When ``True``, or when ``None`` and ``home_dir`` was not
+            supplied, calls ``.resolve()`` on the resulting path. If the path
+            fails to resolve, the value is invalid.
+
+        must_exist:
+
+            When ``True``, or when ``None`` and ``home_dir`` was not
+            supplied, the path must exist. If ``resolve`` is also effective,
+            this sets ``strict=True`` on ``.resolve()``; otherwise an
+            explicit ``.exists()`` check is used.
+    """
+
+    CODE_DOES_NOT_EXIST = "does_not_exist"
+
+    templates = {
+        CODE_DOES_NOT_EXIST: "Path {value!r} does not exist.",
+    }
+
+    def __init__(
+        self,
+        home_dir: "str | Path | None" = None,
+        resolve: "bool | None" = None,
+        must_exist: "bool | None" = None,
+    ):
+        super().__init__()
+        self._home_dir = Path(home_dir) if home_dir is not None else None
+        self._should_resolve = resolve is True or (resolve is None and home_dir is None)
+        self._must_exist = must_exist is True or (
+            must_exist is None and home_dir is None
+        )
+
+    def _apply(self, value):
+        value: "str | Path" = self._filter(value, f.Type((str, Path)))
+        if self._has_errors:
+            return None
+
+        path = Path(value)
+        home = self._home_dir if self._home_dir is not None else Path.home()
+
+        if path.parts and path.parts[0] == "~":
+            path = Path(home, *path.parts[1:])
+
+        if self._should_resolve:
+            try:
+                path = path.resolve(strict=self._must_exist)
+            except (FileNotFoundError, OSError):
+                return self._invalid_value(value, self.CODE_DOES_NOT_EXIST)
+        elif self._must_exist:
+            if not path.exists():
+                return self._invalid_value(value, self.CODE_DOES_NOT_EXIST)
+
+        return path
