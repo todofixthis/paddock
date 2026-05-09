@@ -192,12 +192,14 @@ class ConfigLoader:
                 self.load_extra_config(Path(parsed.config_file).expanduser())
             )
 
-        # Exclude None values (unset vars) and PADDOCK_CONFIG_FILE (meta-key
-        # that locates extra config files, not a config value itself).
+        # Exclude None values (unset vars), PADDOCK_CONFIG_FILE (meta-key that
+        # locates extra config files, not a config value itself), and
+        # PADDOCK_BUILD_ARGS (a dict cannot be expressed as a single env var).
+        _env_config_exclude = {"PADDOCK_BUILD_ARGS", "PADDOCK_CONFIG_FILE"}
         env_for_config = {
             k: v
             for k, v in validated_env.items()
-            if v is not None and k != "PADDOCK_CONFIG_FILE"
+            if v is not None and k not in _env_config_exclude
         }
         sources.append(self.config_from_env(env_for_config))
         sources.append(self.config_from_cli(parsed))

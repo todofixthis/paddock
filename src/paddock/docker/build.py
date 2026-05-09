@@ -1,6 +1,7 @@
 import subprocess
 from datetime import datetime, timedelta, timezone
 from enum import StrEnum
+from pathlib import Path
 
 import filters as f
 
@@ -53,8 +54,8 @@ class ImageBuilder:
         self,
         *,
         image: str,
-        dockerfile: str,
-        context: str,
+        dockerfile: Path,
+        context: Path,
         build_args: dict[str, str],
     ) -> None:
         """Run docker build, streaming output to stdout."""

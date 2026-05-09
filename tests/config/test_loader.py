@@ -168,6 +168,36 @@ def test_env_schema_ignores_non_paddock_vars():
     assert runner.is_valid()
 
 
+def test_env_build_args_not_mapped(tmp_path):
+    """PADDOCK_BUILD_ARGS is silently ignored — it cannot express a key=value dict as a single env var."""
+    paddock_dir = tmp_path / ".paddock"
+    paddock_dir.mkdir()
+    (paddock_dir / "config.toml").write_text(
+        'image = "ubuntu:22.04"\nagent = "claude"\n'
+    )
+
+    class FakeParsed:
+        agent = None
+        build_args = {}
+        build_context = None
+        build_dockerfile = None
+        build_policy = None
+        command = []
+        config_file = None
+        dry_run = False
+        image = None
+        network = None
+        quiet = False
+        volumes = {}
+        workdir = None
+
+    runner = ConfigLoader().resolve(
+        FakeParsed(), workdir=tmp_path, environ={"PADDOCK_BUILD_ARGS": "FOO=bar"}
+    )
+    assert runner.is_valid()
+    assert runner.cleaned_data["build"] is None
+
+
 def test_loader_resolve_env_dockerfile_tilde_expanded(monkeypatch, tmp_path):
     """A tilde in PADDOCK_BUILD_DOCKERFILE is expanded through ConfigLoader.resolve()."""
     monkeypatch.setenv("HOME", str(tmp_path))
