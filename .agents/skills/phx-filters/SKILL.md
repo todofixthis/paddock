@@ -173,6 +173,24 @@ assert_filter_errors(MyFilter(), value, ["invalid"])
 assert_filter_errors(MyFilter(), value, ["wrong_type"])
 ```
 
+### Narrowing `self._filter` return types with `cast`
+
+`self._filter` returns `Any`. Always `cast` the result to the expected success type,
+then guard with `_has_errors`. In loops where failure doesn't stop iteration, include
+`None` in the cast and guard with `is not None` instead.
+
+```python
+# Early-return pattern (most _apply methods)
+value = cast(str, self._filter(value, f.Unicode))
+if self._has_errors:
+    return None
+
+# Loop pattern (no early return per entry)
+host = cast(Path | None, self._filter(raw, f.Unicode | Filepath(), sub_key=k))
+if host is not None:
+    result[str(host)] = ...
+```
+
 ### Multi-type input with `f.Type`
 
 To assert that a value is one of several types (without coercing), pass a tuple:

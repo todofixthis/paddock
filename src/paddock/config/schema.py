@@ -2,7 +2,7 @@ import sys
 
 import filters as f
 
-from paddock.config.filters import Agent, Filepath, Volume
+from paddock.config.filters import Agent, Filepath, VolumeMap
 
 BUILD_POLICIES = ("always", "daily", "if-missing", "weekly")
 
@@ -10,8 +10,8 @@ BUILD_POLICIES = ("always", "daily", "if-missing", "weekly")
 _build_schema = f.FilterMapper(
     {
         "args": f.FilterRepeater(f.Unicode),
-        "context": f.Unicode | Filepath,
-        "dockerfile": f.Required | f.Unicode | f.NotEmpty | Filepath,
+        "context": f.Unicode | Filepath(is_dir=True),
+        "dockerfile": f.Required | f.Unicode | f.NotEmpty | Filepath(is_dir=False),
         "policy": f.Choice(BUILD_POLICIES),
     },
     allow_extra_keys=False,
@@ -24,7 +24,7 @@ _config_schema = f.FilterMapper(
         "build": _build_schema,
         "image": f.Required | f.Unicode | f.NotEmpty,
         "network": f.Unicode,
-        "volumes": f.Optional(dict) | f.FilterRepeater(Volume),
+        "volumes": f.Optional(dict) | VolumeMap(),
     },
     allow_extra_keys=False,
 )
@@ -33,10 +33,10 @@ _config_schema = f.FilterMapper(
 _env_schema = f.FilterMapper(
     {
         "PADDOCK_AGENT": Agent,
-        "PADDOCK_BUILD_CONTEXT": f.Unicode | f.NotEmpty | Filepath,
-        "PADDOCK_BUILD_DOCKERFILE": f.Unicode | f.NotEmpty | Filepath,
+        "PADDOCK_BUILD_CONTEXT": f.Unicode | f.NotEmpty | Filepath(is_dir=True),
+        "PADDOCK_BUILD_DOCKERFILE": f.Unicode | f.NotEmpty | Filepath(is_dir=False),
         "PADDOCK_BUILD_POLICY": f.Choice(BUILD_POLICIES),
-        "PADDOCK_CONFIG_FILE": f.Unicode | Filepath,
+        "PADDOCK_CONFIG_FILE": f.Unicode | Filepath(is_dir=False),
         "PADDOCK_IMAGE": f.Unicode | f.NotEmpty,
         "PADDOCK_NETWORK": f.Unicode,
     },

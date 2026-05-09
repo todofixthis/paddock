@@ -75,27 +75,31 @@ def test_valid_build_args(tmp_path):
     assert result["build"]["args"] == {"FOO": "bar", "PYTHON_VERSION": "3.13"}
 
 
-def test_valid_volumes():
+def test_valid_volumes(tmp_path):
     """
     Volumes can be specified as a bare path (implicit :ro), explicit :ro, or explicit :rw.
-    The Volume filter normalises bare paths by appending ':ro'.
+    Host paths are resolved by VolumeMap; bare container paths get ':ro' appended.
     """
+    implicit = tmp_path / "implicit"
+    implicit.mkdir()
+    explicit_ro = tmp_path / "explicit-ro"
+    explicit_ro.mkdir()
+    explicit_rw = tmp_path / "explicit-rw"
+    explicit_rw.mkdir()
+
     config = {
         "image": "ubuntu:22.04",
         "agent": "claude",
         "volumes": {
-            # Implicit :ro — Volume filter appends ':ro'
-            "/implicit": "/container/implicit",
-            # Explicit :ro
-            "/explicit-ro": "/container/ro:ro",
-            # Explicit :rw
-            "/explicit-rw": "/container/rw:rw",
+            str(implicit): "/container/implicit",
+            str(explicit_ro): "/container/ro:ro",
+            str(explicit_rw): "/container/rw:rw",
         },
     }
     result = ConfigSchema().validate(config)
-    assert result["volumes"]["/implicit"] == "/container/implicit:ro"
-    assert result["volumes"]["/explicit-ro"] == "/container/ro:ro"
-    assert result["volumes"]["/explicit-rw"] == "/container/rw:rw"
+    assert result["volumes"][str(implicit.resolve())] == "/container/implicit:ro"
+    assert result["volumes"][str(explicit_ro.resolve())] == "/container/ro:ro"
+    assert result["volumes"][str(explicit_rw.resolve())] == "/container/rw:rw"
 
 
 def test_invalid_volume_value():

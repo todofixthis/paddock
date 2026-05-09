@@ -3,7 +3,7 @@ from pathlib import Path
 import filters as f
 import pytest
 
-from paddock.config.filters import Agent, Filepath, Volume
+from paddock.config.filters import Agent, Filepath, Volume, VolumeMap
 
 
 def test_volume_bare_path():
@@ -356,4 +356,133 @@ def test_pass_must_exist_false_overrides_default(assert_filter_passes, tmp_path)
         Filepath(must_exist=False, resolve=False),
         "~/missing.txt",
         tmp_path / "missing.txt",
+    )
+
+
+# -- is_dir -----------------------------------------------------------------
+
+
+def test_pass_is_dir_true_directory(assert_filter_passes, tmp_path):
+    """is_dir=True passes when the path is a directory."""
+    target = tmp_path / "mydir"
+    target.mkdir()
+    assert_filter_passes(
+        Filepath(home_dir=tmp_path, is_dir=True, must_exist=True), target
+    )
+
+
+def test_fail_is_dir_true_file(assert_filter_errors, tmp_path):
+    """is_dir=True fails when the path is a file."""
+    target = tmp_path / "file.txt"
+    target.write_text("")
+    assert_filter_errors(
+        Filepath(home_dir=tmp_path, is_dir=True, must_exist=True),
+        target,
+        [Filepath.CODE_NOT_A_DIRECTORY],
+    )
+
+
+def test_pass_is_dir_false_file(assert_filter_passes, tmp_path):
+    """is_dir=False passes when the path is a regular file."""
+    target = tmp_path / "file.txt"
+    target.write_text("")
+    assert_filter_passes(
+        Filepath(home_dir=tmp_path, is_dir=False, must_exist=True), target
+    )
+
+
+def test_fail_is_dir_false_directory(assert_filter_errors, tmp_path):
+    """is_dir=False fails when the path is a directory."""
+    target = tmp_path / "mydir"
+    target.mkdir()
+    assert_filter_errors(
+        Filepath(home_dir=tmp_path, is_dir=False, must_exist=True),
+        target,
+        [Filepath.CODE_IS_A_DIRECTORY],
+    )
+
+
+def test_pass_is_dir_nonexistent_skips_check(assert_filter_passes, tmp_path):
+    """is_dir check is skipped for non-existent paths (must_exist=False)."""
+    assert_filter_passes(
+        Filepath(home_dir=tmp_path, is_dir=True, must_exist=False),
+        tmp_path / "missing",
+    )
+
+
+# ---------------------------------------------------------------------------
+# Volume with home_dir
+# ---------------------------------------------------------------------------
+
+
+def test_volume_home_dir_tilde_expansion(assert_filter_passes):
+    """home_dir causes ~ in the path portion to expand."""
+    assert_filter_passes(Volume(home_dir="/root"), "~/.config:ro", "/root/.config:ro")
+
+
+def test_volume_home_dir_bare_path_normalised(assert_filter_passes):
+    """A bare path with home_dir still gets :ro appended."""
+    assert_filter_passes(Volume(home_dir="/root"), "/etc/hosts", "/etc/hosts:ro")
+
+
+def test_volume_home_dir_rw_preserved(assert_filter_passes):
+    """:rw mode is preserved when home_dir is set."""
+    assert_filter_passes(Volume(home_dir="/root"), "~/.ssh:rw", "/root/.ssh:rw")
+
+
+# ---------------------------------------------------------------------------
+# VolumeMap
+# ---------------------------------------------------------------------------
+
+
+def test_volume_map_valid(assert_filter_passes, tmp_path):
+    """A dict of valid host→container entries is validated and returned."""
+    host = tmp_path / "data"
+    host.mkdir()
+    assert_filter_passes(
+        VolumeMap(),
+        {str(host): "/container/data:ro"},
+        {str(host): "/container/data:ro"},
+    )
+
+
+def test_volume_map_tilde_expansion(assert_filter_passes, tmp_path):
+    """Host paths with ~ are expanded using Path.home()."""
+    target = tmp_path / "work"
+    target.mkdir()
+    assert_filter_passes(
+        VolumeMap(),
+        {"~/work": "/container/work:rw"},
+        {str(target.resolve()): "/container/work:rw"},
+    )
+
+
+def test_volume_map_invalid_host_path(assert_filter_errors, tmp_path):
+    """A host path that does not exist fails validation."""
+    assert_filter_errors(
+        VolumeMap(),
+        {str(tmp_path / "missing"): "/container/data:ro"},
+        expected_codes={str(tmp_path / "missing"): [Filepath.CODE_DOES_NOT_EXIST]},
+    )
+
+
+def test_volume_map_invalid_container_spec(assert_filter_errors, tmp_path):
+    """A container spec with more than one colon is invalid."""
+    host = tmp_path / "data"
+    host.mkdir()
+    assert_filter_errors(
+        VolumeMap(),
+        {str(host): "not:a:valid:path"},
+        expected_codes={str(host): [Volume.CODE_INVALID]},
+    )
+
+
+def test_volume_map_container_home_dir(assert_filter_passes, tmp_path):
+    """container_home_dir causes ~ in container paths to expand."""
+    host = tmp_path / "src"
+    host.mkdir()
+    assert_filter_passes(
+        VolumeMap(container_home_dir="/root"),
+        {str(host): "~/.config:ro"},
+        {str(host): "/root/.config:ro"},
     )
