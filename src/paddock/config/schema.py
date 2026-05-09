@@ -5,6 +5,8 @@ import filters as f
 from paddock.config.filters import Agent, Filepath, VolumeMap
 
 BUILD_POLICIES = ("always", "daily", "if-missing", "weekly")
+# Default home directory inside the container; see docs/future/ to make this configurable.
+CONTAINER_HOME = "/root"
 
 # Schema for the build sub-dict.
 _build_schema = f.FilterMapper(
@@ -24,7 +26,7 @@ _config_schema = f.FilterMapper(
         "build": _build_schema,
         "image": f.Required | f.Unicode | f.NotEmpty,
         "network": f.Unicode,
-        "volumes": f.Optional(dict) | VolumeMap(),
+        "volumes": f.Optional(dict) | VolumeMap(container_home_dir=CONTAINER_HOME),
     },
     allow_extra_keys=False,
 )
