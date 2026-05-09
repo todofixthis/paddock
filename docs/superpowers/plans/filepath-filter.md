@@ -1,7 +1,7 @@
 # Plan: `Filepath` Filter and Tilde Expansion
 
-**Status:** not started
-**Worktree:** TBD — see Task 1, Step 1
+**Status:** in progress
+**Worktree:** `.worktrees/filepath-filter` — branch `feature/filepath-filter`
 
 ## Background
 
@@ -76,27 +76,9 @@ def _apply(self, value):
 
 ---
 
-## Task 1 — Create worktree and feature branch
+## Task 1 — Create worktree and feature branch ✅
 
-- [ ] **Step 1: Record worktree path**
-
-  Run:
-  ```bash
-  git worktree add .worktrees/filepath-filter -b feature/filepath-filter origin/develop
-  ```
-  Then:
-  ```bash
-  uv run --directory .worktrees/filepath-filter autohooks activate --mode=pythonpath
-  ```
-  Update the `**Worktree:**` field in this plan's header with the path and branch name.
-
-- [ ] **Step 2: Verify test baseline**
-
-  Run `uv run pytest --collect-only -q` inside the worktree and note the test count (currently 66). Confirm it does not change before any code is written.
-
-- [ ] **Step 3: Compress this task in the plan**
-
-  Use the `compress-plan-task` skill.
+Worktree created at `.worktrees/filepath-filter` on branch `feature/filepath-filter` (branched from `origin/main` — no `origin/develop` exists). Autohooks activated after manually creating the missing hooks directory at `.git/worktrees/filepath-filter/hooks/`. Test baseline confirmed at 66 tests.
 
 ---
 
