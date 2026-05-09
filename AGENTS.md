@@ -60,6 +60,10 @@ Place comments on the line preceding the code they document, not as trailing com
 - **Flat test functions**: Tests are always flat functions (not methods on a class), even when testing class behaviour.
 - **Naming convention**: Methods that produce a config dict from a specific source are named `config_from_<source>` (e.g. `config_from_env`, `config_from_cli`), not `<source>_to_config`.
 
+## Testing
+
+- **No lambdas in `pytest.mark.parametrize`**: if a parametrize case requires a lambda, that is a signal the cases are complex enough to deserve separate named test functions.
+
 ## Git Worktrees
 
 Use `.worktrees/` for isolated workspaces (project-local, gitignored).

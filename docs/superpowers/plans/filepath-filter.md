@@ -7,7 +7,7 @@
 
 Config values that accept file paths may contain `~` (tilde home-directory shorthand). Currently nothing expands the tilde, so a path like `~/projects/myapp/Dockerfile` would be passed verbatim to Docker and fail. We need a `Filepath` filter that expands `~` at the schema level, using the Unix philosophy (one job only — no type coercion).
 
-The filter is always placed *after* `f.Required | f.Unicode` (or `f.Optional | f.Unicode`) in a chain; it asserts `Type((str, Path))` internally rather than coercing.
+The filter is always placed *after* `f.Required | f.Unicode` (or after `f.Unicode`) in a chain; it asserts `Type((str, Path))` internally rather than coercing.
 
 ## Scope — where the filter applies
 
@@ -15,10 +15,11 @@ The filter is always placed *after* `f.Required | f.Unicode` (or `f.Optional | f
 |---|---|---|
 | `config/schema.py` | `build.dockerfile` | Required path |
 | `config/schema.py` | `build.context` | Optional path |
-| `config/loader.py:176` | `PADDOCK_CONFIG_FILE` env var | Expanded before `Path()` |
-| `config/loader.py:179` | `--config-file` CLI arg | Expanded before `Path()` |
+| `config/schema.py` (new env schema) | `PADDOCK_CONFIG_FILE` | Validated before mapping |
+| `config/schema.py` (new env schema) | `PADDOCK_BUILD_DOCKERFILE` | Validated before mapping |
+| `config/schema.py` (new env schema) | `PADDOCK_BUILD_CONTEXT` | Validated before mapping |
 
-The loader paths (rows 3–4) are host-system paths that bypass the schema; tilde expansion is applied inline via `Path(x).expanduser()` rather than through the filter chain.
+All path expansion for env vars is handled via the env schema (Task 4), not inline `.expanduser()` calls.
 
 ## `Filepath` filter spec
 
@@ -34,7 +35,7 @@ class Filepath(BaseFilter):
     ): ...
 ```
 
-Accepts `str | Path` input — checked with `f.Type((str, Path))` (assert, not coerce). The input is stringified for tilde detection, then always returned as a `Path`.
+Accepts `str | Path` input — checked with `f.Type((str, Path))` (assert, not coerce). The input is converted to a `Path` and tilde detection uses `path.parts[0]`, then always returned as a `Path`.
 
 **Effective flags** (computed once in `__init__`):
 
@@ -53,15 +54,11 @@ def _apply(self, value):
     if self._has_errors:
         return None
 
-    str_value = str(value)
+    path = Path(value)
     home = self._home_dir if self._home_dir is not None else Path.home()
 
-    if str_value == "~":
-        path = Path(home)
-    elif str_value.startswith("~/"):
-        path = Path(home) / str_value[2:]
-    else:
-        path = Path(value)
+    if path.parts and path.parts[0] == "~":
+        path = Path(home, *path.parts[1:])
 
     if self._should_resolve:
         try:
@@ -114,8 +111,8 @@ conventions: `test_pass_<sub_group>_<scenario>` / `test_fail_<sub_group>_<scenar
 
 - [ ] **Step 1: Write failing tests**
 
-  Add to `tests/config/test_filters.py`. Add `from pathlib import Path` to the imports and
-  `Filepath` to the `from paddock.config.filters import` line.
+  Add to `tests/config/test_filters.py`. Add `from pathlib import Path` and `import pytest` to
+  the imports, and `Filepath` to the `from paddock.config.filters import` line.
 
   ```python
   # ---------------------------------------------------------------------------
@@ -174,45 +171,42 @@ conventions: `test_pass_<sub_group>_<scenario>` / `test_fail_<sub_group>_<scenar
 
   def test_fail_wrong_type(assert_filter_errors):
       """A value that is neither str nor Path is rejected."""
-      assert_filter_errors(Filepath(home_dir="/h"), 42, ["wrong_type"])
+      assert_filter_errors(Filepath(home_dir="/h"), 42, [f.Type.CODE_WRONG_TYPE])
 
 
-  # -- resolve: path normalisation (home_dir set → resolve=False by default) --
+  # -- resolve ----------------------------------------------------------------
 
-  @pytest.mark.parametrize(
-      "make_input,make_expected",
-      [
-          pytest.param(
-              lambda p: str(p / "." / "file.txt"),
-              lambda p: (p / "file.txt").resolve(),
-              id="dot",
-          ),
-          pytest.param(
-              lambda p: str(p / "sub" / ".." / "file.txt"),
-              lambda p: (p / "file.txt").resolve(),
-              id="dotdot",
-          ),
-          pytest.param(
-              lambda p: str(p / "link.txt"),
-              lambda p: (p / "target.txt").resolve(),
-              id="symlink",
-          ),
-      ],
-  )
-  def test_pass_resolve_normalises(
-      tmp_path, assert_filter_passes, make_input, make_expected
-  ):
-      """resolve=True (default when home_dir is None) resolves dots and symlinks."""
-      (tmp_path / "sub").mkdir()
-      (tmp_path / "file.txt").write_text("")
-      target = tmp_path / "target.txt"
+  def test_pass_resolve_dot_segment(tmp_path, assert_filter_passes):
+      """resolve=True resolves '.' segments in paths."""
+      target = tmp_path / "file.txt"
       target.write_text("")
-      (tmp_path / "link.txt").symlink_to(target)
       assert_filter_passes(
           Filepath(),
-          make_input(tmp_path),
-          make_expected(tmp_path),
+          str(tmp_path / "." / "file.txt"),
+          target.resolve(),
       )
+
+
+  def test_pass_resolve_dotdot_segment(tmp_path, assert_filter_passes):
+      """resolve=True resolves '..' segments in paths."""
+      subdir = tmp_path / "sub"
+      subdir.mkdir()
+      target = tmp_path / "file.txt"
+      target.write_text("")
+      assert_filter_passes(
+          Filepath(),
+          str(subdir / ".." / "file.txt"),
+          target.resolve(),
+      )
+
+
+  def test_pass_resolve_symlink(tmp_path, assert_filter_passes):
+      """resolve=True follows symlinks to their real target."""
+      target = tmp_path / "target.txt"
+      target.write_text("")
+      link = tmp_path / "link.txt"
+      link.symlink_to(target)
+      assert_filter_passes(Filepath(), str(link), target.resolve())
 
 
   def test_fail_resolve_broken_symlink(tmp_path, assert_filter_errors):
@@ -301,23 +295,19 @@ conventions: `test_pass_<sub_group>_<scenario>` / `test_fail_<sub_group>_<scenar
       )
   ```
 
-  Also add `import pytest` to the imports at the top of the file.
-
   Run `uv run pytest tests/config/test_filters.py` — all new tests must **fail** (ImportError or
   NameError on `Filepath`).
 
 - [ ] **Step 2: Implement `Filepath` in `src/paddock/config/filters.py`**
 
-  Add `from pathlib import Path` at the top if not already present. Add after the `Volume` class
-  (use the spec above verbatim, filling in the docstring):
+  Add `from pathlib import Path` at the top if not already present. Add after the `Volume` class:
 
   ```python
   class Filepath(BaseFilter):
       """Expands a tilde prefix and returns a ``Path``.
 
-      Accepts ``str`` or ``Path`` input. Place after ``f.Required | f.Unicode``
-      or ``f.Optional(None) | f.Unicode`` in a chain — this filter asserts the
-      type without coercing it.
+      Accepts ``str`` or ``Path`` input. Place after ``f.Unicode`` in a chain
+      — this filter asserts the type without coercing it.
 
       The ``resolve`` and ``must_exist`` parameters default to ``None``, which
       activates them automatically when no custom ``home_dir`` is supplied (host
@@ -370,15 +360,11 @@ conventions: `test_pass_<sub_group>_<scenario>` / `test_fail_<sub_group>_<scenar
           if self._has_errors:
               return None
 
-          str_value = str(value)
+          path = Path(value)
           home = self._home_dir if self._home_dir is not None else Path.home()
 
-          if str_value == "~":
-              path = Path(home)
-          elif str_value.startswith("~/"):
-              path = Path(home) / str_value[2:]
-          else:
-              path = Path(value)
+          if path.parts and path.parts[0] == "~":
+              path = Path(home, *path.parts[1:])
 
           if self._should_resolve:
               try:
@@ -398,9 +384,7 @@ conventions: `test_pass_<sub_group>_<scenario>` / `test_fail_<sub_group>_<scenar
   uv run pytest tests/config/test_filters.py -v
   ```
 
-  All tests (old and new) must pass. **Note:** if `test_fail_wrong_type` fails because the actual
-  error code differs from `"wrong_type"`, inspect `f.Type.CODE_WRONG_TYPE` and correct the
-  assertion.
+  All tests (old and new) must pass.
 
 - [ ] **Step 4: Commit**
 
@@ -416,29 +400,60 @@ conventions: `test_pass_<sub_group>_<scenario>` / `test_fail_<sub_group>_<scenar
 
 **Note on return type:** `Filepath` returns `Path` objects. After updating the schema, `build.dockerfile` and `build.context` will be `Path` objects in the cleaned config. Check `src/paddock/docker/build.py` for any code that assumes these values are strings (e.g. `.startswith()`, `str` concatenation) and update accordingly.
 
-- [ ] **Step 1: Update `src/paddock/config/schema.py`**
+- [ ] **Step 1: Fix pre-existing filter chains in `src/paddock/config/schema.py`**
 
-  Import `Filepath`:
+  The existing chains incorrectly place `f.Optional(None)` at the start. `None` passes through
+  all filters automatically — `f.Optional` is only needed when the fallback is a non-`None` value,
+  and must always go at the end of the chain. Fix the chains before adding `Filepath`:
+
+  ```python
+  _build_schema = f.FilterMapper(
+      {
+          "args": f.FilterRepeater(f.Unicode),
+          "context": f.Unicode | Filepath(),
+          "dockerfile": f.Required | f.Unicode | f.NotEmpty | Filepath(),
+          "policy": f.Choice(BUILD_POLICIES),
+      },
+      allow_extra_keys=False,
+  )
+
+  _config_schema = f.FilterMapper(
+      {
+          "agent": f.Required | Agent,
+          "build": _build_schema,
+          "image": f.Required | f.Unicode | f.NotEmpty,
+          "network": f.Unicode,
+          "volumes": f.FilterRepeater(Volume),
+      },
+      allow_extra_keys=False,
+  )
+  ```
+
+  Notes:
+  - `f.Optional(None)` removed from all chains — redundant since `None` is a natural pass-through.
+  - `volumes` previously used `f.Optional(dict)` (the type, not an instance) — this was a bug.
+    The default is now supplied by `_apply_defaults` before schema validation, so no `f.Optional`
+    is needed here at all. Confirm the existing test suite still passes before proceeding.
+
+- [ ] **Step 2: Import `Filepath` in `src/paddock/config/schema.py`**
+
   ```python
   from paddock.config.filters import Agent, Filepath, Volume
   ```
 
-  Update the build schema entries. The default `Filepath()` resolves and checks existence — appropriate for a Dockerfile and context dir that must be present at build time:
-  ```python
-  "context": f.Optional(None) | f.Unicode | Filepath(),
-  "dockerfile": f.Required | f.Unicode | f.NotEmpty | Filepath(),
-  ```
+- [ ] **Step 3: Check and update `src/paddock/docker/build.py`**
 
-- [ ] **Step 2: Check and update `src/paddock/docker/build.py`**
+  Read `build.py` and identify any uses of `build_config["dockerfile"]` or
+  `build_config["context"]` that assume a `str`. Update them to work with `Path` objects (e.g.
+  wrap in `str()` before passing to shell commands, or use `Path` methods directly).
 
-  Read `build.py` and identify any uses of `build_config["dockerfile"]` or `build_config["context"]` that assume a `str`. Update them to work with `Path` objects (e.g. wrap in `str()` before passing to shell commands, or use `Path` methods directly).
+- [ ] **Step 4: Add schema tests**
 
-- [ ] **Step 3: Add schema tests**
-
-  Add to `tests/config/test_schema.py`. Because `Filepath()` checks existence by default, paths must be created in `tmp_path`:
+  Add to `tests/config/test_schema.py`. All tests that exercise `Filepath` must create real paths
+  in `tmp_path` because `Filepath()` checks existence by default.
 
   ```python
-  def test_build_dockerfile_tilde_expanded_with_tilde(tmp_path, monkeypatch):
+  def test_build_dockerfile_tilde_expanded(tmp_path, monkeypatch):
       """'~/Dockerfile' is expanded using Path.home()."""
       monkeypatch.setenv("HOME", str(tmp_path))
       dockerfile = tmp_path / "Dockerfile"
@@ -474,25 +489,23 @@ conventions: `test_pass_<sub_group>_<scenario>` / `test_fail_<sub_group>_<scenar
       assert not str(result.cleaned_data["build"]["context"]).startswith("~")
 
 
-  def test_build_context_none_unchanged():
-      """None context is not touched by the filepath filter."""
+  def test_build_context_none_unchanged(tmp_path):
+      """None context passes through the filepath filter unchanged."""
+      dockerfile = tmp_path / "Dockerfile"
+      dockerfile.write_text("")
       raw = {
           "agent": "claude",
-          "build": {"dockerfile": "/Dockerfile", "context": None},
+          "build": {"dockerfile": str(dockerfile), "context": None},
           "image": "myimage",
           "network": None,
           "volumes": {},
       }
       result = f.FilterRunner(_config_schema, raw)
+      assert result.is_valid()
       assert result.cleaned_data["build"]["context"] is None
   ```
 
-  **Important:** `test_build_context_none_unchanged` uses `/Dockerfile` which likely does not exist
-  on the test host. If `must_exist` rejects it, change the schema entry to
-  `Filepath(must_exist=False)` and update these notes accordingly — then evaluate whether the
-  other schema tests need similar adjustment.
-
-- [ ] **Step 4: Run full test suite**
+- [ ] **Step 5: Run full test suite**
 
   ```bash
   uv run pytest
@@ -500,68 +513,112 @@ conventions: `test_pass_<sub_group>_<scenario>` / `test_fail_<sub_group>_<scenar
 
   All tests must pass. Confirm test count has grown from 66.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 6: Commit**
 
   Run `git status` to catch any related unstaged or untracked files, then use the `creative-commits` skill.
 
-- [ ] **Step 6: Compress this task in the plan**
+- [ ] **Step 7: Compress this task in the plan**
 
   Use the `compress-plan-task` skill.
 
 ---
 
-## Task 4 — Expand tildes in `ConfigLoader`
+## Task 4 — Env var validation schema
 
-Loader paths (`PADDOCK_CONFIG_FILE`, `--config-file`) bypass the schema, so expansion is applied inline using `Path.expanduser()`.
+`config_from_env` currently maps raw PADDOCK_* strings into config structure with no per-value
+validation or coercion. Env vars should go through the same filter chains as equivalent TOML
+values (including `Filepath` for path vars), so that validation is consistent regardless of
+config source.
 
-- [ ] **Step 1: Update `src/paddock/config/loader.py`**
+The structure difference from TOML: env vars are flat (`PADDOCK_BUILD_DOCKERFILE`) where TOML is
+nested (`build.dockerfile`). Validate the raw `env` dict against a flat-key schema before
+`config_from_env` maps them.
 
-  Lines 175–179 currently:
+- [ ] **Step 1: Add `_env_schema` to `src/paddock/config/schema.py`**
+
+  The schema validates only the PADDOCK_* keys this project recognises. All keys are optional
+  (`allow_missing_keys=True`); unrecognised keys are allowed (`allow_extra_keys=True`) because the
+  process environment contains many non-paddock vars.
+
   ```python
-  if paddock_config_file := env.get("PADDOCK_CONFIG_FILE"):
-      sources.append(self.load_extra_config(Path(paddock_config_file)))
-
-  if parsed.config_file is not None:
-      sources.append(self.load_extra_config(Path(parsed.config_file)))
+  _env_schema = f.FilterMapper(
+      {
+          "PADDOCK_AGENT": Agent,
+          "PADDOCK_BUILD_ARGS": f.Unicode,
+          "PADDOCK_BUILD_CONTEXT": f.Unicode | Filepath(),
+          "PADDOCK_BUILD_DOCKERFILE": f.Unicode | Filepath(),
+          "PADDOCK_BUILD_POLICY": f.Choice(BUILD_POLICIES),
+          "PADDOCK_CONFIG_FILE": f.Unicode | Filepath(),
+          "PADDOCK_IMAGE": f.Unicode | f.NotEmpty,
+          "PADDOCK_NETWORK": f.Unicode,
+      },
+      allow_extra_keys=True,
+      allow_missing_keys=True,
+  )
   ```
 
-  Change to:
+  Export `_env_schema` alongside `_config_schema`.
+
+- [ ] **Step 2: Apply `_env_schema` in `src/paddock/config/loader.py`**
+
+  In `resolve()`, validate `env` against `_env_schema` before reading
+  `PADDOCK_CONFIG_FILE` or calling `config_from_env`. Print errors to stderr and exit on failure,
+  consistent with `ConfigSchema.validate()`.
+
+  The validated env dict (from `runner.cleaned_data`) replaces the raw `env` dict for all
+  subsequent lookups. Because `Filepath()` has already resolved and expanded paths in the validated
+  dict, the inline `Path(...).expanduser()` calls for `PADDOCK_CONFIG_FILE` and `parsed.config_file`
+  are replaced by direct `Path(validated_env["PADDOCK_CONFIG_FILE"])` — expansion is already done.
+
+  `parsed.config_file` comes from the CLI, not env, so it still needs expansion. Apply a
+  `FilterRunner(Filepath(), parsed.config_file)` for that value, or use `Path(parsed.config_file).expanduser()`.
+
+  Import `_env_schema` in `loader.py`.
+
+- [ ] **Step 3: Add env schema tests**
+
+  Add to `tests/config/test_loader.py` (or a new `tests/config/test_env_schema.py` if that keeps
+  things cleaner):
+
   ```python
-  if paddock_config_file := env.get("PADDOCK_CONFIG_FILE"):
-      sources.append(self.load_extra_config(Path(paddock_config_file).expanduser()))
-
-  if parsed.config_file is not None:
-      sources.append(self.load_extra_config(Path(parsed.config_file).expanduser()))
-  ```
-
-- [ ] **Step 2: Add loader tests**
-
-  Add to `tests/config/test_loader.py`:
-
-  ```python
-  def test_resolve_expands_tilde_in_paddock_config_file(tmp_path, monkeypatch):
-      """PADDOCK_CONFIG_FILE containing a leading tilde is expanded and loaded."""
+  def test_env_schema_expands_tilde_in_config_file(tmp_path, monkeypatch):
+      """PADDOCK_CONFIG_FILE with a leading tilde is expanded by the env schema."""
       monkeypatch.setenv("HOME", str(tmp_path))
       config_file = tmp_path / "extra.toml"
-      config_file.write_text('[build]\ndockerfile = "/Dockerfile"\n')
+      config_file.write_text("")
+      runner = f.FilterRunner(_env_schema, {"PADDOCK_CONFIG_FILE": "~/extra.toml"})
+      assert runner.is_valid()
+      assert runner.cleaned_data["PADDOCK_CONFIG_FILE"] == config_file.resolve()
 
-      loader = ConfigLoader()
-      sourced = loader.load_extra_config(Path("~/extra.toml").expanduser())
-      assert "build" in sourced
 
-
-  def test_resolve_expands_tilde_in_config_file_arg(tmp_path, monkeypatch):
-      """--config-file with a leading tilde is expanded before loading."""
+  def test_env_schema_expands_tilde_in_dockerfile(tmp_path, monkeypatch):
+      """PADDOCK_BUILD_DOCKERFILE with a leading tilde is expanded by the env schema."""
       monkeypatch.setenv("HOME", str(tmp_path))
-      config_file = tmp_path / "alt.toml"
-      config_file.write_text('[build]\ndockerfile = "/Dockerfile"\n')
+      dockerfile = tmp_path / "Dockerfile"
+      dockerfile.write_text("")
+      runner = f.FilterRunner(
+          _env_schema, {"PADDOCK_BUILD_DOCKERFILE": "~/Dockerfile"}
+      )
+      assert runner.is_valid()
+      assert runner.cleaned_data["PADDOCK_BUILD_DOCKERFILE"] == dockerfile.resolve()
 
-      loader = ConfigLoader()
-      result = loader.load_extra_config(Path("~/alt.toml").expanduser())
-      assert "build" in result
+
+  def test_env_schema_rejects_invalid_policy():
+      """PADDOCK_BUILD_POLICY with an unrecognised value is invalid."""
+      runner = f.FilterRunner(_env_schema, {"PADDOCK_BUILD_POLICY": "never"})
+      assert not runner.is_valid()
+
+
+  def test_env_schema_ignores_non_paddock_vars():
+      """Non-PADDOCK_* vars in the env are silently ignored."""
+      runner = f.FilterRunner(_env_schema, {"PATH": "/usr/bin", "HOME": "/home/user"})
+      assert runner.is_valid()
   ```
 
-- [ ] **Step 3: Run full test suite**
+  Also add a test confirming that validated env values flow through to the resolved config (an
+  integration test through `ConfigLoader.resolve()`).
+
+- [ ] **Step 4: Run full test suite**
 
   ```bash
   uv run pytest
@@ -569,11 +626,11 @@ Loader paths (`PADDOCK_CONFIG_FILE`, `--config-file`) bypass the schema, so expa
 
   All tests must pass.
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 5: Commit**
 
   Run `git status` to catch any related unstaged or untracked files, then use the `creative-commits` skill.
 
-- [ ] **Step 5: Compress this task in the plan**
+- [ ] **Step 6: Compress this task in the plan**
 
   Use the `compress-plan-task` skill.
 
@@ -622,7 +679,9 @@ Loader paths (`PADDOCK_CONFIG_FILE`, `--config-file`) bypass the schema, so expa
 - [ ] Is `test_pass_none` the first test for `Filepath`?
 - [ ] Do all tests use `assert_filter_passes` / `assert_filter_errors` fixtures?
 - [ ] Do all test names follow `test_pass_<sub_group>_<scenario>` / `test_fail_*` convention?
-- [ ] Is tilde expansion confirmed at both the schema layer and the loader layer?
+- [ ] Do all `assert_filter_errors` calls use constant refs (e.g. `Filepath.CODE_DOES_NOT_EXIST`, `f.Type.CODE_WRONG_TYPE`) rather than literal strings?
+- [ ] Are no lambdas used in `pytest.mark.parametrize`?
+- [ ] Is tilde expansion confirmed at the schema layer, and also for env vars via `_env_schema`?
 - [ ] Are `resolve` and `must_exist` each tested for effective-True, explicit-False, and the interaction case (resolve=False + must_exist=True)?
 - [ ] Does every test that uses `Filepath()` (default home) either use a real existing path or set `must_exist=False`?
 - [ ] Is `Path` imported in `filters.py`?
@@ -630,3 +689,4 @@ Loader paths (`PADDOCK_CONFIG_FILE`, `--config-file`) bypass the schema, so expa
 - [ ] Has `docker/build.py` been checked for code that assumes `dockerfile`/`context` are strings?
 - [ ] Does `Filepath` return a `Path` object (not `str`) in all code paths?
 - [ ] Does `Filepath` accept both `str` and `Path` input (via `f.Type((str, Path))`)?
+- [ ] Have all pre-existing `f.Optional(None)` usages been removed from filter chain starts?

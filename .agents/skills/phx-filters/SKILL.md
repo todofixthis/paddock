@@ -32,9 +32,12 @@ Apply filters in this order:
 1. `f.Required` — if the field must be present (omit for optional fields)
 2. Type check / coercion (e.g. `f.Unicode`, `f.Type(dict)`)
 3. Content filters (e.g. `f.NotEmpty`, `f.Choice(...)`, custom filters)
-4. `f.Optional(default)` — **at the end only**, so the default bypasses all validation above
+4. `f.Optional(default)` — **at the end only, and only when the default is non-`None`**
 
-The `f.Optional(default)` at the end means: "if the value is missing/None after all other filters, substitute this default." Placing it at the start would skip all validation for the field.
+`None` passes through every filter automatically (handled by `BaseFilter` before `_apply` is
+called), so `f.Optional(None)` is always redundant. Only use `f.Optional` when you need to
+substitute a specific non-`None` fallback, and place it at the end so the default bypasses
+all preceding validation.
 
 ## `f.FilterMapper`
 
@@ -44,7 +47,7 @@ Validates a dict against a schema. Each key maps to a filter chain.
 schema = f.FilterMapper(
     {
         'image': f.Required | f.Unicode | f.NotEmpty,
-        'network': f.Optional(None),
+        'network': f.Unicode,  # None passes through automatically; no f.Optional needed
     },
     allow_extra_keys=False,  # unknown keys are errors
 )
@@ -53,11 +56,11 @@ runner = f.FilterRunner(schema, data)
 
 Use `allow_extra_keys=False` in all project schemas so typos in config files are caught.
 
-For optional nested dicts (e.g. `build`), the pattern is:
+For optional nested dicts (e.g. `build`), pass the sub-schema directly — `None` passes through
+`FilterMapper` automatically, so no `f.Optional(None)` prefix is needed:
 ```python
-'build': f.Optional(None) | f.Type(dict) | _build_schema
+'build': _build_schema
 ```
-`f.Optional(None)` short-circuits and returns `None` when the value is absent; `_build_schema` only runs when a real dict is present.
 
 ## `f.FilterRepeater`
 
@@ -113,6 +116,20 @@ Follow the phx-filters convention for all custom filter tests:
 - `test_pass_<sub_group>_<scenario>` — passing cases grouped by behaviour
 - `test_fail_<sub_group>_<scenario>` — failing cases grouped by behaviour
 - Omit `<sub_group>` when there is only one test in that group (e.g. `test_fail_wrong_type`)
+
+### Error code references
+
+Always use constant refs when asserting error codes — never hard-code the string literal:
+
+```python
+# Correct
+assert_filter_errors(MyFilter(), value, [MyFilter.CODE_INVALID])
+assert_filter_errors(MyFilter(), value, [f.Type.CODE_WRONG_TYPE])
+
+# Wrong — a bare string obscures which filter and code path produced the error
+assert_filter_errors(MyFilter(), value, ["invalid"])
+assert_filter_errors(MyFilter(), value, ["wrong_type"])
+```
 
 ### Multi-type input with `f.Type`
 
