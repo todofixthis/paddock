@@ -112,9 +112,9 @@ class Filepath(BaseFilter):
 
     def __init__(
         self,
-        home_dir: "str | Path | None" = None,
-        resolve: "bool | None" = None,
-        must_exist: "bool | None" = None,
+        home_dir: str | Path | None = None,
+        resolve: bool | None = None,
+        must_exist: bool | None = None,
     ):
         super().__init__()
         self._home_dir = Path(home_dir) if home_dir is not None else None
@@ -124,7 +124,7 @@ class Filepath(BaseFilter):
         )
 
     def _apply(self, value):
-        value: "str | Path" = self._filter(value, f.Type((str, Path)))
+        value: str | Path = self._filter(value, f.Type((str, Path)))
         if self._has_errors:
             return None
 
