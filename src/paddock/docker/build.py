@@ -59,7 +59,7 @@ class ImageBuilder:
         build_args: dict[str, str],
     ) -> None:
         """Run docker build, streaming output to stdout."""
-        argv = ["docker", "build", "-t", image, "-f", dockerfile]
+        argv: list[str | Path] = ["docker", "build", "-t", image, "-f", dockerfile]
         for key, value in build_args.items():
             argv += ["--build-arg", f"{key}={value}"]
         argv.append(context)

@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import cast
 
 import filters as f
 from filters.base import BaseFilter
@@ -124,7 +125,7 @@ class Filepath(BaseFilter):
         )
 
     def _apply(self, value):
-        value: str | Path = self._filter(value, f.Type((str, Path)))
+        value = cast(str | Path, self._filter(value, f.Type((str, Path))))
         if self._has_errors:
             return None
 
