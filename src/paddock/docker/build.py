@@ -54,12 +54,12 @@ class ImageBuilder:
         self,
         *,
         image: str,
-        dockerfile: str,
-        context: str,
+        dockerfile: Path,
+        context: Path,
         build_args: dict[str, str],
     ) -> None:
         """Run docker build, streaming output to stdout."""
-        argv = ["docker", "build", "-t", image, "-f", dockerfile]
+        argv: list[str | Path] = ["docker", "build", "-t", image, "-f", dockerfile]
         for key, value in build_args.items():
             argv += ["--build-arg", f"{key}={value}"]
         argv.append(context)
@@ -79,7 +79,7 @@ class ImageBuilder:
         """
         policy = BuildPolicy(build_config.get("policy", "if-missing"))
         dockerfile = build_config["dockerfile"]
-        context = build_config.get("context") or str(Path(dockerfile).parent)
+        context = build_config.get("context") or dockerfile.parent
         image_created_at = self.get_image_created_at(image)
         if self.should_build(policy, image_created_at):
             self.run_build(

@@ -2,17 +2,19 @@ import sys
 
 import filters as f
 
-from paddock.config.filters import Agent, Volume
+from paddock.config.filters import Agent, Filepath, VolumeMap
 
 BUILD_POLICIES = ("always", "daily", "if-missing", "weekly")
+# Default home directory inside the container; see docs/future/ to make this configurable.
+CONTAINER_HOME = "/root"
 
 # Schema for the build sub-dict.
 _build_schema = f.FilterMapper(
     {
-        "args": f.Optional(None) | f.FilterRepeater(f.Unicode),
-        "context": f.Optional(None),
-        "dockerfile": f.Required | f.Unicode | f.NotEmpty,
-        "policy": f.Optional(None) | f.Choice(BUILD_POLICIES),
+        "args": f.FilterRepeater(f.Unicode),
+        "context": f.Unicode | Filepath(is_dir=True),
+        "dockerfile": f.Required | f.Unicode | f.NotEmpty | Filepath(is_dir=False),
+        "policy": f.Choice(BUILD_POLICIES),
     },
     allow_extra_keys=False,
 )
@@ -21,12 +23,27 @@ _build_schema = f.FilterMapper(
 _config_schema = f.FilterMapper(
     {
         "agent": f.Required | Agent,
-        "build": f.Optional(None) | _build_schema,
+        "build": _build_schema,
         "image": f.Required | f.Unicode | f.NotEmpty,
-        "network": f.Optional(None),
-        "volumes": f.Optional(dict) | f.FilterRepeater(Volume),
+        "network": f.Unicode,
+        "volumes": f.Optional(dict) | VolumeMap(container_home_dir=CONTAINER_HOME),
     },
     allow_extra_keys=False,
+)
+
+# Flat schema for PADDOCK_* environment variables, validated before mapping.
+_env_schema = f.FilterMapper(
+    {
+        "PADDOCK_AGENT": Agent,
+        "PADDOCK_BUILD_CONTEXT": f.Unicode | f.NotEmpty | Filepath(is_dir=True),
+        "PADDOCK_BUILD_DOCKERFILE": f.Unicode | f.NotEmpty | Filepath(is_dir=False),
+        "PADDOCK_BUILD_POLICY": f.Choice(BUILD_POLICIES),
+        "PADDOCK_CONFIG_FILE": f.Unicode | Filepath(is_dir=False),
+        "PADDOCK_IMAGE": f.Unicode | f.NotEmpty,
+        "PADDOCK_NETWORK": f.Unicode,
+    },
+    allow_extra_keys=True,
+    allow_missing_keys=True,
 )
 
 

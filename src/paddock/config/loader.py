@@ -1,10 +1,11 @@
+import sys
 import tomllib
 from pathlib import Path
 from typing import Any, TypedDict
 
 import filters as f
 
-from paddock.config.schema import _config_schema
+from paddock.config.schema import _config_schema, _env_schema
 
 _USER_CONFIG_PATH = Path.home() / ".config" / "paddock" / "config.toml"
 _PROJECT_CONFIG_NAME = Path(".paddock") / "config.toml"
@@ -167,18 +168,40 @@ class ConfigLoader:
 
         env = environ if environ is not None else dict(os.environ)
 
+        env_runner = f.FilterRunner(_env_schema, env)
+        if not env_runner.is_valid():
+            for key, messages in env_runner.errors.items():
+                for msg in messages:
+                    print(
+                        f"Config error [{key}]: {msg['message']}",
+                        file=sys.stderr,
+                    )
+            sys.exit(1)
+        validated_env = env_runner.cleaned_data
+
         sources = [
             self.load_user_config(),
             self.load_project_config(workdir),
         ]
 
-        if paddock_config_file := env.get("PADDOCK_CONFIG_FILE"):
-            sources.append(self.load_extra_config(Path(paddock_config_file)))
+        if paddock_config_file := validated_env.get("PADDOCK_CONFIG_FILE"):
+            sources.append(self.load_extra_config(paddock_config_file))
 
         if parsed.config_file is not None:
-            sources.append(self.load_extra_config(Path(parsed.config_file)))
+            sources.append(
+                self.load_extra_config(Path(parsed.config_file).expanduser())
+            )
 
-        sources.append(self.config_from_env(env))
+        # Exclude None values (unset vars), PADDOCK_CONFIG_FILE (meta-key that
+        # locates extra config files, not a config value itself), and
+        # PADDOCK_BUILD_ARGS (a dict cannot be expressed as a single env var).
+        _env_config_exclude = {"PADDOCK_BUILD_ARGS", "PADDOCK_CONFIG_FILE"}
+        env_for_config = {
+            k: v
+            for k, v in validated_env.items()
+            if v is not None and k not in _env_config_exclude
+        }
+        sources.append(self.config_from_env(env_for_config))
         sources.append(self.config_from_cli(parsed))
 
         merged_sourced = self._merge_sourced(sources)

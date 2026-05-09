@@ -25,6 +25,7 @@ uv sync --group=dev                                    # sync deps after pulling
 uv run pytest                                          # run tests (current Python)
 uv run tox -p                                          # run tests (all supported versions)
 uv run pytest --collect-only                           # verify test count (note at start of mahi; confirm it increases when done)
+uv run mypy src/                                       # type check
 uv run ruff check                                      # lint
 uv run make -C docs clean && uv run make -C docs html  # build docs
 ```
@@ -53,6 +54,10 @@ Place comments on the line preceding the code they document, not as trailing com
 - `main` — releases only; merge from `develop` via PR
 - `develop` — main development branch
 - Feature branches off `develop` for all new work
+
+## Configuration
+
+- **`pyproject.toml` sections**: Keep all sections in alphabetical order — top-level tables (`[build-system]`, `[dependency-groups]`, `[project]`, `[tool]`) and subsections within each group (e.g. `[tool.autohooks]` before `[tool.hatch]` before `[tool.mypy]`).
 
 ## Architecture
 
