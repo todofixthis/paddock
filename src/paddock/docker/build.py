@@ -1,7 +1,6 @@
 import subprocess
 from datetime import datetime, timedelta, timezone
 from enum import StrEnum
-from pathlib import Path
 
 import filters as f
 
@@ -79,7 +78,7 @@ class ImageBuilder:
         """
         policy = BuildPolicy(build_config.get("policy", "if-missing"))
         dockerfile = build_config["dockerfile"]
-        context = build_config.get("context") or str(Path(dockerfile).parent)
+        context = build_config.get("context") or dockerfile.parent
         image_created_at = self.get_image_created_at(image)
         if self.should_build(policy, image_created_at):
             self.run_build(

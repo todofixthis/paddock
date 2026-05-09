@@ -2,17 +2,17 @@ import sys
 
 import filters as f
 
-from paddock.config.filters import Agent, Volume
+from paddock.config.filters import Agent, Filepath, Volume
 
 BUILD_POLICIES = ("always", "daily", "if-missing", "weekly")
 
 # Schema for the build sub-dict.
 _build_schema = f.FilterMapper(
     {
-        "args": f.Optional(None) | f.FilterRepeater(f.Unicode),
-        "context": f.Optional(None),
-        "dockerfile": f.Required | f.Unicode | f.NotEmpty,
-        "policy": f.Optional(None) | f.Choice(BUILD_POLICIES),
+        "args": f.FilterRepeater(f.Unicode),
+        "context": f.Unicode | Filepath,
+        "dockerfile": f.Required | f.Unicode | f.NotEmpty | Filepath,
+        "policy": f.Choice(BUILD_POLICIES),
     },
     allow_extra_keys=False,
 )
@@ -21,9 +21,9 @@ _build_schema = f.FilterMapper(
 _config_schema = f.FilterMapper(
     {
         "agent": f.Required | Agent,
-        "build": f.Optional(None) | _build_schema,
+        "build": _build_schema,
         "image": f.Required | f.Unicode | f.NotEmpty,
-        "network": f.Optional(None),
+        "network": f.Unicode,
         "volumes": f.Optional(dict) | f.FilterRepeater(Volume),
     },
     allow_extra_keys=False,
