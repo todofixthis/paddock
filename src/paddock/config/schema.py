@@ -33,8 +33,8 @@ _config_schema = f.FilterMapper(
 _env_schema = f.FilterMapper(
     {
         "PADDOCK_AGENT": Agent,
-        "PADDOCK_BUILD_CONTEXT": f.Unicode | Filepath,
-        "PADDOCK_BUILD_DOCKERFILE": f.Unicode | Filepath,
+        "PADDOCK_BUILD_CONTEXT": f.Unicode | f.NotEmpty | Filepath,
+        "PADDOCK_BUILD_DOCKERFILE": f.Unicode | f.NotEmpty | Filepath,
         "PADDOCK_BUILD_POLICY": f.Choice(BUILD_POLICIES),
         "PADDOCK_CONFIG_FILE": f.Unicode | Filepath,
         "PADDOCK_IMAGE": f.Unicode | f.NotEmpty,

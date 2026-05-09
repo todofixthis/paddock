@@ -287,6 +287,18 @@ def test_fail_must_exist_broken_symlink(assert_filter_errors, tmp_path):
     )
 
 
+def test_fail_must_exist_resolve_false_broken_symlink(assert_filter_errors, tmp_path):
+    """A broken symlink is invalid when must_exist=True and resolve=False."""
+    link = tmp_path / "link.txt"
+    link.symlink_to(tmp_path / "target.txt")
+
+    assert_filter_errors(
+        Filepath(home_dir=tmp_path, resolve=False, must_exist=True),
+        link,
+        [Filepath.CODE_DOES_NOT_EXIST],
+    )
+
+
 def test_pass_must_exist_false_missing(assert_filter_passes, tmp_path):
     """must_exist=False skips the existence check."""
     assert_filter_passes(
@@ -297,14 +309,15 @@ def test_pass_must_exist_false_missing(assert_filter_passes, tmp_path):
 
 
 def test_pass_must_exist_resolve_false_valid(assert_filter_passes, tmp_path):
-    """must_exist=True with resolve=False: explicit .exists() check passes."""
+    """must_exist=True with resolve=False: .exists() passes but the symlink is not followed."""
     target = tmp_path / "target.txt"
     target.write_text("")
+    link = tmp_path / "link.txt"
+    link.symlink_to(target)
 
     assert_filter_passes(
         Filepath(home_dir=tmp_path, must_exist=True, resolve=False),
-        "~/./target.txt",
-        tmp_path / "." / "target.txt",
+        link,
     )
 
 

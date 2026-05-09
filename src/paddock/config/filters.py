@@ -107,7 +107,7 @@ class Filepath(BaseFilter):
     CODE_DOES_NOT_EXIST = "does_not_exist"
 
     templates = {
-        CODE_DOES_NOT_EXIST: "Path {value!r} does not exist.",
+        CODE_DOES_NOT_EXIST: "Path {value!r} does not exist or cannot be resolved.",
     }
 
     def __init__(
@@ -137,7 +137,7 @@ class Filepath(BaseFilter):
         if self._should_resolve:
             try:
                 path = path.resolve(strict=self._must_exist)
-            except (FileNotFoundError, OSError):
+            except OSError:
                 return self._invalid_value(value, self.CODE_DOES_NOT_EXIST)
         elif self._must_exist:
             if not path.exists():

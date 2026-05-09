@@ -156,6 +156,18 @@ def test_env_schema_expands_tilde_in_dockerfile(monkeypatch, tmp_path):
     assert runner.cleaned_data["PADDOCK_BUILD_DOCKERFILE"] == dockerfile.resolve()
 
 
+def test_env_schema_rejects_empty_dockerfile():
+    """PADDOCK_BUILD_DOCKERFILE="" is rejected — empty string would silently resolve to CWD."""
+    runner = f.FilterRunner(_env_schema, {"PADDOCK_BUILD_DOCKERFILE": ""})
+    assert not runner.is_valid()
+
+
+def test_env_schema_rejects_empty_context():
+    """PADDOCK_BUILD_CONTEXT="" is rejected — empty string would silently resolve to CWD."""
+    runner = f.FilterRunner(_env_schema, {"PADDOCK_BUILD_CONTEXT": ""})
+    assert not runner.is_valid()
+
+
 def test_env_schema_rejects_invalid_policy():
     """PADDOCK_BUILD_POLICY with an unrecognised value is invalid."""
     runner = f.FilterRunner(_env_schema, {"PADDOCK_BUILD_POLICY": "never"})
