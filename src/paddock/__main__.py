@@ -61,7 +61,7 @@ def run(argv: list[str] | None = None) -> None:
         logger.info("Other containers on this network:")
         _log_network_peers(config["network"])
 
-    if config.get("build"):
+    if not parsed.dry_run and config.get("build"):
         builder = ImageBuilder()
         build_args = {**agent.get_build_args(), **config["build"].get("args", {})}
         built = builder.maybe_build(

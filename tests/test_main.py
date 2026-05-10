@@ -66,6 +66,29 @@ def test_runs_docker(minimal_config: Path, mocker, monkeypatch):
     assert docker_argv[0] == "docker"
 
 
+def test_dry_run_skips_image_build(capsys, tmp_path: Path, mocker, monkeypatch):
+    """--dry-run must not trigger an image build even when build config is present."""
+    dockerfile = tmp_path / "Dockerfile"
+    dockerfile.write_text("FROM ubuntu:22.04\n")
+    config_dir = tmp_path / ".paddock"
+    config_dir.mkdir()
+    cfg = config_dir / "config.toml"
+    cfg.write_text(
+        f'image = "myimage:latest"\nagent = "claude"\n\n'
+        f'[build]\ndockerfile = "{dockerfile}"\n'
+    )
+    monkeypatch.chdir(tmp_path)
+    mocker.patch(
+        "paddock.docker.builder.DockerCommandBuilder._container_name_available",
+        return_value=True,
+    )
+    mock_maybe_build = mocker.patch("paddock.__main__.ImageBuilder.maybe_build")
+    with pytest.raises(SystemExit) as exc:
+        run(["--dry-run"])
+    assert exc.value.code == 0
+    mock_maybe_build.assert_not_called()
+
+
 def test_help_flag(capsys):
     """--help prints usage and exits 0."""
     with pytest.raises(SystemExit) as exc:
