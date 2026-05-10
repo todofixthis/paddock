@@ -74,7 +74,7 @@ def test_dry_run_skips_image_build(capsys, tmp_path: Path, mocker, monkeypatch):
     config_dir.mkdir()
     cfg = config_dir / "config.toml"
     cfg.write_text(
-        f'image = "myimage:latest"\nagent = "claude"\n\n'
+        'image = "myimage:latest"\nagent = "claude"\n\n'
         f'[build]\ndockerfile = "{dockerfile}"\n'
     )
     monkeypatch.chdir(tmp_path)
