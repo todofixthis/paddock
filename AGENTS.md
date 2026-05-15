@@ -18,7 +18,6 @@ If you find yourself about to establish a new cross-cutting pattern (something t
 
 ```bash
 uv run autohooks activate --mode=pythonpath            # install pre-commit hook (once per clone)
-uv run git commit                                      # always use instead of git commit (runs autohooks)
 uv add --bounds major <package>                        # add a runtime dependency at latest version
 uv add --bounds major --group dev <package>            # add a dev dependency at latest version
 uv sync --group=dev                                    # sync deps after pulling
@@ -29,7 +28,10 @@ uv run mypy src/                                       # type check
 uv run ruff check                                      # lint
 uv run make -C docs clean && uv run make -C docs html  # build docs
 uvx --from pip pip index versions <package>            # check available versions on PyPI
+uv run git commit                                      # always use instead of git commit (runs autohooks)
 ```
+
+> **Never write bare `git commit` in plans or step-by-step instructions.** Autohooks requires the `uv run` prefix — a bare `git commit` will fail with "autohooks is not installed."
 
 ## Docstrings
 
@@ -69,6 +71,10 @@ Place comments on the line preceding the code they document, not as trailing com
 ## Testing
 
 - **No lambdas in `pytest.mark.parametrize`**: if a parametrize case requires a lambda, that is a signal the cases are complex enough to deserve separate named test functions.
+
+## Git Commits
+
+Always commit via `uv run git commit`. Never use bare `git commit` — it bypasses autohooks and will fail. This rule applies in plan steps, commit instructions, and any other context where a commit command is written.
 
 ## Git Worktrees
 
