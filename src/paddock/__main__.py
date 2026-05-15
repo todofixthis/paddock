@@ -6,7 +6,7 @@ from pathlib import Path
 
 from paddock.agents import BaseAgent, agent_registry
 from paddock.cli import parse_args
-from paddock.config.loader import ConfigLoader
+from paddock.config.loader import ConfigError, ConfigLoader
 from paddock.docker.build import ImageBuilder
 from paddock.docker.builder import DockerCommandBuilder
 
@@ -39,15 +39,11 @@ def run(argv: list[str] | None = None) -> None:
     workdir = Path(parsed.workdir) if parsed.workdir else Path.cwd()
 
     loader = ConfigLoader()
-    runner = loader.resolve(parsed, workdir, environ=dict(os.environ))
-
-    if not runner.is_valid():
-        for key, errors in runner.errors.items():
-            for error in errors:
-                print(f"Config error [{key}]: {error}", file=sys.stderr)
+    try:
+        config = loader.resolve(parsed, workdir, environ=dict(os.environ))
+    except ConfigError as e:
+        print(str(e), file=sys.stderr)
         sys.exit(1)
-
-    config = runner.cleaned_data
 
     agent_key = "false" if config["agent"] is False else str(config["agent"])
     agent: BaseAgent = agent_registry.get(agent_key)

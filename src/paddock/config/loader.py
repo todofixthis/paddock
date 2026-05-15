@@ -1,4 +1,3 @@
-import sys
 from pathlib import Path
 from typing import Any, TypedDict
 
@@ -147,8 +146,8 @@ class ConfigLoader:
         self,
         parsed: Any,
         workdir: Path,
-        environ: dict[str, str] | None = None,
-    ) -> f.FilterRunner:
+        environ: dict[str, str],
+    ) -> dict:
         """Load config from all sources, merge, apply defaults, and validate.
 
         Args:
@@ -162,24 +161,22 @@ class ConfigLoader:
 
             environ:
 
-                Environment variable mapping. Defaults to ``os.environ``.
+                Environment variable mapping (e.g. ``dict(os.environ)``).
 
         Returns:
-            A ``FilterRunner`` for the caller to check ``is_valid()``.
+            The validated, merged config as a plain dict.
+
+        Raises:
+            ConfigError: If env vars or the merged config fail validation.
         """
-        import os
-
-        env = environ if environ is not None else dict(os.environ)
-
-        env_runner = f.FilterRunner(_env_schema, env)
+        env_runner = f.FilterRunner(_env_schema, environ)
         if not env_runner.is_valid():
-            for key, messages in env_runner.errors.items():
-                for msg in messages:
-                    print(
-                        f"Config error [{key}]: {msg['message']}",
-                        file=sys.stderr,
-                    )
-            sys.exit(1)
+            messages = [
+                f"Config error [{key}]: {error['message']}"
+                for key, errors in env_runner.errors.items()
+                for error in errors
+            ]
+            raise ConfigError("\n".join(messages))
         validated_env = env_runner.cleaned_data
 
         sources = [
@@ -211,7 +208,15 @@ class ConfigLoader:
         plain = self._extract_values(merged_sourced)
         plain = self._apply_defaults(plain)
 
-        return f.FilterRunner(_config_schema, plain)
+        config_runner = f.FilterRunner(_config_schema, plain)
+        if not config_runner.is_valid():
+            messages = [
+                f"Config error [{key}]: {error['message']}"
+                for key, errors in config_runner.errors.items()
+                for error in errors
+            ]
+            raise ConfigError("\n".join(messages))
+        return config_runner.cleaned_data
 
     def _load_toml_sourced(self, path: Path) -> SourcedConfig:
         """Load a TOML file and wrap each leaf value with its source path.
