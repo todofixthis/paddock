@@ -28,6 +28,7 @@ uv run pytest --collect-only                           # verify test count (note
 uv run mypy src/                                       # type check
 uv run ruff check                                      # lint
 uv run make -C docs clean && uv run make -C docs html  # build docs
+uvx --from pip pip index versions <package>            # check available versions on PyPI
 ```
 
 ## Docstrings

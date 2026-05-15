@@ -1,9 +1,10 @@
 from pathlib import Path
 
 import filters as f
+import pytest
 from filters.pytest import skip_value_check
 
-from paddock.config.loader import ConfigLoader
+from paddock.config.loader import ConfigError, ConfigLoader
 from paddock.config.schema import _env_schema
 
 
@@ -113,17 +114,17 @@ def test_resolve_returns_valid_runner(tmp_path: Path, monkeypatch):
 
     class FakeParsed:
         agent = None
-        build_args = {}
+        build_args: dict = {}
         build_context = None
         build_dockerfile = None
         build_policy = None
-        command = []
+        command: list = []
         config_file = None
         dry_run = False
         image = None
         network = None
         quiet = False
-        volumes = {}
+        volumes: dict = {}
         workdir = None
 
     loader = ConfigLoader()
@@ -214,17 +215,17 @@ def test_env_build_args_not_mapped(tmp_path):
 
     class FakeParsed:
         agent = None
-        build_args = {}
+        build_args: dict = {}
         build_context = None
         build_dockerfile = None
         build_policy = None
-        command = []
+        command: list = []
         config_file = None
         dry_run = False
         image = None
         network = None
         quiet = False
-        volumes = {}
+        volumes: dict = {}
         workdir = None
 
     runner = ConfigLoader().resolve(
@@ -245,19 +246,35 @@ def test_loader_resolve_env_dockerfile_tilde_expanded(monkeypatch, tmp_path):
 
     class FakeParsed:
         agent = None
-        build_args = {}
+        build_args: dict = {}
         build_context = None
         build_dockerfile = None
         build_policy = None
-        command = []
+        command: list = []
         config_file = None
         dry_run = False
         image = None
         network = None
         quiet = False
-        volumes = {}
+        volumes: dict = {}
         workdir = None
 
     runner = ConfigLoader().resolve(FakeParsed(), workdir=tmp_path)
     assert runner.is_valid()
     assert runner.cleaned_data["build"]["dockerfile"] == dockerfile.resolve()
+
+
+def test_load_invalid_toml_raises(tmp_path: Path):
+    """Loading a file with invalid TOML raises ConfigError."""
+    bad = tmp_path / "config.toml"
+    bad.write_text("this = is not = valid toml")
+    with pytest.raises(ConfigError, match="Invalid TOML"):
+        ConfigLoader().load_user_config(bad)
+
+
+def test_load_empty_toml_returns_empty(tmp_path: Path):
+    """An empty TOML file is valid and yields an empty SourcedConfig."""
+    empty = tmp_path / "config.toml"
+    empty.write_text("")
+    result = ConfigLoader().load_user_config(empty)
+    assert result == {}

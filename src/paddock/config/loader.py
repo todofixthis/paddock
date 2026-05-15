@@ -1,5 +1,4 @@
 import sys
-import tomllib
 from pathlib import Path
 from typing import Any, TypedDict
 
@@ -20,6 +19,10 @@ class ConfigEntry(TypedDict):
 
 # SourcedConfig: same shape as the config schema, but leaf values are ConfigEntry.
 SourcedConfig = dict[str, Any]
+
+
+class ConfigError(Exception):
+    """Raised when config loading or validation fails."""
 
 
 class ConfigLoader:
@@ -220,12 +223,18 @@ class ConfigLoader:
 
         Returns:
             A ``SourcedConfig``, or ``{}`` if the file does not exist.
+
+        Raises:
+            ConfigError: If the file contains invalid TOML.
         """
         if not path.exists():
             return {}
-        with path.open("rb") as fh:
-            raw = tomllib.load(fh)
-        return self._annotate_source(raw, str(path))
+        content = path.read_text(encoding="utf-8")
+        runner = f.FilterRunner(f.TomlDecode, content)
+        if not runner.is_valid():
+            msgs = [e["message"] for errs in runner.errors.values() for e in errs]
+            raise ConfigError(f"Invalid TOML in {path}: {'; '.join(msgs)}")
+        return self._annotate_source(runner.cleaned_data, str(path))
 
     def _annotate_source(self, data: dict, source: str) -> SourcedConfig:
         """Recursively wrap leaf values with source info.
