@@ -532,7 +532,7 @@ wheels = [
 
 [[package]]
 name = "phx-filters"
-version = "3.5.1"
+version = "3.6.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "phx-class-registry" },
@@ -540,9 +540,9 @@ dependencies = [
     { name = "pytz" },
     { name = "regex" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/3a/84/bc2b3ed4626adf61439b05c6ad9fcb038387ef1c555fce9e95ed5d243ac2/phx_filters-3.5.1.tar.gz", hash = "sha256:f892628fc701fdd507269efb0d51d56e2ea96e58088ece1209be5819b4b266c9", size = 94069, upload-time = "2026-03-09T19:15:20.297Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/b3/05/94088c510a6a6f3d418fba7c57b9915f44c2795bd13f59020219cc187bcd/phx_filters-3.6.0.tar.gz", hash = "sha256:e1ee2ec8d87ccfe98c16c348f6166e0fad4d0f404f75060bfe8dc151372d941a", size = 95457, upload-time = "2026-05-10T20:05:39.571Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/1b/61/d0081a0cdb88b6c042ca2acb797c2b0c3d4d7272fddfef37194fe9fa1930/phx_filters-3.5.1-py3-none-any.whl", hash = "sha256:37cd0a6dc5d1dd784f256e6100453ae1ceab5a68613bb71503a431865b77d429", size = 43224, upload-time = "2026-03-09T19:15:21.682Z" },
+    { url = "https://files.pythonhosted.org/packages/80/03/1bf85722019c55c53b4a94b154995c6b517d292b95bb5ce96cc8787a9d8d/phx_filters-3.6.0-py3-none-any.whl", hash = "sha256:b2ace2374f263fef6b7f69d081f38474de61a6fc84d3aee1854a101eed48fcd6", size = 43294, upload-time = "2026-05-10T20:05:36.897Z" },
 ]
 
 [[package]]
@@ -570,7 +570,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "phx-class-registry", specifier = ">=5.2.1,<6.0.0" },
-    { name = "phx-filters", specifier = ">=3.5.1,<4.0.0" },
+    { name = "phx-filters", specifier = ">=3.6.0,<4.0.0" },
 ]
 
 [package.metadata.requires-dev]
