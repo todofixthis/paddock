@@ -14,6 +14,12 @@ with the current working directory mounted as the workspace.
 .. image:: https://img.shields.io/badge/licence-MIT-blue.svg
    :alt: MIT Licence
 
+.. caution::
+
+   **Pre-release software — here be dragons.**
+   APIs, configuration formats, and CLI flags may change without notice
+   in future versions. Bugs and crashes are possible.
+
 Overview
 --------
 
