@@ -124,7 +124,7 @@ rm release-<version>.md release-<version>.md.asc release-<version>-body.md
 
 > [!CAUTION]
 > **Alpha software — here be dragons**
-> This is an early release. APIs, configuration formats, and CLI flags may change without notice in future versions.
+> This is an early release. APIs, configuration formats, and CLI flags may change without notice in future versions. Bugs and crashes are possible.
 
 > [!WARNING]
 > **Breaking changes**

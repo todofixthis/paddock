@@ -1,4 +1,9 @@
-> `CLAUDE.md` is a symlink to this file — edit `AGENTS.md` only.
+> **Symlinks for Claude Code compatibility:**
+> - `CLAUDE.md` → `AGENTS.md` — edit `AGENTS.md` only
+> - `.claude/` → `.agents/` — edit files under `.agents/` only
+>
+> Git refuses to stage files through a symlink directory. Always use the real paths
+> (`.agents/`, `AGENTS.md`) when staging, never the symlink paths.
 
 ## Getting Started
 
@@ -73,6 +78,7 @@ Place comments on the line preceding the code they document, not as trailing com
 ## Testing
 
 - **No lambdas in `pytest.mark.parametrize`**: if a parametrize case requires a lambda, that is a signal the cases are complex enough to deserve separate named test functions.
+- **Environment-level isolation**: prefer redirecting `$HOME` and stripping env vars (e.g. `PADDOCK_*`) over patching Python internals (e.g. module-level constants). This keeps tests honest — they exercise the same path-resolution logic real users hit.
 
 ## Git Commits
 
