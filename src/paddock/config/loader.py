@@ -5,8 +5,20 @@ import filters as f
 
 from paddock.config.schema import _config_schema, _env_schema
 
-_USER_CONFIG_PATH = Path.home() / ".config" / "paddock" / "config.toml"
 _PROJECT_CONFIG_NAME = Path(".paddock") / "config.toml"
+
+
+def _user_config_path() -> Path:
+    """Return the default user config path.
+
+    Evaluated at call time rather than import time so that changes to
+    ``$HOME`` (e.g. in tests) are respected.
+
+    Returns:
+        ``~/.config/paddock/config.toml`` resolved against the current home
+        directory.
+    """
+    return Path.home() / ".config" / "paddock" / "config.toml"
 
 
 class ConfigEntry(TypedDict):
@@ -37,19 +49,20 @@ class ConfigLoader:
     6. CLI arg overrides
     """
 
-    def load_user_config(self, path: Path = _USER_CONFIG_PATH) -> SourcedConfig:
+    def load_user_config(self, path: Path | None = None) -> SourcedConfig:
         """Load the user-level config file.
 
         Args:
             path:
 
-                Path to the user config file. Defaults to
-                ``~/.config/paddock/config.toml``.
+                Path to the user config file. If omitted, defaults to
+                ``~/.config/paddock/config.toml`` resolved at call time via
+                :func:`_user_config_path`.
 
         Returns:
             A ``SourcedConfig`` mapping, or ``{}`` if the file does not exist.
         """
-        return self._load_toml_sourced(path)
+        return self._load_toml_sourced(path or _user_config_path())
 
     def load_project_config(self, workdir: Path) -> SourcedConfig:
         """Load the project-level config from ``<workdir>/.paddock/config.toml``.

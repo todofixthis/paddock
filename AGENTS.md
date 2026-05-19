@@ -37,6 +37,8 @@ uv run git commit                                      # always use instead of g
 
 Google/Napoleon format (`Args:`, `Returns:`, `Note:`) — not Sphinx `:param:` style. Max 80 chars per line. Escape backslashes (e.g. `'\\n'` not `'\n'`). Blank line before lists inside `Args:` sections to avoid Sphinx indentation warnings. ReadTheDocs treats all Sphinx warnings as errors — resolve them before pushing.
 
+All non-trivial functions and methods require a docstring explaining their purpose. This includes cases where the reason for a function's existence is non-obvious even if its implementation is simple — e.g. a wrapper that defers evaluation to runtime.
+
 ## Code Comments
 
 Place comments on the line preceding the code they document, not as trailing comments.

@@ -1,14 +1,19 @@
-# Python metas
-*.egg-info/
-.python-version
+# Byte-compiled / optimised / DLL files
+*.py[cod]
 __pycache__/
-dist/
-
-# uv virtualenv
-.venv/
-# Suffix with host/container identifier to avoid collisions
-.venv.*/
 
 # Coding agent stuffs
 .agents/settings.local.json
 .worktrees/
+
+# Distribution / packaging
+*.egg-info/
+dist/
+
+# Release artefacts (local working files)
+release-*-body.md
+release-*.md
+release-*.md.asc
+
+# Sphinx documentation
+docs/_build/
