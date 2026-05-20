@@ -3,6 +3,7 @@ import subprocess
 from pathlib import Path
 
 from paddock.agents import BaseAgent
+from paddock.config.filters import VolumeSpec
 
 
 def sanitise_volume_name(image: str, agent_key: str) -> str:
@@ -22,7 +23,9 @@ class DockerCommandBuilder:
         argv = ["docker", "run", "--rm", "-it"]
         argv += ["--name", self._resolve_container_name()]
         argv += [f"--workdir={self._workdir}"]
-        argv += self._volume_flag(str(self._workdir), f"{self._workdir}:rw")
+        argv += self._volume_flag(
+            str(self._workdir), VolumeSpec(str(self._workdir), "rw")
+        )
         for host, container in self._agent.get_volumes().items():
             argv += self._volume_flag(host, container)
         for host, container in self._config.get("volumes", {}).items():
@@ -61,5 +64,5 @@ class DockerCommandBuilder:
         return name not in result.stdout.splitlines()
 
     @staticmethod
-    def _volume_flag(host_or_name: str, container_spec: str) -> list[str]:
+    def _volume_flag(host_or_name: str, container_spec: VolumeSpec) -> list[str]:
         return ["-v", f"{host_or_name}:{container_spec}"]

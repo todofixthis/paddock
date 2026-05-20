@@ -1,7 +1,7 @@
 from pathlib import Path
 from unittest.mock import MagicMock
 
-
+from paddock.config.filters import VolumeSpec
 from paddock.docker.builder import DockerCommandBuilder, sanitise_volume_name
 
 
@@ -35,7 +35,7 @@ def test_minimal_command(mocker, tmp_path: Path):
     - '-v {workdir}:{workdir}:rw' to mount the workdir at the same path
     - the image name
     """
-    config = {
+    config: dict[str, object] = {
         "image": "ubuntu:22.04",
         "agent": "claude",
         "volumes": {},
@@ -64,7 +64,7 @@ def test_container_name_from_workdir(mocker, tmp_path: Path):
     """Container is named 'paddock-{dirname}-{agent}'."""
     workdir = tmp_path / "my-project"
     workdir.mkdir()
-    config = {
+    config: dict[str, object] = {
         "image": "ubuntu:22.04",
         "agent": "claude",
         "volumes": {},
@@ -85,7 +85,7 @@ def test_container_name_from_workdir(mocker, tmp_path: Path):
 
 def test_container_name_suffix_on_conflict(mocker, tmp_path: Path):
     """If the container name is taken, a numeric suffix is appended."""
-    config = {
+    config: dict[str, object] = {
         "image": "ubuntu:22.04",
         "agent": "claude",
         "volumes": {},
@@ -105,7 +105,7 @@ def test_container_name_suffix_on_conflict(mocker, tmp_path: Path):
 
 def test_uses_agent_command(mocker, tmp_path: Path):
     """When no command override is given, the agent's default command is appended."""
-    config = {
+    config: dict[str, object] = {
         "image": "ubuntu:22.04",
         "agent": "claude",
         "volumes": {},
@@ -124,7 +124,7 @@ def test_uses_agent_command(mocker, tmp_path: Path):
 
 def test_command_override(mocker, tmp_path: Path):
     """An explicit command overrides the agent default."""
-    config = {
+    config: dict[str, object] = {
         "image": "ubuntu:22.04",
         "agent": "claude",
         "volumes": {},
@@ -143,10 +143,10 @@ def test_command_override(mocker, tmp_path: Path):
 
 def test_config_volumes(mocker, tmp_path: Path):
     """Config volumes are passed as -v flags."""
-    config = {
+    config: dict[str, object] = {
         "image": "ubuntu:22.04",
         "agent": "claude",
-        "volumes": {"/host/data": "/data:ro"},
+        "volumes": {"/host/data": VolumeSpec("/data", "ro")},
         "network": None,
     }
     agent = make_agent()
@@ -163,7 +163,7 @@ def test_config_volumes(mocker, tmp_path: Path):
 
 def test_network(mocker, tmp_path: Path):
     """A configured network is passed via --network."""
-    config = {
+    config: dict[str, object] = {
         "image": "ubuntu:22.04",
         "agent": "claude",
         "volumes": {},
@@ -183,13 +183,15 @@ def test_network(mocker, tmp_path: Path):
 
 def test_scratch_volume(mocker, tmp_path: Path):
     """Agent scratch volumes (named Docker volumes) are passed via -v."""
-    config = {
+    config: dict[str, object] = {
         "image": "ubuntu:22.04",
         "agent": "claude",
         "volumes": {},
         "network": None,
     }
-    agent = make_agent(scratch_volumes={"paddock_ubuntu_22_04_claude": "/scratch"})
+    agent = make_agent(
+        scratch_volumes={"paddock_ubuntu_22_04_claude": VolumeSpec("/scratch", "rw")}
+    )
     mocker.patch(
         "paddock.docker.builder.DockerCommandBuilder._container_name_available",
         return_value=True,
@@ -198,4 +200,4 @@ def test_scratch_volume(mocker, tmp_path: Path):
         command=[]
     )
     vol_args = [argv[i + 1] for i, a in enumerate(argv) if a == "-v"]
-    assert any("paddock_ubuntu_22_04_claude:/scratch" in v for v in vol_args)
+    assert any("paddock_ubuntu_22_04_claude:/scratch:rw" in v for v in vol_args)

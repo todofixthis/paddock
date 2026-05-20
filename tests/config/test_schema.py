@@ -1,6 +1,7 @@
 import filters as f
 import pytest
 
+from paddock.config.filters import VolumeSpec
 from paddock.config.schema import ConfigSchema, _config_schema
 
 
@@ -97,9 +98,15 @@ def test_valid_volumes(tmp_path):
         },
     }
     result = ConfigSchema().validate(config)
-    assert result["volumes"][str(implicit.resolve())] == "/container/implicit:ro"
-    assert result["volumes"][str(explicit_ro.resolve())] == "/container/ro:ro"
-    assert result["volumes"][str(explicit_rw.resolve())] == "/container/rw:rw"
+    assert result["volumes"][str(implicit.resolve())] == VolumeSpec(
+        "/container/implicit", "ro"
+    )
+    assert result["volumes"][str(explicit_ro.resolve())] == VolumeSpec(
+        "/container/ro", "ro"
+    )
+    assert result["volumes"][str(explicit_rw.resolve())] == VolumeSpec(
+        "/container/rw", "rw"
+    )
 
 
 def test_invalid_volume_value():

@@ -1,4 +1,5 @@
 from paddock.agents import BaseAgent
+from paddock.config.filters import VolumeSpec
 
 
 class ShellAgent(BaseAgent):
@@ -7,7 +8,7 @@ class ShellAgent(BaseAgent):
     def get_command(self) -> list[str]:
         return ["/bin/bash"]
 
-    def get_volumes(self) -> dict[str, str]:
+    def get_volumes(self) -> dict[str, VolumeSpec]:
         return {}
 
     def get_build_args(self) -> dict[str, str]:
