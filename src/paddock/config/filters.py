@@ -1,8 +1,9 @@
 from pathlib import Path
-from typing import cast
+from typing import NamedTuple, cast
 
 import filters as f
 from filters.base import BaseFilter
+from filters.macros import filter_macro
 
 
 class Agent(BaseFilter):
@@ -130,58 +131,56 @@ class Filepath(BaseFilter):
         return path
 
 
-class Volume(BaseFilter):
+class VolumeSpec(NamedTuple):
+    """Structured container path spec produced by the ``Volume`` filter."""
+
+    container_path: str
+    mode: str
+
+    def __str__(self) -> str:
+        return f"{self.container_path}:{self.mode}"
+
+
+@filter_macro
+def Volume(home_dir: str | Path | None = None):
     """Validates a Docker volume container path spec.
 
     Accepts paths of the form ``/container/path``, ``/container/path:ro``,
     or ``/container/path:rw``. Values with more than one colon-separated
-    segment are invalid. Bare paths (no mode suffix) are normalised to
-    ``:ro``.
+    segment are invalid. Bare paths (no mode suffix) normalise to ``:ro``.
+    Mode is case-folded, so ``RO`` and ``RW`` are accepted.
 
-    When ``home_dir`` is supplied, a leading ``~`` in the path portion is
-    expanded relative to that directory via ``Filepath``.
+    Returns a :class:`VolumeSpec` NamedTuple.
+
+    ``Filepath`` is always applied to the container path (with
+    ``resolve=False`` and ``must_exist=False``) to ensure absolute paths
+    reach Docker. When ``home_dir`` is supplied, a leading ``~`` is
+    expanded relative to that directory; when ``home_dir`` is ``None``,
+    ``Path.home()`` is used as the fallback.
 
     Args:
         home_dir:
 
             Home directory to substitute for ``~`` in the path portion.
-            When ``None`` (default), no tilde expansion is performed.
+            When ``None`` (default), ``Path.home()`` is used.
     """
-
-    CODE_INVALID = "invalid"
-
-    templates = {
-        CODE_INVALID: "Expected a container path, optionally suffixed with :ro or :rw.",
-    }
-
-    def __init__(self, home_dir: str | Path | None = None):
-        super().__init__()
-        self._home_dir = Path(home_dir) if home_dir is not None else None
-
-    def _apply(self, value):
-        value = cast(str, self._filter(value, f.Unicode))
-        if self._has_errors:
-            return None
-
-        # Values with more than one colon are invalid.
-        parts = value.split(":")
-        if len(parts) > 2:
-            return self._invalid_value(value, self.CODE_INVALID)
-
-        # If a mode suffix is present, it must be 'ro' or 'rw'.
-        if len(parts) == 2 and parts[1] not in ("ro", "rw"):
-            return self._invalid_value(value, self.CODE_INVALID)
-
-        mode = ":" + parts[1] if len(parts) == 2 else ":ro"
-        path_str = parts[0]
-
-        if self._home_dir is not None:
-            path = cast(Path, self._filter(path_str, Filepath(home_dir=self._home_dir)))
-            if self._has_errors:
-                return None
-            return str(path) + mode
-
-        return path_str + mode
+    return (
+        f.Unicode
+        | f.NotEmpty
+        | f.Split(":", keys=["container_path", "mode"])
+        | f.NamedTuple(
+            VolumeSpec,
+            {
+                "container_path": (
+                    f.Required
+                    | f.Unicode
+                    | Filepath(home_dir=home_dir, resolve=False, must_exist=False)
+                    | f.Unicode
+                ),
+                "mode": f.CaseFold | f.Choice({"ro", "rw"}) | f.Optional("ro"),
+            },
+        )
+    )
 
 
 class VolumeMap(BaseFilter):
@@ -192,8 +191,8 @@ class VolumeMap(BaseFilter):
     existence. Values (container path specs) are validated through
     ``Volume``.
 
-    Returns a ``dict[str, str]`` mapping resolved host-path strings to
-    container path specs.
+    Returns a ``dict[str, VolumeSpec]`` mapping resolved host-path strings
+    to container path specs.
 
     Args:
         container_home_dir:
@@ -222,7 +221,7 @@ class VolumeMap(BaseFilter):
                 self._filter(raw_host, f.Unicode | Filepath(), sub_key=sub_key),
             )
             container_spec = cast(
-                str | None,
+                VolumeSpec | None,
                 self._filter(
                     raw_container,
                     Volume(home_dir=self._container_home_dir),

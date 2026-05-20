@@ -3,35 +3,55 @@ from pathlib import Path
 import filters as f
 import pytest
 
-from paddock.config.filters import Agent, Filepath, Volume, VolumeMap
+from paddock.config.filters import Agent, Filepath, Volume, VolumeMap, VolumeSpec
 
 
-def test_volume_explicit_ro():
-    """':ro' mode is valid and returned as-is."""
-    assert (
-        f.FilterRunner(Volume, "/container/path:ro").cleaned_data
-        == "/container/path:ro"
+def test_volume_pass_none(assert_filter_passes):
+    """None is always a pass-through."""
+    assert_filter_passes(Volume, None)
+
+
+def test_volume_pass_explicit_ro(assert_filter_passes):
+    """':ro' mode is valid."""
+    assert_filter_passes(
+        Volume, "/container/path:ro", VolumeSpec("/container/path", "ro")
     )
 
 
-def test_volume_explicit_rw():
-    """':rw' mode is valid and returned as-is."""
-    assert (
-        f.FilterRunner(Volume, "/container/path:rw").cleaned_data
-        == "/container/path:rw"
+def test_volume_pass_explicit_rw(assert_filter_passes):
+    """':rw' mode is valid."""
+    assert_filter_passes(
+        Volume, "/container/path:rw", VolumeSpec("/container/path", "rw")
     )
 
 
-def test_volume_implicit_ro():
-    """A path with no mode suffix has ':ro' appended."""
-    assert (
-        f.FilterRunner(Volume, "/container/path").cleaned_data == "/container/path:ro"
+def test_volume_pass_implicit_ro(assert_filter_passes):
+    """A bare path normalises to mode 'ro'."""
+    assert_filter_passes(Volume, "/container/path", VolumeSpec("/container/path", "ro"))
+
+
+def test_volume_pass_casefold(assert_filter_passes):
+    """Mode is case-folded; ':RO' normalises to 'ro'."""
+    assert_filter_passes(
+        Volume, "/container/path:RO", VolumeSpec("/container/path", "ro")
     )
 
 
-def test_volume_invalid():
+def test_volume_fail_too_many_colons(assert_filter_errors):
     """A value with more than one colon-separated segment is invalid."""
-    assert not f.FilterRunner(Volume, "not:a:valid:path").is_valid()
+    assert_filter_errors(Volume, "not:a:valid:path", [f.Len.CODE_TOO_LONG])
+
+
+def test_volume_fail_bad_mode(assert_filter_errors):
+    """An unrecognised mode suffix is invalid."""
+    assert_filter_errors(
+        Volume, "/container/path:rz", {"mode": [f.Choice.CODE_INVALID]}
+    )
+
+
+def test_volume_fail_empty(assert_filter_errors):
+    """An empty string is invalid."""
+    assert_filter_errors(Volume, "", [f.NotEmpty.CODE_EMPTY])
 
 
 def test_agent_string():
@@ -410,17 +430,23 @@ def test_pass_is_dir_nonexistent_skips_check(assert_filter_passes, tmp_path):
 
 def test_volume_home_dir_tilde_expansion(assert_filter_passes):
     """home_dir causes ~ in the path portion to expand."""
-    assert_filter_passes(Volume(home_dir="/root"), "~/.config:ro", "/root/.config:ro")
+    assert_filter_passes(
+        Volume(home_dir="/root"), "~/.config:ro", VolumeSpec("/root/.config", "ro")
+    )
 
 
 def test_volume_home_dir_bare_path_normalised(assert_filter_passes):
     """A bare path with home_dir still gets :ro appended."""
-    assert_filter_passes(Volume(home_dir="/root"), "/etc/hosts", "/etc/hosts:ro")
+    assert_filter_passes(
+        Volume(home_dir="/root"), "/etc/hosts", VolumeSpec("/etc/hosts", "ro")
+    )
 
 
 def test_volume_home_dir_rw_preserved(assert_filter_passes):
     """:rw mode is preserved when home_dir is set."""
-    assert_filter_passes(Volume(home_dir="/root"), "~/.ssh:rw", "/root/.ssh:rw")
+    assert_filter_passes(
+        Volume(home_dir="/root"), "~/.ssh:rw", VolumeSpec("/root/.ssh", "rw")
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -440,7 +466,7 @@ def test_volume_map_valid(assert_filter_passes, tmp_path):
     assert_filter_passes(
         VolumeMap(),
         {str(host): "/container/data:ro"},
-        {str(host): "/container/data:ro"},
+        {str(host): VolumeSpec("/container/data", "ro")},
     )
 
 
@@ -451,7 +477,7 @@ def test_volume_map_tilde_expansion(assert_filter_passes, tmp_path):
     assert_filter_passes(
         VolumeMap(),
         {"~/work": "/container/work:rw"},
-        {str(target.resolve()): "/container/work:rw"},
+        {str(target.resolve()): VolumeSpec("/container/work", "rw")},
     )
 
 
@@ -471,7 +497,7 @@ def test_volume_map_invalid_container_spec(assert_filter_errors, tmp_path):
     assert_filter_errors(
         VolumeMap(),
         {str(host): "not:a:valid:path"},
-        expected_codes={str(host): [Volume.CODE_INVALID]},
+        expected_codes={str(host): [f.Len.CODE_TOO_LONG]},
     )
 
 
@@ -482,5 +508,5 @@ def test_volume_map_container_home_dir(assert_filter_passes, tmp_path):
     assert_filter_passes(
         VolumeMap(container_home_dir="/root"),
         {str(host): "~/.config:ro"},
-        {str(host): "/root/.config:ro"},
+        {str(host): VolumeSpec("/root/.config", "ro")},
     )
