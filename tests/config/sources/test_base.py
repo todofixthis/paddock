@@ -40,9 +40,6 @@ class _Fake(ConfigSource):
         return f.FilterRunner(f.Type(dict), {"image": "x"})
 
 
-@pytest.mark.xfail(
-    strict=True, reason="Requires all source classes registered — passes after Task 5"
-)
 def test_registry_iteration_is_weight_ordered():
     """SortedClassRegistry iterates by WEIGHT ascending."""
     from paddock.config import sources  # noqa: F401 — triggers registration
