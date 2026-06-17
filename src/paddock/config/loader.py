@@ -4,24 +4,8 @@ from typing import Any, TypedDict
 import filters as f
 
 from paddock.config.errors import ConfigError
-from paddock.config.filters import Agent, Filepath
-from paddock.config.schema import BUILD_POLICIES, standard_config_schema
-
-# Flat schema for PADDOCK_* environment variables, validated before mapping.
-# Temporarily lives here until EnvConfigSource absorbs it in Task 4.
-_env_schema = f.FilterMapper(
-    {
-        "PADDOCK_AGENT": Agent,
-        "PADDOCK_BUILD_CONTEXT": f.Unicode | f.NotEmpty | Filepath(is_dir=True),
-        "PADDOCK_BUILD_DOCKERFILE": f.Unicode | f.NotEmpty | Filepath(is_dir=False),
-        "PADDOCK_BUILD_POLICY": f.Choice(BUILD_POLICIES),
-        "PADDOCK_CONFIG_FILE": f.Unicode | Filepath(is_dir=False),
-        "PADDOCK_IMAGE": f.Unicode | f.NotEmpty,
-        "PADDOCK_NETWORK": f.Unicode,
-    },
-    allow_extra_keys=True,
-    allow_missing_keys=True,
-)
+from paddock.config.schema import standard_config_schema
+from paddock.config.sources.env import _env_schema
 
 _PROJECT_CONFIG_NAME = Path(".paddock") / "config.toml"
 

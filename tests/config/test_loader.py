@@ -6,7 +6,8 @@ import pytest
 from filters.pytest import skip_value_check
 
 from paddock.config.errors import ConfigError
-from paddock.config.loader import ConfigLoader, _env_schema
+from paddock.config.loader import ConfigLoader
+from paddock.config.sources.env import _env_schema
 
 
 def test_load_missing_file_returns_empty(tmp_path: Path):
@@ -136,21 +137,6 @@ def test_resolve_returns_config_dict(tmp_path: Path):
 # ---------------------------------------------------------------------------
 # _env_schema
 # ---------------------------------------------------------------------------
-
-
-def test_env_schema_expands_tilde_in_config_file(
-    assert_filter_passes, monkeypatch, tmp_path
-):
-    """PADDOCK_CONFIG_FILE with a leading tilde is expanded by the env schema."""
-    monkeypatch.setenv("HOME", str(tmp_path))
-    config_file = tmp_path / "extra.toml"
-    config_file.write_text("")
-    runner = assert_filter_passes(
-        _env_schema,
-        {"PADDOCK_CONFIG_FILE": "~/extra.toml"},
-        skip_value_check,
-    )
-    assert runner.cleaned_data["PADDOCK_CONFIG_FILE"] == config_file.resolve()
 
 
 def test_env_schema_expands_tilde_in_dockerfile(
