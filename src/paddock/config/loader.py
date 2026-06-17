@@ -1,343 +1,215 @@
+import logging
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, TypedDict
 
 import filters as f
 
+from paddock.cli import ParsedArgs
+from paddock.config.allowlist import Allowlist
+from paddock.config.context import ConfigContext
 from paddock.config.errors import ConfigError
 from paddock.config.schema import standard_config_schema
-from paddock.config.sources.env import _env_schema
+from paddock.config.sources import source_registry
+from paddock.config.sources.user import _default_user_config_path
 
-_PROJECT_CONFIG_NAME = Path(".paddock") / "config.toml"
+logger = logging.getLogger("paddock")
 
-
-def _user_config_path() -> Path:
-    """Return the default user config path.
-
-    Evaluated at call time rather than import time so that changes to
-    ``$HOME`` (e.g. in tests) are respected.
-
-    Returns:
-        ``~/.config/paddock/config.toml`` resolved against the current home
-        directory.
-    """
-    return Path.home() / ".config" / "paddock" / "config.toml"
+# Sources whose load output is allowlist-gated. Trusted sources skip this.
+_GATED_SOURCES = frozenset({"project_toml", "env", "cli"})
 
 
-class ConfigEntry(TypedDict):
-    """A single config value annotated with its origin."""
+@dataclass
+class ResolvedConfig:
+    """The result of a full config resolution."""
 
-    value: Any
-    source: str
-
-
-# SourcedConfig: same shape as the config schema, but leaf values are ConfigEntry.
-SourcedConfig = dict[str, Any]
+    config: dict
+    project_toml_enabled: bool
+    project_dir_readonly: bool
 
 
 class ConfigLoader:
-    """Loads, merges, and validates paddock config from all sources.
+    """Orchestrates loading, validation, sanitisation, and reduction of config.
 
-    Config resolution order (later sources overwrite earlier):
-
-    1. User-level (``~/.config/paddock/config.toml``)
-    2. Project-level (``<workdir>/.paddock/config.toml``)
-    3. Extra config file via ``PADDOCK_CONFIG_FILE`` env var
-    4. Extra config file via ``--config-file`` CLI arg
-    5. Env var overrides (``PADDOCK_*``)
-    6. CLI arg overrides
+    The merge order, source list, and per-source loaders all come from
+    :data:`source_registry`. To add a new source, define a ``ConfigSource``
+    subclass with a ``SOURCE_KEY`` and ``WEIGHT``; ``AutoRegister`` does the rest.
     """
 
-    def load_user_config(self, path: Path | None = None) -> SourcedConfig:
-        """Load the user-level config file.
+    def __init__(self, user_config_path: Path | None = None) -> None:
+        """Initialises the loader with an optional user config path override.
 
         Args:
-            path:
-
-                Path to the user config file. If omitted, defaults to
-                ``~/.config/paddock/config.toml`` resolved at call time via
-                :func:`_user_config_path`.
-
-        Returns:
-            A ``SourcedConfig`` mapping, or ``{}`` if the file does not exist.
+            user_config_path: If provided, overrides the default user config
+                path (``~/.config/paddock/config.toml``). Useful for testing.
         """
-        return self._load_toml_sourced(path or _user_config_path())
-
-    def load_project_config(self, workdir: Path) -> SourcedConfig:
-        """Load the project-level config from ``<workdir>/.paddock/config.toml``.
-
-        Args:
-            workdir:
-
-                The project working directory.
-
-        Returns:
-            A ``SourcedConfig`` mapping, or ``{}`` if the file does not exist.
-        """
-        return self._load_toml_sourced(workdir / _PROJECT_CONFIG_NAME)
-
-    def load_extra_config(self, path: Path) -> SourcedConfig:
-        """Load an arbitrary config file (for ``PADDOCK_CONFIG_FILE`` or ``--config-file``).
-
-        Args:
-            path:
-
-                Path to the extra config file.
-
-        Returns:
-            A ``SourcedConfig`` mapping, or ``{}`` if the file does not exist.
-        """
-        return self._load_toml_sourced(path)
-
-    def config_from_env(self, environ: dict[str, str]) -> SourcedConfig:
-        """Extract config from ``PADDOCK_*`` environment variables.
-
-        Strips the ``PADDOCK_`` prefix, lowercases, and splits on ``_`` to map
-        to the config structure. For example::
-
-            PADDOCK_IMAGE=foo           → {'image': {'value': 'foo', ...}}
-            PADDOCK_BUILD_DOCKERFILE=x  → {'build': {'dockerfile': {'value': 'x', ...}}}
-
-        Args:
-            environ:
-
-                Environment variable mapping to inspect.
-
-        Returns:
-            A ``SourcedConfig`` containing only the ``PADDOCK_``-prefixed entries.
-        """
-        config: SourcedConfig = {}
-        prefix = "PADDOCK_"
-        for key, value in environ.items():
-            if not key.startswith(prefix):
-                continue
-            parts = key[len(prefix) :].lower().split("_")
-            self._deep_set_sourced(config, parts, value, source=f"env:{key}")
-        return config
-
-    def config_from_cli(self, parsed: Any) -> SourcedConfig:
-        """Extract config from a parsed CLI args object (omitting ``None`` values).
-
-        Args:
-            parsed:
-
-                An object with attributes matching the paddock CLI argument names.
-
-        Returns:
-            A ``SourcedConfig`` containing only the non-``None`` CLI values.
-        """
-        config: SourcedConfig = {}
-        build: SourcedConfig = {}
-        source = "cli"
-
-        if parsed.image is not None:
-            config["image"] = {"value": parsed.image, "source": source}
-        if parsed.agent is not None:
-            config["agent"] = {"value": parsed.agent, "source": source}
-        if parsed.network is not None:
-            config["network"] = {"value": parsed.network, "source": source}
-        if parsed.build_dockerfile is not None:
-            build["dockerfile"] = {"value": parsed.build_dockerfile, "source": source}
-        if parsed.build_context is not None:
-            build["context"] = {"value": parsed.build_context, "source": source}
-        if parsed.build_policy is not None:
-            build["policy"] = {"value": parsed.build_policy, "source": source}
-        if parsed.build_args:
-            build["args"] = {
-                k: {"value": v, "source": source} for k, v in parsed.build_args.items()
-            }
-        if build:
-            config["build"] = build
-        if parsed.volumes:
-            config["volumes"] = {
-                k: {"value": v, "source": source} for k, v in parsed.volumes.items()
-            }
-        return config
+        self._user_path_override = user_config_path
 
     def resolve(
         self,
-        parsed: Any,
+        parsed: ParsedArgs,
         workdir: Path,
         environ: dict[str, str],
-    ) -> dict:
+    ) -> ResolvedConfig:
         """Load config from all sources, merge, apply defaults, and validate.
 
         Args:
-            parsed:
-
-                Parsed CLI arguments object.
-
-            workdir:
-
-                The project working directory.
-
-            environ:
-
-                Environment variable mapping (e.g. ``dict(os.environ)``).
+            parsed: Parsed CLI arguments object.
+            workdir: The project working directory.
+            environ: Environment variable mapping (e.g. ``dict(os.environ)``).
 
         Returns:
-            The validated, merged config as a plain dict.
+            A :class:`ResolvedConfig` containing the validated merged config
+            and metadata derived from trusted sources.
 
         Raises:
-            ConfigError: If env vars or the merged config fail validation.
+            ExceptionGroup: If any enabled source fails validation, or if the
+                final merged config fails validation.
         """
-        env_runner = f.FilterRunner(_env_schema, environ)
-        if not env_runner.is_valid():
-            messages = [
-                f"Config error [{key}]: {error['message']}"
-                for key, errors in env_runner.errors.items()
-                for error in errors
-            ]
-            raise ConfigError("\n".join(messages))
-        validated_env = env_runner.cleaned_data
+        context = ConfigContext(
+            parsed=parsed,
+            environ=dict(environ),
+            workdir=workdir,
+            user_config_path=self._user_path_override or _default_user_config_path(),
+        )
 
-        sources = [
-            self.load_user_config(),
-            self.load_project_config(workdir),
-        ]
+        # Phase 1: Load every source via registry iteration (WEIGHT-ascending).
+        runners: dict[str, f.FilterRunner] = {
+            str(key): cls().load(context) for key, cls in source_registry.items()
+        }
 
-        if paddock_config_file := validated_env.get("PADDOCK_CONFIG_FILE"):
-            sources.append(self.load_extra_config(paddock_config_file))
+        # Phase 2: Build allowlist + project_dir_readonly from trusted sources.
+        allowlist, project_dir_readonly = self._extract_meta(context, runners)
 
-        if parsed.config_file is not None:
-            sources.append(
-                self.load_extra_config(Path(parsed.config_file).expanduser())
+        # Phase 3a: Aggregate validation errors generically.
+        bad: list[tuple[str, f.FilterRunner]] = []
+        for key, runner in runners.items():
+            if runner.is_valid():
+                continue
+            if key in _GATED_SOURCES and not allowlist.is_enabled(key):
+                logger.warning(
+                    "%s source had errors but is disabled by [config.allowlist] — ignored",
+                    key,
+                )
+                continue
+            bad.append((key, runner))
+        if bad:
+            raise self._error_group(bad)
+
+        # Phase 3b: Warn-if-ignored generically for any gated source that
+        # contributed content while disabled.
+        for key in _GATED_SOURCES:
+            if allowlist.is_enabled(key):
+                continue
+            if runners[key].is_valid() and runners[key].cleaned_data:
+                logger.warning(
+                    "%s contributed config but %s is not in [config.allowlist] — ignored",
+                    key,
+                    key,
+                )
+
+        # Phase 3c: Sanitise.
+        sanitised: dict[str, dict] = {}
+        for src_key, cls in source_registry.items():
+            s_runner = cls().sanitise(runners[str(src_key)], allowlist)
+            sanitised[str(src_key)] = (
+                dict(s_runner.cleaned_data) if s_runner.is_valid() else {}
             )
 
-        # Exclude None values (unset vars), PADDOCK_CONFIG_FILE (meta-key that
-        # locates extra config files, not a config value itself), and
-        # PADDOCK_BUILD_ARGS (a dict cannot be expressed as a single env var).
-        _env_config_exclude = {"PADDOCK_BUILD_ARGS", "PADDOCK_CONFIG_FILE"}
-        env_for_config = {
-            k: v
-            for k, v in validated_env.items()
-            if v is not None and k not in _env_config_exclude
+        # Strip meta sections from project_overrides before merging — already consumed.
+        if "config" in sanitised.get("project_overrides", {}):
+            sanitised["project_overrides"].pop("config", None)
+
+        # Phase 4: Merge in registry (= WEIGHT) order, then validate the final dict.
+        merged: dict = {}
+        for key in sanitised:
+            merged = self._deep_merge(merged, sanitised[key])
+        merged = self._apply_defaults(merged)
+
+        final = f.FilterRunner(standard_config_schema(merged=True), merged)
+        if not final.is_valid():
+            raise self._error_group([("final", final)])
+
+        return ResolvedConfig(
+            config=final.cleaned_data,
+            project_toml_enabled=allowlist.is_enabled("project_toml"),
+            project_dir_readonly=project_dir_readonly,
+        )
+
+    # ------------------------------------------------------------------
+
+    def _extract_meta(
+        self, context: ConfigContext, runners: dict[str, f.FilterRunner]
+    ) -> tuple[Allowlist, bool]:
+        """Build the Allowlist + project_dir_readonly from user + project_overrides.
+
+        ``UserConfigSource.load`` strips ``[config]`` and ``[projects]`` from its
+        output, so we re-parse the user TOML here to recover the global
+        ``[config]`` meta-section. Per-project meta comes from
+        ``ProjectOverridesSource`` (which keeps ``config`` in its output).
+
+        Args:
+            context: The resolved config context for this run.
+            runners: The loaded runners keyed by source key.
+
+        Returns:
+            A tuple of ``(Allowlist, project_dir_readonly)``.
+        """
+        path = context.user_config_path
+        # Read raw TOML to extract allowlist without schema-applied defaults.
+        # Using user_config_schema would fill in False for every unset allowlist
+        # key (via f.Optional(False)), overriding the Allowlist._DEFAULTS of True.
+        global_raw_meta: dict = {}
+        per_project_raw_meta: dict = {}
+        if path.exists():
+            raw_runner = f.FilterRunner(f.TomlDecode, path.read_text(encoding="utf-8"))
+            if raw_runner.is_valid():
+                raw_data = raw_runner.cleaned_data
+                global_raw_meta = raw_data.get("config", {}) or {}
+                projects = raw_data.get("projects", {}) or {}
+                project_entry = projects.get(context.project_key, {}) or {}
+                per_project_raw_meta = project_entry.get("config", {}) or {}
+
+        # project_dir_readonly: use schema-validated runners for type safety.
+        po_runner = runners.get("project_overrides")
+        po_cleaned = (
+            po_runner.cleaned_data if po_runner and po_runner.is_valid() else {}
+        )
+        po_meta = po_cleaned.get("config", {}) or {}
+
+        allowlist_raw = {
+            **(global_raw_meta.get("allowlist") or {}),
+            **(per_project_raw_meta.get("allowlist") or {}),
         }
-        sources.append(self.config_from_env(env_for_config))
-        sources.append(self.config_from_cli(parsed))
+        readonly = po_meta.get(
+            "project_dir_readonly",
+            global_raw_meta.get("project_dir_readonly", True),
+        )
+        return Allowlist(allowlist_raw), bool(readonly)
 
-        merged_sourced = self._merge_sourced(sources)
-        plain = self._extract_values(merged_sourced)
-        plain = self._apply_defaults(plain)
-
-        config_runner = f.FilterRunner(standard_config_schema(merged=True), plain)
-        if not config_runner.is_valid():
-            messages = [
-                f"Config error [{key}]: {error['message']}"
-                for key, errors in config_runner.errors.items()
-                for error in errors
-            ]
-            raise ConfigError("\n".join(messages))
-        return config_runner.cleaned_data
-
-    def _load_toml_sourced(self, path: Path) -> SourcedConfig:
-        """Load a TOML file and wrap each leaf value with its source path.
+    def _error_group(self, bad: list[tuple[str, f.FilterRunner]]) -> ExceptionGroup:
+        """Build an ``ExceptionGroup`` from a list of invalid runners.
 
         Args:
-            path:
-
-                Path to the TOML file.
+            bad: List of ``(source_key, runner)`` pairs where the runner is
+                not valid.
 
         Returns:
-            A ``SourcedConfig``, or ``{}`` if the file does not exist.
-
-        Raises:
-            ConfigError: If the file contains invalid TOML.
+            An ``ExceptionGroup`` wrapping one :class:`ConfigError` per
+            validation message.
         """
-        if not path.exists():
-            return {}
-        content = path.read_text(encoding="utf-8")
-        runner = f.FilterRunner(f.TomlDecode, content)
-        if not runner.is_valid():
-            msgs = [e["message"] for errs in runner.errors.values() for e in errs]
-            raise ConfigError(f"Invalid TOML in {path}: {'; '.join(msgs)}")
-        return self._annotate_source(runner.cleaned_data, str(path))
-
-    def _annotate_source(self, data: dict, source: str) -> SourcedConfig:
-        """Recursively wrap leaf values with source info.
-
-        Args:
-            data:
-
-                Raw config dict to annotate.
-
-            source:
-
-                Source label (typically a file path string).
-
-        Returns:
-            A ``SourcedConfig`` with the same structure as ``data``.
-        """
-        result: SourcedConfig = {}
-        for key, value in data.items():
-            if isinstance(value, dict):
-                result[key] = self._annotate_source(value, source)
-            else:
-                result[key] = {"value": value, "source": source}
-        return result
-
-    def _deep_set_sourced(
-        self,
-        config: SourcedConfig,
-        parts: list[str],
-        value: str,
-        source: str,
-    ) -> None:
-        """Deep-set a value in a ``SourcedConfig`` using a key-path list.
-
-        Args:
-            config:
-
-                The target ``SourcedConfig`` to mutate.
-
-            parts:
-
-                Ordered key segments forming the path to the target leaf.
-
-            value:
-
-                The raw string value to store.
-
-            source:
-
-                Source label for the ``ConfigEntry``.
-        """
-        node = config
-        for part in parts[:-1]:
-            if part not in node or not isinstance(node[part], dict):
-                node[part] = {}
-            node = node[part]
-        node[parts[-1]] = {"value": value, "source": source}
-
-    def _merge_sourced(self, sources: list[SourcedConfig]) -> SourcedConfig:
-        """Deep-merge a list of ``SourcedConfig`` dicts; later sources overwrite earlier.
-
-        Args:
-            sources:
-
-                Ordered list of ``SourcedConfig`` mappings.
-
-        Returns:
-            A single merged ``SourcedConfig``.
-        """
-        result: SourcedConfig = {}
-        for source in sources:
-            result = self._deep_merge(result, source)
-        return result
+        errors: list[ConfigError] = []
+        for source_key, runner in bad:
+            for key, messages in runner.errors.items():
+                for msg in messages:
+                    errors.append(ConfigError(f"[{source_key}:{key}] {msg['message']}"))
+        return ExceptionGroup("config validation failed", errors)
 
     def _deep_merge(self, base: dict, override: dict) -> dict:
         """Recursively merge ``override`` into ``base``.
 
-        ``ConfigEntry`` dicts (those with both ``value`` and ``source`` keys) are
-        treated as leaves and replaced wholesale rather than merged.
-
         Args:
-            base:
-
-                The base dict to merge into.
-
-            override:
-
-                The dict whose values take precedence.
+            base: The base dict to merge into.
+            override: The dict whose values take precedence.
 
         Returns:
             A new merged dict.
@@ -348,31 +220,8 @@ class ConfigLoader:
                 key in result
                 and isinstance(result[key], dict)
                 and isinstance(value, dict)
-                and not ("value" in value and "source" in value)
             ):
                 result[key] = self._deep_merge(result[key], value)
-            else:
-                result[key] = value
-        return result
-
-    def _extract_values(self, sourced: SourcedConfig) -> dict:
-        """Strip source annotations, returning a plain config dict.
-
-        Args:
-            sourced:
-
-                A ``SourcedConfig`` to strip.
-
-        Returns:
-            A plain dict with the same structure but without ``ConfigEntry`` wrappers.
-        """
-        result: dict = {}
-        for key, value in sourced.items():
-            if isinstance(value, dict):
-                if "value" in value and "source" in value:
-                    result[key] = value["value"]
-                else:
-                    result[key] = self._extract_values(value)
             else:
                 result[key] = value
         return result
@@ -383,16 +232,12 @@ class ConfigLoader:
         Mutates and returns ``config``.
 
         Args:
-            config:
-
-                The plain config dict to fill.
+            config: The plain config dict to fill.
 
         Returns:
             The same dict with defaults applied.
         """
         config.setdefault("agent", "claude")
-        config.setdefault("build", None)
-        config.setdefault("network", None)
         config.setdefault("volumes", {})
         if isinstance(config.get("build"), dict):
             config["build"].setdefault("args", {})

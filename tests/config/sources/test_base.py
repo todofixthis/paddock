@@ -37,7 +37,9 @@ class _Fake(ConfigSource):
     WEIGHT = 5
 
     def load(self, context):
-        return f.FilterRunner(f.Type(dict), {"image": "x"})
+        # Return an empty valid runner — non-empty content would pollute
+        # the registry-driven loader and interfere with other tests.
+        return f.FilterRunner(f.Type(dict), {})
 
 
 def test_registry_iteration_is_weight_ordered():
