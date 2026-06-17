@@ -8,6 +8,7 @@ from paddock.agents import BaseAgent, agent_registry
 from paddock.cli import parse_args
 from paddock.config.errors import ConfigError
 from paddock.config.loader import ConfigLoader
+from paddock.config.project_dir import ProjectDirManager
 from paddock.docker.build import ImageBuilder
 from paddock.docker.builder import DockerCommandBuilder
 
@@ -41,10 +42,26 @@ def run(argv: list[str] | None = None) -> None:
 
     loader = ConfigLoader()
     try:
-        config = loader.resolve(parsed, workdir, environ=dict(os.environ))
-    except ConfigError as e:
-        print(str(e), file=sys.stderr)
+        resolved = loader.resolve(parsed, workdir, environ=dict(os.environ))
+    except* ConfigError as eg:
+        for err in eg.exceptions:
+            print(str(err), file=sys.stderr)
         sys.exit(1)
+
+    config = resolved.config
+
+    project_dir_volume = None
+    paddock_dir_created = False
+    manager = ProjectDirManager()
+    if resolved.project_toml_enabled:
+        try:
+            host_path, container_spec, paddock_dir_created = manager.prepare(
+                workdir, readonly=resolved.project_dir_readonly
+            )
+            project_dir_volume = (host_path, container_spec)
+        except ConfigError as e:
+            print(str(e), file=sys.stderr)
+            sys.exit(1)
 
     agent_key = "false" if config["agent"] is False else str(config["agent"])
     agent: BaseAgent = agent_registry.get(agent_key)
@@ -68,19 +85,24 @@ def run(argv: list[str] | None = None) -> None:
         )
         logger.info("Image build: %s", "triggered" if built else "skipped (up to date)")
 
-    docker_argv = DockerCommandBuilder(
-        config=config,
-        agent=agent,
-        workdir=workdir,
-    ).build(command=parsed.command)
+    try:
+        docker_argv = DockerCommandBuilder(
+            config=config,
+            agent=agent,
+            workdir=workdir,
+            project_dir_volume=project_dir_volume,
+        ).build(command=parsed.command)
 
-    if not parsed.quiet:
-        print(" ".join(docker_argv))
+        if not parsed.quiet:
+            print(" ".join(docker_argv))
 
-    if parsed.dry_run:
-        sys.exit(0)
+        if parsed.dry_run:
+            sys.exit(0)
 
-    subprocess.run(docker_argv)
+        subprocess.run(docker_argv)
+    finally:
+        if resolved.project_toml_enabled:
+            manager.cleanup(workdir, created_by_paddock=paddock_dir_created)
 
 
 def main() -> None:

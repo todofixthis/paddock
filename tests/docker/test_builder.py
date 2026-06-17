@@ -201,3 +201,49 @@ def test_scratch_volume(mocker, tmp_path: Path):
     )
     vol_args = [argv[i + 1] for i, a in enumerate(argv) if a == "-v"]
     assert any("paddock_ubuntu_22_04_claude:/scratch:rw" in v for v in vol_args)
+
+
+def test_project_dir_volume_added_after_workdir(mocker, tmp_path: Path):
+    config: dict[str, object] = {
+        "image": "ubuntu:22.04",
+        "agent": "claude",
+        "volumes": {},
+        "network": None,
+    }
+    mocker.patch(
+        "paddock.docker.builder.DockerCommandBuilder._container_name_available",
+        return_value=True,
+    )
+    pd = tmp_path / ".paddock"
+    pd.mkdir()
+    argv = DockerCommandBuilder(
+        config=config,
+        agent=make_agent(),
+        workdir=tmp_path,
+        project_dir_volume=(str(pd), VolumeSpec(str(pd), "ro")),
+    ).build(command=[])
+    vols = [argv[i + 1] for i, a in enumerate(argv) if a == "-v"]
+    workdir_i = next(i for i, v in enumerate(vols) if f"{tmp_path}:{tmp_path}:rw" in v)
+    paddock_i = next(i for i, v in enumerate(vols) if str(pd) in v and "ro" in v)
+    assert paddock_i > workdir_i
+
+
+def test_no_project_dir_volume_when_none(mocker, tmp_path: Path):
+    config: dict[str, object] = {
+        "image": "ubuntu:22.04",
+        "agent": "claude",
+        "volumes": {},
+        "network": None,
+    }
+    mocker.patch(
+        "paddock.docker.builder.DockerCommandBuilder._container_name_available",
+        return_value=True,
+    )
+    argv = DockerCommandBuilder(
+        config=config,
+        agent=make_agent(),
+        workdir=tmp_path,
+        project_dir_volume=None,
+    ).build(command=[])
+    vols = [argv[i + 1] for i, a in enumerate(argv) if a == "-v"]
+    assert not any(".paddock" in v for v in vols)
