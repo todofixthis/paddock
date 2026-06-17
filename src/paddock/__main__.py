@@ -6,7 +6,8 @@ from pathlib import Path
 
 from paddock.agents import BaseAgent, agent_registry
 from paddock.cli import parse_args
-from paddock.config.loader import ConfigError, ConfigLoader
+from paddock.config.errors import ConfigError
+from paddock.config.loader import ConfigLoader
 from paddock.docker.build import ImageBuilder
 from paddock.docker.builder import DockerCommandBuilder
 

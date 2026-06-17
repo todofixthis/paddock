@@ -5,7 +5,8 @@ import filters as f
 import pytest
 from filters.pytest import skip_value_check
 
-from paddock.config.loader import ConfigError, ConfigLoader
+from paddock.config.errors import ConfigError
+from paddock.config.loader import ConfigLoader
 from paddock.config.schema import _env_schema
 
 

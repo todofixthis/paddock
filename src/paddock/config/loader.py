@@ -3,6 +3,7 @@ from typing import Any, TypedDict
 
 import filters as f
 
+from paddock.config.errors import ConfigError
 from paddock.config.schema import _config_schema, _env_schema
 
 _PROJECT_CONFIG_NAME = Path(".paddock") / "config.toml"
@@ -30,10 +31,6 @@ class ConfigEntry(TypedDict):
 
 # SourcedConfig: same shape as the config schema, but leaf values are ConfigEntry.
 SourcedConfig = dict[str, Any]
-
-
-class ConfigError(Exception):
-    """Raised when config loading or validation fails."""
 
 
 class ConfigLoader:
