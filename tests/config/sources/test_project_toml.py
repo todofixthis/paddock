@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from paddock.cli import ParsedArgs
+from paddock.config.allowlist import Allowlist
 from paddock.config.context import ConfigContext
 from paddock.config.sources.project_toml import ProjectTomlSource
 
@@ -63,3 +64,22 @@ def test_load_invalid_toml(tmp_path: Path):
     (d / "config.toml").write_text("not = valid = toml")
     runner = ProjectTomlSource().load(_ctx(tmp_path))
     assert not runner.is_valid()
+
+
+def test_sanitise_filters_by_allowlist(tmp_path: Path):
+    d = tmp_path / ".paddock"
+    d.mkdir()
+    (d / "config.toml").write_text('image = "p:2"\nagent = "claude"\n')
+    runner = ProjectTomlSource().load(_ctx(tmp_path))
+    a = Allowlist({"project_toml": ["image"]})
+    s = ProjectTomlSource().sanitise(runner, a)
+    assert s.cleaned_data == {"image": "p:2"}
+
+
+def test_sanitise_blocked_source_returns_empty(tmp_path: Path):
+    d = tmp_path / ".paddock"
+    d.mkdir()
+    (d / "config.toml").write_text('image = "p:2"\n')
+    runner = ProjectTomlSource().load(_ctx(tmp_path))
+    s = ProjectTomlSource().sanitise(runner, Allowlist({}))
+    assert s.cleaned_data == {}

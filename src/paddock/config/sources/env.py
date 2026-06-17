@@ -2,6 +2,7 @@ from typing import Any, ClassVar
 
 import filters as f
 
+from paddock.config.allowlist import Allowlist
 from paddock.config.context import ConfigContext
 from paddock.config.filters import Agent, Filepath
 from paddock.config.schema import BUILD_POLICIES, standard_config_schema
@@ -77,15 +78,15 @@ class EnvConfigSource(ConfigSource):
         return f.FilterRunner(standard_config_schema(merged=False), shaped)
 
     def sanitise(
-        self, runner: f.FilterRunner, allowlist: object | None
+        self, runner: f.FilterRunner, allowlist: Allowlist | None
     ) -> f.FilterRunner:
         """Drop keys not permitted by the allowlist for this source.
 
-        No-op when ``allowlist`` is ``None`` (default until Task 6 lands).
+        No-op when ``allowlist`` is ``None``.
         """
         if allowlist is None or not runner.is_valid():
             return runner
-        filtered = allowlist.filter(runner.cleaned_data, self.SOURCE_KEY)  # type: ignore[attr-defined]
+        filtered = allowlist.filter(runner.cleaned_data, self.SOURCE_KEY)
         return f.FilterRunner(standard_config_schema(merged=False), filtered)
 
     def _deep_set(self, node: dict, parts: list[str], value: Any) -> None:

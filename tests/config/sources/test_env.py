@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from paddock.cli import ParsedArgs
+from paddock.config.allowlist import Allowlist
 from paddock.config.context import ConfigContext
 from paddock.config.sources.env import EnvConfigSource
 
@@ -87,3 +88,18 @@ def test_loader_keys_are_skipped(tmp_path):
         _ctx(tmp_path, {"PADDOCK_CONFIG_FILE": "/x", "PADDOCK_BUILD_ARGS": "foo"})
     )
     assert runner.cleaned_data == {}
+
+
+def test_sanitise_filters_by_allowlist(tmp_path):
+    runner = EnvConfigSource().load(
+        _ctx(tmp_path, {"PADDOCK_IMAGE": "x:1", "PADDOCK_NETWORK": "y"})
+    )
+    a = Allowlist({"env": ["image"]})
+    s = EnvConfigSource().sanitise(runner, a)
+    assert s.cleaned_data == {"image": "x:1"}
+
+
+def test_sanitise_blocked_source_returns_empty(tmp_path):
+    runner = EnvConfigSource().load(_ctx(tmp_path, {"PADDOCK_IMAGE": "x:1"}))
+    s = EnvConfigSource().sanitise(runner, Allowlist({"env": False}))
+    assert s.cleaned_data == {}

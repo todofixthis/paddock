@@ -5,6 +5,7 @@ import filters as f
 from class_registry.base import AutoRegister
 from class_registry.registry import SortedClassRegistry
 
+from paddock.config.allowlist import Allowlist
 from paddock.config.context import ConfigContext
 
 # Iterated in ascending WEIGHT order; the loader uses this directly as the
@@ -55,7 +56,7 @@ class ConfigSource(AutoRegister(source_registry), ABC):  # type: ignore[misc]
         """
 
     def sanitise(
-        self, runner: f.FilterRunner, allowlist: object | None
+        self, runner: f.FilterRunner, allowlist: Allowlist | None
     ) -> f.FilterRunner:
         """Filter the loaded config based on the user-controlled allowlist.
 
