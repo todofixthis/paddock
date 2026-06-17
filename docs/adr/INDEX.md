@@ -2,6 +2,7 @@
 
 # ADR Index
 
-| # | Status | Title | Scope | Summary | Revisit |
-|---|--------|-------|-------|---------|---------|
-| [0001](0001-add-mypy-type-checker.md) | Accepted | Add mypy as Type Checker | pyproject.toml | Use mypy for static type checking, integrated via autohooks-plugin-mypy. | ty stabilises (leaves 0.0.x) and ships a published autohooks plugin. |
+| # | Status | Title | Tags | Summary |
+|---|--------|-------|------|---------|
+| [0001](0001-add-mypy-type-checker.md) | Accepted | Add mypy as Type Checker | tooling, type-checking, pre-commit, autohooks | Use mypy for static type checking, integrated via autohooks-plugin-mypy. |
+| [0002](0002-project-config-security.md) | Accepted | Secure Project-Level Config via Source Registry and Allowlist | config, security, architecture, registry, allowlist | Introduce a registry-driven config-source architecture with an allowlist mechanism and .paddock directory lifecycle management to secure project-level configuration. |
