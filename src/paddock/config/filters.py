@@ -232,3 +232,33 @@ class VolumeMap(BaseFilter):
                 result[str(host_path)] = container_spec
 
         return result if not self._has_errors else None
+
+
+class AllowlistEntry(BaseFilter):
+    """Validates a single ``[config.allowlist]`` entry.
+
+    Accepts ``True``, ``False``, or a list of dotted-path strings naming keys
+    in the standard config schema. The set of valid dotted paths is derived by
+    reflection in :mod:`paddock.config.schema` and passed through via the
+    ``Choice`` filter applied to each list element.
+
+    The valid dotted-path set is loaded lazily at validation time (rather than
+    at import time) to avoid a circular import between ``filters`` and ``schema``.
+    """
+
+    CODE_INVALID = "invalid"
+    templates = {
+        CODE_INVALID: "Expected True, False, or a list of known config key paths.",
+    }
+
+    def _apply(self, value):
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, list):
+            from paddock.config.schema import allowlist_directives
+
+            cleaned = self._filter(
+                value, f.FilterRepeater(f.Choice(allowlist_directives()))
+            )
+            return cleaned if not self._has_errors else None
+        return self._invalid_value(value, self.CODE_INVALID)

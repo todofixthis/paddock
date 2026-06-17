@@ -6,8 +6,7 @@ import pytest
 from filters.pytest import skip_value_check
 
 from paddock.config.errors import ConfigError
-from paddock.config.loader import ConfigLoader
-from paddock.config.schema import _env_schema
+from paddock.config.loader import ConfigLoader, _env_schema
 
 
 def test_load_missing_file_returns_empty(tmp_path: Path):
@@ -233,7 +232,7 @@ def test_env_build_args_not_mapped(tmp_path):
         FakeParsed(), workdir=tmp_path, environ={"PADDOCK_BUILD_ARGS": "FOO=bar"}
     )
     assert isinstance(result, dict)
-    assert result["build"] is None
+    assert result.get("build") is None
 
 
 def test_loader_resolve_env_dockerfile_tilde_expanded(monkeypatch, tmp_path):

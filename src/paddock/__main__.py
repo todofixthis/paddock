@@ -51,7 +51,7 @@ def run(argv: list[str] | None = None) -> None:
 
     logger.info("Using image: %s", config["image"])
     logger.info("Agent: %s", config["agent"])
-    for host, container in config["volumes"].items():
+    for host, container in config.get("volumes", {}).items():
         logger.info("Mounting %s -> %s", host, container)
     if config.get("network"):
         logger.info("Network: %s", config["network"])
