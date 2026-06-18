@@ -4,5 +4,5 @@
 
 | # | Status | Title | Tags | Summary |
 |---|--------|-------|------|---------|
-| [0001](0001-add-mypy-type-checker.md) | Accepted | Add mypy as Type Checker | tooling, type-checking, pre-commit, autohooks | Use mypy for static type checking, integrated via autohooks-plugin-mypy. |
-| [0002](0002-project-config-security.md) | Accepted | Secure Project-Level Config via Source Registry and Allowlist | config, security, architecture, registry, allowlist | Introduce a registry-driven config-source architecture with an allowlist mechanism and .paddock directory lifecycle management to secure project-level configuration. |
+| [0001](0001-add-mypy-type-checker.md) | Accepted | Add mypy as Type Checker | autohooks, mypy, pre-commit, tooling, ty, type-checking | Use mypy (not Astral ty) for static type checking via autohooks-plugin-mypy; revisit ty once it stabilises and ships an autohooks plugin. |
+| [0002](0002-project-config-security.md) | Accepted | Secure Project-Level Config via Source Registry and Allowlist | allowlist, architecture, config, config-sources, registry, security, threat-model | Secure project-level config with a registry-driven source architecture where new sources start blocked unless allowlisted and untrusted sources cannot grant their own trust; the .paddock lifecycle is managed automatically. |

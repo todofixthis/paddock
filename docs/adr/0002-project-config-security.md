@@ -1,8 +1,8 @@
 ---
 status: Accepted
 date: 2026-06-17
-tags: [config, security, architecture, registry, allowlist]
-summary: Introduce a registry-driven config-source architecture with an allowlist mechanism and .paddock directory lifecycle management to secure project-level configuration.
+tags: [allowlist, architecture, config, config-sources, registry, security, threat-model]
+summary: Secure project-level config with a registry-driven source architecture where new sources start blocked unless allowlisted and untrusted sources cannot grant their own trust; the .paddock lifecycle is managed automatically.
 ---
 
 # 0002: Secure Project-Level Config via Source Registry and Allowlist
@@ -46,19 +46,22 @@ A four-phase workflow — **load → collect-and-validate → sanitise → reduc
 concerns cleanly. Per-source validation uses a non-strict `standard_config_schema(merged=False)`
 (required fields allow `None`); the final merge pass uses a strict `standard_config_schema(merged=True)`.
 
-**Pros:**
-- Security by default: new sources start blocked; the allowlist is small and auditable.
-- Extensible: adding a source means defining a class; no central list to update.
-- Testable: each source is a standalone class with its own test file.
-- Generic blocking: disabled sources are treated identically regardless of type.
+**Pros:** Security by default — new sources start blocked, and the allowlist stays small and auditable.
 
 **Cons:**
 - More files and indirection than the current flat loader.
 - Two-mode schema macro is non-obvious at first read.
+- Disallowed keys are dropped silently: a user who allowlists one path but
+  mistypes a sibling key gets it discarded with no error or warning (the
+  source-level warning fires only when a whole source is disabled) — a real
+  debugging cost.
 
 **Risks:**
 - `SortedClassRegistry` (from `class_registry`) is an external dependency; its
   `AutoRegister` + `is_abstract()` contract must be preserved.
+- Allowlist-path discovery (`allowlist_directives`) walks `filters` private
+  internals (`_filters`), and `_STANDARD_FIELDS` mirrors `_standard_fields()`;
+  both must be re-verified on every `filters` upgrade.
 
 ### Option 3: Flat loader with a denylist
 
@@ -81,6 +84,12 @@ Option 2. The registry architecture is chosen for three reasons:
    source is added; only a new subclass is needed.
 
 Subsidiary decisions recorded here to avoid re-litigation:
+
+- **Threat-model scope** — `env` and `cli` default to fully trusted (`True`);
+  only `project_toml` defaults to blocked. The gating defends against a
+  checked-in project file, not against an attacker-controlled shell. In CI or
+  any context where `PADDOCK_*` env vars are untrusted, operators must gate
+  `env` explicitly via `[config.allowlist]`.
 
 - **`ConfigError` in `paddock/config/errors.py`** — extracted to break circular imports
   between the loader and schema modules. Prefer restructuring module boundaries over
@@ -127,7 +136,10 @@ Subsidiary decisions recorded here to avoid re-litigation:
 - **`.paddock` lifecycle** — `ProjectDirManager` creates `.paddock` if missing, produces
   a `VolumeSpec` for a same-path bind mount (host path == container path, consistent with
   paddock's convention), and removes the directory post-exit only if paddock created it
-  and it remains empty. Mount mode defaults to read-only (`project_dir_readonly = true`).
+  and it remains empty. The same-path mount exposes the host's absolute project path
+  inside the container and works only where that path is valid in both namespaces. Mount
+  mode defaults to read-only (`project_dir_readonly = true`) so the container cannot
+  mutate host-side project state.
 
 ## Consequences
 
