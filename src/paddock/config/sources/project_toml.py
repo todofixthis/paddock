@@ -4,10 +4,11 @@ import filters as f
 
 from paddock.config.allowlist import Allowlist
 from paddock.config.context import ConfigContext
+from paddock.config.project_dir import PROJECT_DIR_NAME
 from paddock.config.schema import standard_config_schema
 from paddock.config.sources.base import ConfigSource
 
-_CONFIG_NAME = Path(".paddock") / "config.toml"
+_CONFIG_NAME = Path(PROJECT_DIR_NAME) / "config.toml"
 
 
 class ProjectTomlSource(ConfigSource):

@@ -38,7 +38,9 @@ class ExtraConfigSource(ConfigSource):
             return full_runner
 
         cleaned = full_runner.cleaned_data
-        stripped = {k: v for k, v in cleaned.items() if k not in {"projects", "config"}}
+        stripped = {
+            k: v for k, v in cleaned.items() if k not in self._META_SECTION_KEYS
+        }
         return f.FilterRunner(schema, stripped)
 
     def _resolve_path(self, context: ConfigContext) -> Path | None:

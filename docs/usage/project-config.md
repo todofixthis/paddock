@@ -9,7 +9,13 @@ paddock supports two levels of configuration:
 
 Because project-level config lives inside a project repository, paddock treats it as **untrusted by default**. A malicious or misconfigured project could otherwise redirect your Docker image, override your network settings, or mount sensitive paths. You must explicitly grant each project (or all projects) permission to contribute config before paddock will honour it.
 
-The same trust model applies to environment variables (`PADDOCK_*`) and CLI flags — they are permitted by default, but you can restrict or disable them using the same allowlist mechanism.
+### What this protects against
+
+The threat model is an **untrusted change landing in a repository** — a `.paddock/config.toml` committed by another contributor (or pulled in by an automated dependency update) that silently changes how your container runs. It is *not* designed to defend against an attacker who already controls your shell: anyone who can set `PADDOCK_*` environment variables or pass CLI flags can already run arbitrary commands, so paddock trusts those inputs by default.
+
+Environment variables (`PADDOCK_*`) and CLI flags are therefore **permitted by default**. The same allowlist mechanism can still restrict or disable them when you need it to — see [The allowlist](#the-allowlist).
+
+> **CI environments:** continuous-integration runners are the one place where these two worlds overlap — the checked-in files and the process environment are often shaped by the same, potentially untrusted, pull request. If you run paddock in CI against untrusted branches, gate `env` (and `cli`) explicitly rather than relying on their permissive defaults.
 
 ## Enabling project-level config
 
@@ -38,11 +44,13 @@ In this example:
 - When paddock runs from `/Users/alice/code/widgets`, it uses `widgets-dev:latest` as the base image.
 - Project-level config is permitted, but only the `volumes` key — not `image`, `network`, or anything else.
 
-**Note:** project paths must be **absolute** and match the workdir exactly. Tilde expansion (e.g. `[projects."~/code/widgets"]`) is not yet supported — follow [filters#92](https://github.com/phx-nz/phx-filters/issues/92) for updates.
+**Note:** project paths must be **absolute** and match the workdir exactly. Tilde expansion (e.g. `[projects."~/code/widgets"]`) is not yet supported — follow [phx-filters#92](https://github.com/phx-nz/phx-filters/issues/92) for updates.
 
 ## The allowlist
 
-Each gated source (`project_toml`, `env`, `cli`) has an entry in `[config.allowlist]`. Valid values are:
+The allowlist is more than the switch that turns project config on — it is the single mechanism for controlling **every** gated source: project files (`project_toml`), environment variables (`env`), and CLI flags (`cli`). Enabling `project_toml` and restricting `env` are two applications of the same rule, not separate features.
+
+Each gated source has an entry in `[config.allowlist]`. Valid values are:
 
 | Value | Effect |
 |---|---|

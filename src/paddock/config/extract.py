@@ -1,3 +1,6 @@
+from typing import cast
+
+import filters as f
 from filters.base import BaseFilter
 
 
@@ -8,20 +11,24 @@ class ExtractProject(BaseFilter):
     requested project key is absent, returns ``{}``. Input must be a ``dict``;
     output is the inner dict belonging to the requested project, or ``{}``.
 
+    Note:
+        Once todofixthis/filters#93 (``f.Item``) and #94 land, this custom
+        filter can collapse into a ``filter_macro`` built from
+        ``f.Type(dict) | f.Item('projects', default=dict) | f.Item(project,
+        default=dict)``, removing the need for a bespoke ``_apply``.
+
     Args:
         project: Absolute project path string to look up under ``[projects]``.
     """
-
-    CODE_NOT_DICT = "not_dict"
-    templates = {CODE_NOT_DICT: "Expected a dict at the top level."}
 
     def __init__(self, project: str) -> None:
         super().__init__()
         self._project = project
 
     def _apply(self, value):
-        if not isinstance(value, dict):
-            return self._invalid_value(value, self.CODE_NOT_DICT)
+        value = cast(dict, self._filter(value, f.Type(dict)))
+        if self._has_errors:
+            return None
         projects = value.get("projects")
         if not isinstance(projects, dict):
             return {}

@@ -37,6 +37,28 @@ The `Volume` and `Agent` filters in `src/paddock/config/filters.py` are the refe
 
 Custom filters are **not** for one-off validation — use a `FilterChain` instead.
 
+## Writing a custom filter's `_apply`
+
+**Keep `_apply()` pure.** It should contain only validation and transformation of
+`value` — no I/O, no deferred (function-body) imports, no computing lookups (the set of
+valid choices, a schema, a reflected field list) at call time. Resolve those dependencies
+in `__init__` and store them on the instance; `_apply` then reads the stored attribute.
+If resolving a dependency in `__init__` causes a circular import, fix the module
+boundaries (see AGENTS.md → Imports) rather than deferring the import into `_apply`.
+
+**Reuse built-in filters inside `_apply`.** Don't hand-roll a check a built-in already
+does — delegate to `self._filter(value, ...)` and let the built-in record the error:
+
+```python
+# Instead of: if not isinstance(value, dict): return self._invalid_value(...)
+value = cast(dict, self._filter(value, f.Type(dict)))
+if self._has_errors:
+    return None
+```
+
+A custom filter should add only the logic no built-in provides; everything else composes
+from existing filters. This keeps each custom filter doing one thing well.
+
 ## Filter chain ordering convention
 
 Apply filters in this order:

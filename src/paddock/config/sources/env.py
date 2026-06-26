@@ -42,7 +42,12 @@ class EnvConfigSource(ConfigSource):
     WEIGHT = 50
     PREFIX: ClassVar[str] = "PADDOCK_"
 
-    # Handled by ExtraConfigSource / build-args plumbing — not env-mapped here.
+    # PADDOCK_* keys deliberately excluded from the env-to-config mapping:
+    #   * PADDOCK_CONFIG_FILE — consumed by ``ExtraConfigSource`` to locate an
+    #     extra config file; it is not itself a config value.
+    #   * PADDOCK_BUILD_ARGS — build args cannot be expressed as a single scalar
+    #     env var, so there is no env mapping; they arrive via CLI ``--build-arg``
+    #     or a config file's ``build.args``.
     _LOADER_KEYS = frozenset({"PADDOCK_CONFIG_FILE", "PADDOCK_BUILD_ARGS"})
 
     def load(self, context: ConfigContext) -> f.FilterRunner:

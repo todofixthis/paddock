@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, cast
 
 _DEFAULTS: dict[str, bool | list[str]] = {
     "cli": True,
@@ -59,7 +59,7 @@ class Allowlist:
         value = self._rules.get(source_key, True)
         if value is True:
             return config
-        return self._project(config, value)  # type: ignore[arg-type]
+        return self._project(config, cast(list[str], value))
 
     def _project(self, config: dict, paths: list[str]) -> dict:
         """Build a new dict from ``config`` containing only the given dotted paths.

@@ -6,6 +6,10 @@ from paddock.config.filters import VolumeSpec
 
 logger = logging.getLogger("paddock")
 
+# Name of the per-project directory paddock manages and mounts. Shared with
+# ``ProjectTomlSource`` so the directory name is defined in exactly one place.
+PROJECT_DIR_NAME = ".paddock"
+
 
 class ProjectDirManager:
     """Manages the ``.paddock`` directory lifecycle.
@@ -36,7 +40,7 @@ class ProjectDirManager:
         Raises:
             ConfigError: When ``.paddock`` exists but is not a directory.
         """
-        paddock_dir = workdir / ".paddock"
+        paddock_dir = workdir / PROJECT_DIR_NAME
         if paddock_dir.exists() and not paddock_dir.is_dir():
             raise ConfigError(
                 f"{paddock_dir} exists but is not a directory; "
@@ -63,7 +67,7 @@ class ProjectDirManager:
         """
         if not created_by_paddock:
             return
-        paddock_dir = workdir / ".paddock"
+        paddock_dir = workdir / PROJECT_DIR_NAME
         if not paddock_dir.exists():
             return
         if any(paddock_dir.iterdir()):

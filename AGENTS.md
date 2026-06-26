@@ -48,6 +48,11 @@ All non-trivial functions and methods require a docstring explaining their purpo
 
 Place comments on the line preceding the code they document, not as trailing comments.
 
+**No divider comments.** Never use banner/section-divider comments (e.g. `# ----` or
+`# Phase 3c: ...`) to carve a long function into labelled regions. The need for one is a
+smell that the function is doing too much — extract each labelled region into its own
+well-named method instead.
+
 ## Language and Style
 
 - NZ English; incorporate Te Reo Māori where natural (e.g. "mahi", "kaupapa")
@@ -74,6 +79,7 @@ Place comments on the line preceding the code they document, not as trailing com
 - **Object-oriented implementation**: All implementation code (non-test) uses classes. Standalone functions are the exception, not the rule.
 - **Flat test functions**: Tests are always flat functions (not methods on a class), even when testing class behaviour.
 - **Naming convention**: Methods that produce a config dict from a specific source are named `config_from_<source>` (e.g. `config_from_env`, `config_from_cli`), not `<source>_to_config`.
+- **Registry-driven extensibility**: where a registry drives behaviour (e.g. config sources, agents), adding a new member must require only defining a new class — no edits to the orchestrator or to any shared constant. Let the registry own instantiation (`registry[key]`, not `cls()`), and push per-member metadata (defaults, weights, flags) onto the member class rather than into a central lookup the orchestrator maintains. A constant the orchestrator must update for each new member is the anti-pattern this rule exists to prevent.
 
 ### Imports
 

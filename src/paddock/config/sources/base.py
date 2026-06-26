@@ -41,6 +41,12 @@ class ConfigSource(AutoRegister(source_registry), ABC):  # type: ignore[misc]
     SOURCE_KEY: ClassVar[str]
     WEIGHT: ClassVar[int]
 
+    # Sections valid in a user-shaped TOML file but not part of a source's
+    # standard-config output. Sources that read user-shaped files strip these
+    # before returning. Hoisted to the base so the set is defined once and is
+    # easy to extend.
+    _META_SECTION_KEYS: ClassVar[frozenset[str]] = frozenset({"config", "projects"})
+
     @abstractmethod
     def load(self, context: ConfigContext) -> f.FilterRunner:
         """Read, validate, and return a :class:`filters.FilterRunner`.
