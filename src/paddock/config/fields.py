@@ -1,7 +1,8 @@
 # Single source of truth for the standard config key structure. Each top-level
-# key maps to its nested keys (empty tuple = leaf). Both the validation schema
-# (schema.py) and the allowlist directive list are derived from this, so no
-# code reflects into filters' private ``_filters`` internals.
+# key maps to its nested keys (empty tuple = leaf). The allowlist directive
+# list is derived from this; ``schema.py`` is hand-written and checked against
+# it by a co-location test, so no code reflects into filters' private
+# ``_filters`` internals.
 CONFIG_FIELDS: dict[str, tuple[str, ...]] = {
     "agent": (),
     "build": ("args", "context", "dockerfile", "policy"),

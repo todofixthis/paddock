@@ -252,7 +252,7 @@ class AllowlistEntry(BaseFilter):
 
     def __init__(self) -> None:
         super().__init__()
-        self._directives = list(allowlist_directives())
+        self._directives = allowlist_directives()
 
     def _apply(self, value):
         if isinstance(value, bool):

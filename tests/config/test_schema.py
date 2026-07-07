@@ -283,7 +283,10 @@ def test_every_directive_is_accepted_by_the_schema(tmp_path):
     dockerfile = tmp_path / "Dockerfile"
     dockerfile.write_text("")
     path_leaves = {"build.context": str(tmp_path), "build.dockerfile": str(dockerfile)}
-    other_leaves = {"build.policy": BUILD_POLICIES[0]}
+    other_leaves: dict[str, object] = {
+        "build.args": ["x"],
+        "build.policy": BUILD_POLICIES[0],
+    }
     for directive in allowlist_directives():
         parts = directive.split(".")
         config: dict = {}
