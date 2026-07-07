@@ -37,3 +37,24 @@ def test_filter_with_report_lists_dropped_keys():
     )
     assert kept == {"image": "x"}
     assert dropped == ["network"]
+
+
+def test_filter_dotted_path_descends():
+    """A nested dotted path keeps only the named leaf, not its siblings."""
+    al = Allowlist(_DEFAULTS, {"project_toml": ["build.dockerfile"]})
+    kept, dropped = al.filter_with_report(
+        {"build": {"dockerfile": "Dockerfile", "context": "."}, "image": "x"},
+        "project_toml",
+    )
+    assert kept == {"build": {"dockerfile": "Dockerfile"}}
+    assert dropped == ["image"]
+
+
+def test_user_filter_with_report_ignores_false_default():
+    """The trusted user source always passes everything through, even if
+    its rule is ``False`` — matching ``is_enabled``'s override."""
+    al = Allowlist({"user": False}, {})
+    assert al.filter_with_report({"image": "x", "network": "n"}, "user") == (
+        {"image": "x", "network": "n"},
+        [],
+    )

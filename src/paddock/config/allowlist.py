@@ -29,8 +29,20 @@ class Allowlist:
         self._rules: dict[str, bool | list[str]] = {**defaults, **(raw or {})}
 
     def is_enabled(self, source_key: str) -> bool:
-        """Whether a source may contribute. ``user`` is always enabled; an
-        unknown key is blocked (default-deny)."""
+        """Whether a source may contribute to the merged config at all.
+
+        The trusted ``user`` source is always enabled, regardless of any
+        rule. Any other source is enabled if its rule is ``True`` or a
+        non-empty list of dotted paths; a key present in neither
+        ``defaults`` nor the user-supplied ``raw`` rules is blocked
+        (default-deny).
+
+        Args:
+            source_key: The canonical source identifier (e.g. ``"env"``).
+
+        Returns:
+            Whether the source may contribute any keys.
+        """
         if source_key == "user":
             return True
         value = self._rules.get(source_key, False)
@@ -54,11 +66,28 @@ class Allowlist:
     def filter_with_report(
         self, config: dict, source_key: str
     ) -> tuple[dict, list[str]]:
-        """Return (kept, dropped) — the permitted config plus the sorted list of
-        dropped top-level keys, for a single consolidated warning."""
+        """Return the permitted config plus a report of what was dropped.
+
+        Mirrors the ``user``-always-enabled behaviour of :meth:`is_enabled`:
+        the trusted ``user`` source always passes its config through
+        unfiltered, regardless of any rule.
+
+        Args:
+            config: The fully-validated ``cleaned_data`` dict from a source
+                runner.
+            source_key: The canonical source identifier (e.g. ``"env"``).
+
+        Returns:
+            A ``(kept, dropped)`` tuple: ``kept`` is a filtered copy of
+            ``config`` containing only the allowed keys, and ``dropped`` is
+            the sorted list of top-level keys removed, for a single
+            consolidated warning.
+        """
+        if source_key == "user":
+            return dict(config), []
         if not self.is_enabled(source_key):
             return {}, sorted(config)
-        value = self._rules.get(source_key, True if source_key == "user" else False)
+        value = self._rules.get(source_key, False)
         if value is True:
             return dict(config), []
         kept = self._project(config, cast(list[str], value))
