@@ -79,8 +79,6 @@ class ConfigLoader:
             project_dir_readonly=readonly,
         )
 
-    # ------------------------------------------------------------------
-
     def _build_context(
         self,
         parsed: ParsedArgs,
