@@ -2,6 +2,7 @@ from pathlib import Path
 
 from paddock.cli import ParsedArgs
 from paddock.config.context import ConfigContext
+from paddock.config.sources.base import LoadResult
 from paddock.config.sources.user import UserConfigSource
 
 
@@ -40,29 +41,51 @@ def test_weight():
 
 
 def test_load_missing_returns_empty_runner(tmp_path: Path):
-    """Missing config file yields a valid empty runner."""
+    """Missing config file yields a valid empty instance and empty meta."""
     ctx = _ctx(tmp_path, tmp_path / "nope.toml")
-    runner = UserConfigSource().load(ctx)
-    assert runner.is_valid()
-    assert runner.cleaned_data == {}
+    result = UserConfigSource().load(ctx)
+    assert result.instance.is_valid()
+    assert result.instance.cleaned_data == {}
+    assert result.meta == {}
 
 
 def test_load_strips_projects_and_config(tmp_path: Path):
-    """projects and config sections are stripped; only standard keys remain."""
+    """projects and config sections are stripped from instance; only standard keys remain."""
     cfg = tmp_path / "user.toml"
     cfg.write_text(
         'image = "u:1.0"\nagent = "claude"\n'
         '[projects."/abs"]\nimage = "p:2"\n'
         "[config.allowlist]\nproject_toml = true\n"
     )
-    runner = UserConfigSource().load(_ctx(tmp_path, cfg))
-    assert runner.is_valid()
-    assert runner.cleaned_data == {"image": "u:1.0", "agent": "claude"}
+    result = UserConfigSource().load(_ctx(tmp_path, cfg))
+    assert result.instance.is_valid()
+    assert result.instance.cleaned_data == {"image": "u:1.0", "agent": "claude"}
 
 
 def test_load_invalid_toml(tmp_path: Path):
-    """Invalid TOML yields a non-valid runner."""
+    """Invalid TOML yields a non-valid instance."""
     cfg = tmp_path / "user.toml"
     cfg.write_text("not = valid = toml")
-    runner = UserConfigSource().load(_ctx(tmp_path, cfg))
-    assert not runner.is_valid()
+    result = UserConfigSource().load(_ctx(tmp_path, cfg))
+    assert not result.instance.is_valid()
+
+
+def test_load_returns_loadresult_with_meta(tmp_path, monkeypatch):
+    """User source surfaces [config] as validated meta, not stripped silently."""
+    cfg = tmp_path / "config.toml"
+    cfg.write_text('image = "u:1"\n[config.allowlist]\nproject_toml = true\n')
+    from paddock.cli import parse_args
+    from paddock.config.context import ConfigContext
+
+    ctx = ConfigContext(
+        parsed=parse_args([]),
+        environ={},
+        workdir=tmp_path,
+        user_config_path=cfg,
+    )
+    result = UserConfigSource().load(ctx)
+    assert isinstance(result, LoadResult)
+    assert result.instance.cleaned_data == {"image": "u:1"}
+    # Unset allowlist keys arrive as None from the mapper; only the explicit
+    # key matters here.
+    assert result.meta["allowlist"]["project_toml"] is True

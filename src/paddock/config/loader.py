@@ -10,7 +10,7 @@ from paddock.config.context import ConfigContext
 from paddock.config.errors import ConfigError
 from paddock.config.schema import standard_config_schema
 from paddock.config.sources import source_registry
-from paddock.config.sources.user import _default_user_config_path
+from paddock.config.sources.base import LoadResult
 
 logger = logging.getLogger("paddock")
 
@@ -69,21 +69,23 @@ class ConfigLoader:
             parsed=parsed,
             environ=dict(environ),
             workdir=workdir,
-            user_config_path=self._user_path_override or _default_user_config_path(),
+            user_config_path=(
+                self._user_path_override or ConfigContext.default_user_config_path()
+            ),
         )
 
         # Phase 1: Load every source via registry iteration (WEIGHT-ascending).
-        runners: dict[str, f.FilterRunner] = {
+        results: dict[str, LoadResult] = {
             str(key): cls().load(context) for key, cls in source_registry.items()
         }
 
-        # Phase 2: Build allowlist + project_dir_readonly from trusted sources.
-        allowlist, project_dir_readonly = self._extract_meta(context, runners)
+        # Phase 2: Build allowlist + project_dir_readonly from source meta.
+        allowlist, project_dir_readonly = self._extract_meta(results)
 
         # Phase 3a: Aggregate validation errors generically.
         bad: list[tuple[str, f.FilterRunner]] = []
-        for key, runner in runners.items():
-            if runner.is_valid():
+        for key, result in results.items():
+            if result.instance.is_valid():
                 continue
             if key in _GATED_SOURCES and not allowlist.is_enabled(key):
                 logger.warning(
@@ -91,7 +93,7 @@ class ConfigLoader:
                     key,
                 )
                 continue
-            bad.append((key, runner))
+            bad.append((key, result.instance))
         if bad:
             raise self._error_group(bad)
 
@@ -100,24 +102,24 @@ class ConfigLoader:
         for key in _GATED_SOURCES:
             if allowlist.is_enabled(key):
                 continue
-            if runners[key].is_valid() and runners[key].cleaned_data:
+            instance = results[key].instance
+            if instance.is_valid() and instance.cleaned_data:
                 logger.warning(
                     "%s contributed config but %s is not in [config.allowlist] — ignored",
                     key,
                     key,
                 )
 
-        # Phase 3c: Sanitise.
+        # Phase 3c: Sanitise — allowlist-gated sources are filtered; everything
+        # else passes through unchanged. Task 3 makes this fully generic.
         sanitised: dict[str, dict] = {}
-        for src_key, cls in source_registry.items():
-            s_runner = cls().sanitise(runners[str(src_key)], allowlist)
-            sanitised[str(src_key)] = (
-                dict(s_runner.cleaned_data) if s_runner.is_valid() else {}
+        for key, result in results.items():
+            data = (
+                dict(result.instance.cleaned_data) if result.instance.is_valid() else {}
             )
-
-        # Strip meta sections from project_overrides before merging — already consumed.
-        if "config" in sanitised.get("project_overrides", {}):
-            sanitised["project_overrides"].pop("config", None)
+            sanitised[key] = (
+                allowlist.filter(data, key) if key in _GATED_SOURCES else data
+            )
 
         # Phase 4: Merge in registry (= WEIGHT) order, then validate the final dict.
         merged: dict = {}
@@ -137,53 +139,35 @@ class ConfigLoader:
 
     # ------------------------------------------------------------------
 
-    def _extract_meta(
-        self, context: ConfigContext, runners: dict[str, f.FilterRunner]
-    ) -> tuple[Allowlist, bool]:
-        """Build the Allowlist + project_dir_readonly from user + project_overrides.
-
-        ``UserConfigSource.load`` strips ``[config]`` and ``[projects]`` from its
-        output, so we re-parse the user TOML here to recover the global
-        ``[config]`` meta-section. Per-project meta comes from
-        ``ProjectOverridesSource`` (which keeps ``config`` in its output).
+    def _extract_meta(self, results: dict[str, LoadResult]) -> tuple[Allowlist, bool]:
+        """Build the Allowlist + project_dir_readonly from source-provided meta.
 
         Args:
-            context: The resolved config context for this run.
-            runners: The loaded runners keyed by source key.
+            results: The loaded results keyed by source key.
 
         Returns:
             A tuple of ``(Allowlist, project_dir_readonly)``.
         """
-        path = context.user_config_path
-        # Read raw TOML to extract allowlist without schema-applied defaults.
-        # Using user_config_schema would fill in False for every unset allowlist
-        # key (via f.Optional(False)), overriding the Allowlist._DEFAULTS of True.
-        global_raw_meta: dict = {}
-        per_project_raw_meta: dict = {}
-        if path.exists():
-            raw_runner = f.FilterRunner(f.TomlDecode, path.read_text(encoding="utf-8"))
-            if raw_runner.is_valid():
-                raw_data = raw_runner.cleaned_data
-                global_raw_meta = raw_data.get("config", {}) or {}
-                projects = raw_data.get("projects", {}) or {}
-                project_entry = projects.get(context.project_key, {}) or {}
-                per_project_raw_meta = project_entry.get("config", {}) or {}
+        user_meta = results["user"].meta
+        po_meta = results["project_overrides"].meta
 
-        # project_dir_readonly: use schema-validated runners for type safety.
-        po_runner = runners.get("project_overrides")
-        po_cleaned = (
-            po_runner.cleaned_data if po_runner and po_runner.is_valid() else {}
-        )
-        po_meta = po_cleaned.get("config", {}) or {}
+        def _explicit(allowlist: dict | None) -> dict:
+            # Keep only keys the user actually set; drop the None placeholders
+            # the mapper injects for unset keys so class defaults survive the
+            # overlay.
+            return {k: v for k, v in (allowlist or {}).items() if v is not None}
 
         allowlist_raw = {
-            **(global_raw_meta.get("allowlist") or {}),
-            **(per_project_raw_meta.get("allowlist") or {}),
+            **_explicit(user_meta.get("allowlist")),
+            **_explicit(po_meta.get("allowlist")),
         }
-        readonly = po_meta.get(
-            "project_dir_readonly",
-            global_raw_meta.get("project_dir_readonly", True),
-        )
+
+        readonly = po_meta.get("project_dir_readonly")
+        if readonly is None:
+            readonly = user_meta.get("project_dir_readonly")
+        if readonly is None:
+            readonly = True
+
         return Allowlist(allowlist_raw), bool(readonly)
 
     def _error_group(self, bad: list[tuple[str, f.FilterRunner]]) -> ExceptionGroup:

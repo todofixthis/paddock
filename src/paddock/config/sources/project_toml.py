@@ -2,11 +2,10 @@ from pathlib import Path
 
 import filters as f
 
-from paddock.config.allowlist import Allowlist
 from paddock.config.context import ConfigContext
 from paddock.config.project_dir import PROJECT_DIR_NAME
 from paddock.config.schema import standard_config_schema
-from paddock.config.sources.base import ConfigSource
+from paddock.config.sources.base import ConfigSource, LoadResult
 
 _CONFIG_NAME = Path(PROJECT_DIR_NAME) / "config.toml"
 
@@ -22,30 +21,18 @@ class ProjectTomlSource(ConfigSource):
     SOURCE_KEY = "project_toml"
     WEIGHT = 10
 
-    def load(self, context: ConfigContext) -> f.FilterRunner:
+    def load(self, context: ConfigContext) -> LoadResult:
         """Load config from ``<workdir>/.paddock/config.toml``.
 
         Returns:
-            A :class:`filters.FilterRunner` over
-            ``standard_config_schema(merged=False)``. Returns an empty valid
-            runner when the file is absent.
+            A :class:`LoadResult` over ``standard_config_schema(merged=False)``,
+            with empty meta (project TOML carries no ``[config]`` section).
+            Returns an empty valid instance when the file is absent.
         """
         schema = standard_config_schema(merged=False)
         path = context.workdir / _CONFIG_NAME
         if not path.exists():
-            return f.FilterRunner(schema, {})
+            return LoadResult(f.FilterRunner(schema, {}), {})
 
         chain = f.TomlDecode | schema
-        return f.FilterRunner(chain, path.read_text(encoding="utf-8"))
-
-    def sanitise(
-        self, runner: f.FilterRunner, allowlist: Allowlist | None
-    ) -> f.FilterRunner:
-        """Drop keys not permitted by the allowlist for this source.
-
-        No-op when ``allowlist`` is ``None``.
-        """
-        if allowlist is None or not runner.is_valid():
-            return runner
-        filtered = allowlist.filter(runner.cleaned_data, self.SOURCE_KEY)
-        return f.FilterRunner(standard_config_schema(merged=False), filtered)
+        return LoadResult(f.FilterRunner(chain, path.read_text(encoding="utf-8")), {})

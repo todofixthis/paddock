@@ -3,7 +3,7 @@ import filters as f
 from paddock.config.context import ConfigContext
 from paddock.config.extract import ExtractProject
 from paddock.config.schema import config_meta_schema, standard_config_schema
-from paddock.config.sources.base import ConfigSource
+from paddock.config.sources.base import ConfigSource, LoadResult
 
 
 class ProjectOverridesSource(ConfigSource):
@@ -12,21 +12,29 @@ class ProjectOverridesSource(ConfigSource):
     SOURCE_KEY = "project_overrides"
     WEIGHT = 30
 
-    def load(self, context: ConfigContext) -> f.FilterRunner:
+    def load(self, context: ConfigContext) -> LoadResult:
         """Load per-project overrides from the user config file.
 
         Returns:
-            A :class:`filters.FilterRunner` over
-            ``standard_config_schema(extra_keys={"config": ...}, merged=False)``.
-            Returns an empty valid runner when the file is missing or the
+            A :class:`LoadResult` whose ``instance`` conforms to
+            ``standard_config_schema(merged=False)`` and whose ``meta`` is the
+            project entry's validated ``[config]`` section. Returns an empty
+            valid instance and empty meta when the file is missing or the
             project key is not present.
         """
+        schema = standard_config_schema(merged=False)
         path = context.user_config_path
-        schema = standard_config_schema(
+        if not path.exists():
+            return LoadResult(f.FilterRunner(schema, {}), {})
+
+        full_schema = standard_config_schema(
             extra_keys={"config": config_meta_schema}, merged=False
         )
-        if not path.exists():
-            return f.FilterRunner(schema, {})
+        chain = f.TomlDecode | ExtractProject(project=context.project_key) | full_schema
+        full = f.FilterRunner(chain, path.read_text(encoding="utf-8"))
+        if not full.is_valid():
+            return LoadResult(full, {})
 
-        chain = f.TomlDecode | ExtractProject(project=context.project_key) | schema
-        return f.FilterRunner(chain, path.read_text(encoding="utf-8"))
+        cleaned = full.cleaned_data
+        instance = {k: v for k, v in cleaned.items() if k != "config"}
+        return LoadResult(f.FilterRunner(schema, instance), cleaned.get("config") or {})

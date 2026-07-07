@@ -2,11 +2,10 @@ from typing import Any, ClassVar
 
 import filters as f
 
-from paddock.config.allowlist import Allowlist
 from paddock.config.context import ConfigContext
 from paddock.config.filters import Agent, Filepath
 from paddock.config.schema import BUILD_POLICIES, standard_config_schema
-from paddock.config.sources.base import ConfigSource
+from paddock.config.sources.base import ConfigSource, LoadResult
 
 # Validates the raw PADDOCK_* shape. Lifted from the old top-level
 # ``_env_schema`` in the loader so that env validation is fully owned here.
@@ -50,14 +49,14 @@ class EnvConfigSource(ConfigSource):
     #     or a config file's ``build.args``.
     _LOADER_KEYS = frozenset({"PADDOCK_CONFIG_FILE", "PADDOCK_BUILD_ARGS"})
 
-    def load(self, context: ConfigContext) -> f.FilterRunner:
+    def load(self, context: ConfigContext) -> LoadResult:
         """Load config from PADDOCK_* environment variables.
 
         Returns:
-            A :class:`filters.FilterRunner` over
-            ``standard_config_schema(merged=False)``. Returns an empty valid
-            runner when no relevant env vars are present. Returns an invalid
-            runner when env-shape validation fails.
+            A :class:`LoadResult` over ``standard_config_schema(merged=False)``,
+            with empty meta (env carries no ``[config]`` section). Returns an
+            empty valid instance when no relevant env vars are present.
+            Returns an invalid instance when env-shape validation fails.
         """
         raw_env = {
             k: v
@@ -67,7 +66,7 @@ class EnvConfigSource(ConfigSource):
 
         env_runner = f.FilterRunner(_env_schema, raw_env)
         if not env_runner.is_valid():
-            return env_runner
+            return LoadResult(env_runner, {})
 
         cleaned_env = {
             k: v
@@ -80,19 +79,9 @@ class EnvConfigSource(ConfigSource):
             parts = key[len(self.PREFIX) :].lower().split("_")
             self._deep_set(shaped, parts, value)
 
-        return f.FilterRunner(standard_config_schema(merged=False), shaped)
-
-    def sanitise(
-        self, runner: f.FilterRunner, allowlist: Allowlist | None
-    ) -> f.FilterRunner:
-        """Drop keys not permitted by the allowlist for this source.
-
-        No-op when ``allowlist`` is ``None``.
-        """
-        if allowlist is None or not runner.is_valid():
-            return runner
-        filtered = allowlist.filter(runner.cleaned_data, self.SOURCE_KEY)
-        return f.FilterRunner(standard_config_schema(merged=False), filtered)
+        return LoadResult(
+            f.FilterRunner(standard_config_schema(merged=False), shaped), {}
+        )
 
     def _deep_set(self, node: dict, parts: list[str], value: Any) -> None:
         """Deep-set ``value`` in ``node`` at the path described by ``parts``.

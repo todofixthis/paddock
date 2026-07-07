@@ -56,3 +56,12 @@ def test_frozen(tmp_path: Path):
     )
     with pytest.raises(dataclasses.FrozenInstanceError):
         ctx.workdir = tmp_path / "other"  # type: ignore[misc]
+
+
+def test_default_user_config_path_follows_home(monkeypatch, tmp_path: Path):
+    """The default path is resolved per-call against the current $HOME."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    assert (
+        ConfigContext.default_user_config_path()
+        == tmp_path / ".config" / "paddock" / "config.toml"
+    )

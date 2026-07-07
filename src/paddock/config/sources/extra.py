@@ -4,7 +4,7 @@ import filters as f
 
 from paddock.config.context import ConfigContext
 from paddock.config.schema import standard_config_schema, user_config_schema
-from paddock.config.sources.base import ConfigSource
+from paddock.config.sources.base import ConfigSource, LoadResult
 
 
 class ExtraConfigSource(ConfigSource):
@@ -19,29 +19,30 @@ class ExtraConfigSource(ConfigSource):
     SOURCE_KEY = "extra"
     WEIGHT = 40
 
-    def load(self, context: ConfigContext) -> f.FilterRunner:
+    def load(self, context: ConfigContext) -> LoadResult:
         """Load config from the extra config file, if any.
 
         Returns:
-            A :class:`filters.FilterRunner` over
-            ``standard_config_schema(merged=False)``. Returns an empty valid
-            runner when no path is configured or the file does not exist.
+            A :class:`LoadResult` over ``standard_config_schema(merged=False)``,
+            with empty meta (``[config]`` in an extra file is intentionally
+            ignored). Returns an empty valid instance when no path is
+            configured or the file does not exist.
         """
         schema = standard_config_schema(merged=False)
         path = self._resolve_path(context)
         if path is None or not path.exists():
-            return f.FilterRunner(schema, {})
+            return LoadResult(f.FilterRunner(schema, {}), {})
 
         content = path.read_text(encoding="utf-8")
         full_runner = f.FilterRunner(user_config_schema, content)
         if not full_runner.is_valid():
-            return full_runner
+            return LoadResult(full_runner, {})
 
         cleaned = full_runner.cleaned_data
         stripped = {
             k: v for k, v in cleaned.items() if k not in self._META_SECTION_KEYS
         }
-        return f.FilterRunner(schema, stripped)
+        return LoadResult(f.FilterRunner(schema, stripped), {})
 
     def _resolve_path(self, context: ConfigContext) -> Path | None:
         """Return the extra config path from parsed args or environ.

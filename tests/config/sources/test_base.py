@@ -5,7 +5,7 @@ import pytest
 
 from paddock.cli import ParsedArgs
 from paddock.config.context import ConfigContext
-from paddock.config.sources.base import ConfigSource, source_registry
+from paddock.config.sources.base import ConfigSource, LoadResult, source_registry
 
 
 def _ctx(tmp_path: Path) -> ConfigContext:
@@ -37,9 +37,9 @@ class _Fake(ConfigSource):
     WEIGHT = 5
 
     def load(self, context):
-        # Return an empty valid runner — non-empty content would pollute
+        # Return an empty valid result — non-empty content would pollute
         # the registry-driven loader and interfere with other tests.
-        return f.FilterRunner(f.Type(dict), {})
+        return LoadResult(f.FilterRunner(f.Type(dict), {}), {})
 
 
 def test_registry_iteration_is_weight_ordered():
@@ -64,13 +64,6 @@ def test_annotate_source_explicit_override(tmp_path):
     src = _Fake()
     result = src._annotate_source({"image": "x"}, source="custom")
     assert result["image"]["source"] == "custom"
-
-
-def test_sanitise_default_is_noop(tmp_path):
-    src = _Fake()
-    runner = src.load(_ctx(tmp_path))
-    sanitised = src.sanitise(runner, allowlist=None)
-    assert sanitised is runner
 
 
 def test_abstract_load_cannot_be_omitted():

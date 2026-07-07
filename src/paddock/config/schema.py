@@ -97,10 +97,12 @@ def standard_config_schema(extra_keys: dict | None = None, merged: bool = False)
 _ALLOWLIST_SOURCES = frozenset({"cli", "env", "project_toml"})
 
 _allowlist_schema = f.FilterMapper(
-    # ``f.Optional(False)`` first so missing/None keys default to False BEFORE
-    # AllowlistEntry validates. The reverse order would feed None to
-    # AllowlistEntry, which rejects it.
-    {key: f.Optional(False) | AllowlistEntry for key in _ALLOWLIST_SOURCES},
+    # No f.Optional default. NOTE: FilterMapper(allow_missing_keys=True) still
+    # runs each filter for a *missing* key with None — AllowlistEntry passes
+    # None through (BaseFilter short-circuits), so unset keys surface as
+    # value None (not absent). The loader strips those None values before
+    # overlaying explicit rules onto class defaults (see _extract_meta).
+    {key: AllowlistEntry for key in _ALLOWLIST_SOURCES},
     allow_extra_keys=False,
     allow_missing_keys=True,
 )
@@ -108,7 +110,10 @@ _allowlist_schema = f.FilterMapper(
 config_meta_schema = f.FilterMapper(
     {
         "allowlist": _allowlist_schema,
-        "project_dir_readonly": f.Optional(True),
+        # Not f.Optional(True): an unset value must stay None so the loader can
+        # tell "unset" from an explicit False and fall back correctly. The
+        # default True is applied in the loader, presence-aware.
+        "project_dir_readonly": f.Type(bool),
     },
     allow_extra_keys=False,
     allow_missing_keys=True,

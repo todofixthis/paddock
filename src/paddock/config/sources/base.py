@@ -1,12 +1,31 @@
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from typing import Any, ClassVar
 
 import filters as f
 from class_registry.base import AutoRegister
 from class_registry.registry import SortedClassRegistry
 
-from paddock.config.allowlist import Allowlist
 from paddock.config.context import ConfigContext
+
+
+@dataclass
+class LoadResult:
+    """A source's contribution: instance config plus optional meta.
+
+    Attributes:
+        instance: Runner whose ``cleaned_data`` conforms to the standard config
+            shape on success; on a malformed file, the invalid source runner.
+        meta: The validated ``[config]`` section as a plain dict (``{}`` for
+            sources that carry no meta). Valid by construction — it is only
+            ever populated from an already-valid full runner, since a
+            malformed ``[config]`` invalidates the instance runner first, so
+            it needs no separate validity check.
+    """
+
+    instance: "f.FilterRunner"
+    meta: dict
+
 
 # Iterated in ascending WEIGHT order; the loader uses this directly as the
 # merge order (lower weight = lower precedence = merged first).
@@ -48,31 +67,19 @@ class ConfigSource(AutoRegister(source_registry), ABC):  # type: ignore[misc]
     _META_SECTION_KEYS: ClassVar[frozenset[str]] = frozenset({"config", "projects"})
 
     @abstractmethod
-    def load(self, context: ConfigContext) -> f.FilterRunner:
-        """Read, validate, and return a :class:`filters.FilterRunner`.
+    def load(self, context: ConfigContext) -> LoadResult:
+        """Read, validate, and return a :class:`LoadResult`.
 
-        ``cleaned_data`` on the returned runner must conform to the
+        ``cleaned_data`` on ``result.instance`` must conform to the
         ``standard_config_schema(merged=False)`` shape so the loader can merge
         runners symmetrically.
 
         Returns:
-            A :class:`filters.FilterRunner` instance. If the physical source
-            contributes nothing (missing file, no matching env vars), the
-            runner should still be valid with ``cleaned_data == {}``.
+            A :class:`LoadResult`. If the physical source contributes nothing
+            (missing file, no matching env vars), ``instance`` should still be
+            valid with ``cleaned_data == {}``. Sources that carry no ``[config]``
+            meta return ``meta = {}``.
         """
-
-    def sanitise(
-        self, runner: f.FilterRunner, allowlist: Allowlist | None
-    ) -> f.FilterRunner:
-        """Filter the loaded config based on the user-controlled allowlist.
-
-        The default implementation is a no-op. Subclasses representing
-        untrusted sources (``project_toml``, ``env``, ``cli``) override this to
-        drop top-level keys not permitted by the allowlist for their
-        ``SOURCE_KEY``. The override is a one-liner delegating to
-        ``allowlist.filter(runner.cleaned_data, self.SOURCE_KEY)``.
-        """
-        return runner
 
     def _annotate_source(self, data: dict, source: str | None = None) -> dict[str, Any]:
         """Wrap each leaf in ``data`` with ``{"value": ..., "source": source}``.

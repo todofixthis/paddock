@@ -1,7 +1,6 @@
 from pathlib import Path
 
 from paddock.cli import ParsedArgs
-from paddock.config.allowlist import Allowlist
 from paddock.config.context import ConfigContext
 from paddock.config.sources.project_toml import ProjectTomlSource
 
@@ -41,10 +40,10 @@ def test_weight():
 
 
 def test_load_missing_returns_empty(tmp_path: Path):
-    """Missing .paddock/config.toml yields a valid empty runner."""
-    runner = ProjectTomlSource().load(_ctx(tmp_path))
-    assert runner.is_valid()
-    assert runner.cleaned_data == {}
+    """Missing .paddock/config.toml yields a valid empty instance."""
+    result = ProjectTomlSource().load(_ctx(tmp_path))
+    assert result.instance.is_valid()
+    assert result.instance.cleaned_data == {}
 
 
 def test_load_returns_validated_config(tmp_path: Path):
@@ -52,34 +51,15 @@ def test_load_returns_validated_config(tmp_path: Path):
     d = tmp_path / ".paddock"
     d.mkdir()
     (d / "config.toml").write_text('image = "p:2"\nagent = "claude"\n')
-    runner = ProjectTomlSource().load(_ctx(tmp_path))
-    assert runner.is_valid()
-    assert runner.cleaned_data == {"image": "p:2", "agent": "claude"}
+    result = ProjectTomlSource().load(_ctx(tmp_path))
+    assert result.instance.is_valid()
+    assert result.instance.cleaned_data == {"image": "p:2", "agent": "claude"}
 
 
 def test_load_invalid_toml(tmp_path: Path):
-    """Invalid TOML yields a non-valid runner."""
+    """Invalid TOML yields a non-valid instance."""
     d = tmp_path / ".paddock"
     d.mkdir()
     (d / "config.toml").write_text("not = valid = toml")
-    runner = ProjectTomlSource().load(_ctx(tmp_path))
-    assert not runner.is_valid()
-
-
-def test_sanitise_filters_by_allowlist(tmp_path: Path):
-    d = tmp_path / ".paddock"
-    d.mkdir()
-    (d / "config.toml").write_text('image = "p:2"\nagent = "claude"\n')
-    runner = ProjectTomlSource().load(_ctx(tmp_path))
-    a = Allowlist({"project_toml": ["image"]})
-    s = ProjectTomlSource().sanitise(runner, a)
-    assert s.cleaned_data == {"image": "p:2"}
-
-
-def test_sanitise_blocked_source_returns_empty(tmp_path: Path):
-    d = tmp_path / ".paddock"
-    d.mkdir()
-    (d / "config.toml").write_text('image = "p:2"\n')
-    runner = ProjectTomlSource().load(_ctx(tmp_path))
-    s = ProjectTomlSource().sanitise(runner, Allowlist({}))
-    assert s.cleaned_data == {}
+    result = ProjectTomlSource().load(_ctx(tmp_path))
+    assert not result.instance.is_valid()

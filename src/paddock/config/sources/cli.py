@@ -2,10 +2,9 @@ from typing import Any
 
 import filters as f
 
-from paddock.config.allowlist import Allowlist
 from paddock.config.context import ConfigContext
 from paddock.config.schema import standard_config_schema
-from paddock.config.sources.base import ConfigSource
+from paddock.config.sources.base import ConfigSource, LoadResult
 
 
 class CliConfigSource(ConfigSource):
@@ -14,13 +13,13 @@ class CliConfigSource(ConfigSource):
     SOURCE_KEY = "cli"
     WEIGHT = 60
 
-    def load(self, context: ConfigContext) -> f.FilterRunner:
+    def load(self, context: ConfigContext) -> LoadResult:
         """Load config from ``context.parsed``.
 
         Returns:
-            A :class:`filters.FilterRunner` over
-            ``standard_config_schema(merged=False)``. Only non-``None`` values
-            from ``parsed`` are included.
+            A :class:`LoadResult` over ``standard_config_schema(merged=False)``,
+            with empty meta (CLI carries no ``[config]`` section). Only
+            non-``None`` values from ``parsed`` are included.
         """
         parsed = context.parsed
         raw: dict[str, Any] = {}
@@ -45,16 +44,4 @@ class CliConfigSource(ConfigSource):
         if parsed.volumes:
             raw["volumes"] = dict(parsed.volumes)
 
-        return f.FilterRunner(standard_config_schema(merged=False), raw)
-
-    def sanitise(
-        self, runner: f.FilterRunner, allowlist: Allowlist | None
-    ) -> f.FilterRunner:
-        """Drop keys not permitted by the allowlist for this source.
-
-        No-op when ``allowlist`` is ``None``.
-        """
-        if allowlist is None or not runner.is_valid():
-            return runner
-        filtered = allowlist.filter(runner.cleaned_data, self.SOURCE_KEY)
-        return f.FilterRunner(standard_config_schema(merged=False), filtered)
+        return LoadResult(f.FilterRunner(standard_config_schema(merged=False), raw), {})

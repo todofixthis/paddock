@@ -1,7 +1,6 @@
 from pathlib import Path
 
 from paddock.cli import ParsedArgs
-from paddock.config.allowlist import Allowlist
 from paddock.config.context import ConfigContext
 from paddock.config.sources.env import EnvConfigSource
 
@@ -46,60 +45,45 @@ def test_prefix_is_class_property():
 
 
 def test_empty_environ(tmp_path):
-    """Empty environ yields a valid empty runner."""
-    runner = EnvConfigSource().load(_ctx(tmp_path, {}))
-    assert runner.is_valid()
-    assert runner.cleaned_data == {}
+    """Empty environ yields a valid empty instance."""
+    result = EnvConfigSource().load(_ctx(tmp_path, {}))
+    assert result.instance.is_valid()
+    assert result.instance.cleaned_data == {}
 
 
 def test_image_extracted(tmp_path):
     """PADDOCK_IMAGE maps to cleaned_data['image']."""
-    runner = EnvConfigSource().load(_ctx(tmp_path, {"PADDOCK_IMAGE": "x:1"}))
-    assert runner.is_valid()
-    assert runner.cleaned_data == {"image": "x:1"}
+    result = EnvConfigSource().load(_ctx(tmp_path, {"PADDOCK_IMAGE": "x:1"}))
+    assert result.instance.is_valid()
+    assert result.instance.cleaned_data == {"image": "x:1"}
 
 
 def test_nested_keys_extracted(tmp_path):
     """PADDOCK_BUILD_DOCKERFILE maps to cleaned_data['build']['dockerfile']."""
     df = tmp_path / "Dockerfile"
     df.write_text("FROM x")
-    runner = EnvConfigSource().load(
+    result = EnvConfigSource().load(
         _ctx(tmp_path, {"PADDOCK_BUILD_DOCKERFILE": str(df)})
     )
-    assert runner.is_valid()
-    assert runner.cleaned_data["build"]["dockerfile"] == df.resolve()
+    assert result.instance.is_valid()
+    assert result.instance.cleaned_data["build"]["dockerfile"] == df.resolve()
 
 
 def test_invalid_build_policy_surfaces(tmp_path):
-    """Env-shape validation happens inside the source; bad value yields an invalid runner."""
-    runner = EnvConfigSource().load(_ctx(tmp_path, {"PADDOCK_BUILD_POLICY": "bogus"}))
-    assert not runner.is_valid()
+    """Env-shape validation happens inside the source; bad value yields an invalid instance."""
+    result = EnvConfigSource().load(_ctx(tmp_path, {"PADDOCK_BUILD_POLICY": "bogus"}))
+    assert not result.instance.is_valid()
 
 
 def test_non_paddock_vars_ignored(tmp_path):
     """Non-PADDOCK_* env vars are silently ignored."""
-    runner = EnvConfigSource().load(_ctx(tmp_path, {"PATH": "/usr/bin"}))
-    assert runner.cleaned_data == {}
+    result = EnvConfigSource().load(_ctx(tmp_path, {"PATH": "/usr/bin"}))
+    assert result.instance.cleaned_data == {}
 
 
 def test_loader_keys_are_skipped(tmp_path):
     """PADDOCK_CONFIG_FILE and PADDOCK_BUILD_ARGS are handled by other sources."""
-    runner = EnvConfigSource().load(
+    result = EnvConfigSource().load(
         _ctx(tmp_path, {"PADDOCK_CONFIG_FILE": "/x", "PADDOCK_BUILD_ARGS": "foo"})
     )
-    assert runner.cleaned_data == {}
-
-
-def test_sanitise_filters_by_allowlist(tmp_path):
-    runner = EnvConfigSource().load(
-        _ctx(tmp_path, {"PADDOCK_IMAGE": "x:1", "PADDOCK_NETWORK": "y"})
-    )
-    a = Allowlist({"env": ["image"]})
-    s = EnvConfigSource().sanitise(runner, a)
-    assert s.cleaned_data == {"image": "x:1"}
-
-
-def test_sanitise_blocked_source_returns_empty(tmp_path):
-    runner = EnvConfigSource().load(_ctx(tmp_path, {"PADDOCK_IMAGE": "x:1"}))
-    s = EnvConfigSource().sanitise(runner, Allowlist({"env": False}))
-    assert s.cleaned_data == {}
+    assert result.instance.cleaned_data == {}

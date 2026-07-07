@@ -34,3 +34,12 @@ class ConfigContext:
         is a single ``Path.resolve()`` call — cheap enough to repeat.
         """
         return str(self.workdir.resolve())
+
+    @staticmethod
+    def default_user_config_path() -> Path:
+        """Return ``~/.config/paddock/config.toml``, resolved at call time.
+
+        Resolved per-call (not import time) so tests that redirect ``$HOME`` see
+        the updated value.
+        """
+        return Path.home() / ".config" / "paddock" / "config.toml"

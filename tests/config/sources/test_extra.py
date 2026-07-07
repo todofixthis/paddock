@@ -41,19 +41,19 @@ def test_weight():
 
 
 def test_no_path_returns_empty(tmp_path):
-    """No config-file path configured yields a valid empty runner."""
-    runner = ExtraConfigSource().load(_ctx(tmp_path, _empty(), {}))
-    assert runner.cleaned_data == {}
+    """No config-file path configured yields a valid empty instance."""
+    result = ExtraConfigSource().load(_ctx(tmp_path, _empty(), {}))
+    assert result.instance.cleaned_data == {}
 
 
 def test_env_path(tmp_path):
     """PADDOCK_CONFIG_FILE env var is used when no CLI path is set."""
     cfg = tmp_path / "extra.toml"
     cfg.write_text('image = "e:1"\n')
-    runner = ExtraConfigSource().load(
+    result = ExtraConfigSource().load(
         _ctx(tmp_path, _empty(), {"PADDOCK_CONFIG_FILE": str(cfg)})
     )
-    assert runner.cleaned_data == {"image": "e:1"}
+    assert result.instance.cleaned_data == {"image": "e:1"}
 
 
 def test_cli_wins_over_env(tmp_path):
@@ -64,7 +64,7 @@ def test_cli_wins_over_env(tmp_path):
     b.write_text('image = "b"\n')
     p = _empty()
     p.config_file = str(a)
-    runner = ExtraConfigSource().load(
+    result = ExtraConfigSource().load(
         _ctx(tmp_path, p, {"PADDOCK_CONFIG_FILE": str(b)})
     )
-    assert runner.cleaned_data == {"image": "a"}
+    assert result.instance.cleaned_data == {"image": "a"}

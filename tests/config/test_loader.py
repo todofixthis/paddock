@@ -306,6 +306,75 @@ def test_env_allowlist_restricts_keys(tmp_path: Path, monkeypatch):
     assert r.config["network"] == "mynet"
 
 
+def test_cli_allowlist_restricts_keys(tmp_path: Path, monkeypatch):
+    """A dotted-path allowlist rule for cli filters out other cli-supplied keys."""
+    _setup_home(
+        tmp_path,
+        monkeypatch,
+        'agent = "claude"\nimage = "u"\n[config.allowlist]\ncli = ["image"]\n',
+    )
+    parsed = _empty_parsed()
+    parsed.image = "cli-img"
+    parsed.network = "cli-net"
+    r = ConfigLoader().resolve(parsed, workdir=tmp_path, environ={})
+    assert r.config["image"] == "cli-img"
+    assert r.config.get("network") is None
+
+
+def test_cli_blocked_by_allowlist(tmp_path: Path, monkeypatch):
+    """Setting cli = false in [config.allowlist] drops all cli-supplied keys."""
+    _setup_home(
+        tmp_path,
+        monkeypatch,
+        'agent = "claude"\nimage = "u"\n[config.allowlist]\ncli = false\n',
+    )
+    parsed = _empty_parsed()
+    parsed.image = "cli-img"
+    r = ConfigLoader().resolve(parsed, workdir=tmp_path, environ={})
+    assert r.config["image"] == "u"
+
+
+def test_project_toml_allowlist_restricts_keys(tmp_path: Path, monkeypatch):
+    """A dotted-path allowlist rule for project_toml filters its other keys."""
+    _setup_home(
+        tmp_path,
+        monkeypatch,
+        'agent = "claude"\n' '[config.allowlist]\nproject_toml = ["image"]\n',
+    )
+    pd = tmp_path / ".paddock"
+    pd.mkdir()
+    (pd / "config.toml").write_text('image = "p:2"\nnetwork = "p-net"\n')
+    r = ConfigLoader().resolve(_empty_parsed(), workdir=tmp_path, environ={})
+    assert r.config["image"] == "p:2"
+    assert r.config.get("network") is None
+
+
+def test_project_toml_invalid_but_blocked_downgraded_to_warning(
+    tmp_path: Path, monkeypatch, caplog
+):
+    """A blocked-by-default project_toml whose load is also invalid does not error."""
+    _setup_home(tmp_path, monkeypatch, 'agent = "claude"\nimage = "u"\n')
+    pd = tmp_path / ".paddock"
+    pd.mkdir()
+    (pd / "config.toml").write_text("not = valid = toml")
+    with caplog.at_level(logging.WARNING, logger="paddock"):
+        r = ConfigLoader().resolve(_empty_parsed(), workdir=tmp_path, environ={})
+    assert r.config["image"] == "u"
+
+
+def test_extra_config_section_is_ignored(tmp_path: Path, monkeypatch):
+    """[config] in an extra config file is intentionally not treated as meta."""
+    _setup_home(tmp_path, monkeypatch, 'agent = "claude"\nimage = "u"\n')
+    extra = tmp_path / "extra.toml"
+    extra.write_text('network = "extra-net"\n[config.allowlist]\nproject_toml = true\n')
+    parsed = _empty_parsed()
+    parsed.config_file = str(extra)
+    r = ConfigLoader().resolve(parsed, workdir=tmp_path, environ={})
+    assert r.config["network"] == "extra-net"
+    # project_toml is not enabled by the ignored [config] block in the extra file.
+    assert r.project_toml_enabled is False
+
+
 def test_invalid_source_raises_exception_group(tmp_path: Path, monkeypatch):
     _setup_home(tmp_path, monkeypatch, "not = valid = toml")
     with pytest.raises(ExceptionGroup) as exc_info:
