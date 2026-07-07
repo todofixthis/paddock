@@ -192,7 +192,12 @@ def test_project_toml_blocked_by_default(tmp_path: Path, monkeypatch, caplog):
         r = ConfigLoader().resolve(_empty_parsed(), workdir=tmp_path, environ={})
     assert r.config["image"] == "u:1"
     assert r.project_toml_enabled is False
-    assert any("ignored" in rec.message.lower() for rec in caplog.records)
+    warnings = [rec.message for rec in caplog.records]
+    assert (
+        "project_toml: dropped non-allowlisted keys image — add them to "
+        "[config.allowlist].project_toml to keep them" in warnings
+    )
+    assert len(warnings) == 1
 
 
 def test_env_blocked_by_allowlist_warns(tmp_path: Path, monkeypatch, caplog):
@@ -209,10 +214,12 @@ def test_env_blocked_by_allowlist_warns(tmp_path: Path, monkeypatch, caplog):
             environ={"PADDOCK_IMAGE": "ignored"},
         )
     assert r.config["image"] == "u"
-    assert any(
-        "env" in rec.message.lower() and "ignored" in rec.message.lower()
-        for rec in caplog.records
+    warnings = [rec.message for rec in caplog.records]
+    assert (
+        "env: dropped non-allowlisted keys image — add them to "
+        "[config.allowlist].env to keep them" in warnings
     )
+    assert len(warnings) == 1
 
 
 def test_invalid_env_blocked_source_downgraded_to_warning(
@@ -291,22 +298,29 @@ def test_cli_beats_env_beats_user(tmp_path: Path, monkeypatch):
     assert r2.config["image"] == "env"
 
 
-def test_env_allowlist_restricts_keys(tmp_path: Path, monkeypatch):
+def test_env_allowlist_restricts_keys(tmp_path: Path, monkeypatch, caplog):
     _setup_home(
         tmp_path,
         monkeypatch,
         'agent = "claude"\nimage = "u"\n[config.allowlist]\nenv = ["network"]\n',
     )
-    r = ConfigLoader().resolve(
-        _empty_parsed(),
-        workdir=tmp_path,
-        environ={"PADDOCK_IMAGE": "env-img", "PADDOCK_NETWORK": "mynet"},
-    )
+    with caplog.at_level(logging.WARNING, logger="paddock"):
+        r = ConfigLoader().resolve(
+            _empty_parsed(),
+            workdir=tmp_path,
+            environ={"PADDOCK_IMAGE": "env-img", "PADDOCK_NETWORK": "mynet"},
+        )
     assert r.config["image"] == "u"
     assert r.config["network"] == "mynet"
+    warnings = [rec.message for rec in caplog.records]
+    assert (
+        "env: dropped non-allowlisted keys image — add them to "
+        "[config.allowlist].env to keep them" in warnings
+    )
+    assert len(warnings) == 1
 
 
-def test_cli_allowlist_restricts_keys(tmp_path: Path, monkeypatch):
+def test_cli_allowlist_restricts_keys(tmp_path: Path, monkeypatch, caplog):
     """A dotted-path allowlist rule for cli filters out other cli-supplied keys."""
     _setup_home(
         tmp_path,
@@ -316,12 +330,19 @@ def test_cli_allowlist_restricts_keys(tmp_path: Path, monkeypatch):
     parsed = _empty_parsed()
     parsed.image = "cli-img"
     parsed.network = "cli-net"
-    r = ConfigLoader().resolve(parsed, workdir=tmp_path, environ={})
+    with caplog.at_level(logging.WARNING, logger="paddock"):
+        r = ConfigLoader().resolve(parsed, workdir=tmp_path, environ={})
     assert r.config["image"] == "cli-img"
     assert r.config.get("network") is None
+    warnings = [rec.message for rec in caplog.records]
+    assert (
+        "cli: dropped non-allowlisted keys network — add them to "
+        "[config.allowlist].cli to keep them" in warnings
+    )
+    assert len(warnings) == 1
 
 
-def test_cli_blocked_by_allowlist(tmp_path: Path, monkeypatch):
+def test_cli_blocked_by_allowlist(tmp_path: Path, monkeypatch, caplog):
     """Setting cli = false in [config.allowlist] drops all cli-supplied keys."""
     _setup_home(
         tmp_path,
@@ -330,11 +351,18 @@ def test_cli_blocked_by_allowlist(tmp_path: Path, monkeypatch):
     )
     parsed = _empty_parsed()
     parsed.image = "cli-img"
-    r = ConfigLoader().resolve(parsed, workdir=tmp_path, environ={})
+    with caplog.at_level(logging.WARNING, logger="paddock"):
+        r = ConfigLoader().resolve(parsed, workdir=tmp_path, environ={})
     assert r.config["image"] == "u"
+    warnings = [rec.message for rec in caplog.records]
+    assert (
+        "cli: dropped non-allowlisted keys image — add them to "
+        "[config.allowlist].cli to keep them" in warnings
+    )
+    assert len(warnings) == 1
 
 
-def test_project_toml_allowlist_restricts_keys(tmp_path: Path, monkeypatch):
+def test_project_toml_allowlist_restricts_keys(tmp_path: Path, monkeypatch, caplog):
     """A dotted-path allowlist rule for project_toml filters its other keys."""
     _setup_home(
         tmp_path,
@@ -344,9 +372,16 @@ def test_project_toml_allowlist_restricts_keys(tmp_path: Path, monkeypatch):
     pd = tmp_path / ".paddock"
     pd.mkdir()
     (pd / "config.toml").write_text('image = "p:2"\nnetwork = "p-net"\n')
-    r = ConfigLoader().resolve(_empty_parsed(), workdir=tmp_path, environ={})
+    with caplog.at_level(logging.WARNING, logger="paddock"):
+        r = ConfigLoader().resolve(_empty_parsed(), workdir=tmp_path, environ={})
     assert r.config["image"] == "p:2"
     assert r.config.get("network") is None
+    warnings = [rec.message for rec in caplog.records]
+    assert (
+        "project_toml: dropped non-allowlisted keys network — add them to "
+        "[config.allowlist].project_toml to keep them" in warnings
+    )
+    assert len(warnings) == 1
 
 
 def test_project_toml_invalid_but_blocked_downgraded_to_warning(

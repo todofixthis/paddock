@@ -66,7 +66,6 @@ class ConfigLoader:
         results = self._load_sources(context)
         allowlist, readonly = self._extract_meta(results)
         self._validate(results, allowlist)
-        self._warn_ignored(results, allowlist)
         merged = self._merge(self._sanitise(results, allowlist))
 
         final = f.FilterRunner(standard_config_schema(merged=True), merged)
@@ -151,29 +150,6 @@ class ConfigLoader:
             bad.append((key, result.instance))
         if bad:
             raise self._error_group(bad)
-
-    def _warn_ignored(
-        self,
-        results: dict[str, LoadResult],
-        allowlist: Allowlist,
-    ) -> None:
-        """Warn about disabled sources that would otherwise contribute config.
-
-        Args:
-            results: The loaded results keyed by source key.
-            allowlist: The resolved allowlist controlling which sources are
-                enabled.
-        """
-        for key, result in results.items():
-            if allowlist.is_enabled(key):
-                continue
-            instance = result.instance
-            if instance.is_valid() and instance.cleaned_data:
-                logger.warning(
-                    "%s contributed config but %s is not in [config.allowlist] — ignored",
-                    key,
-                    key,
-                )
 
     def _sanitise(
         self,

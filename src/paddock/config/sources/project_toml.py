@@ -14,8 +14,8 @@ class ProjectTomlSource(ConfigSource):
     """Loads ``<workdir>/.paddock/config.toml``.
 
     Loading is unconditional — gating by the allowlist happens generically in
-    the loader's sanitise phase (Task 8), so even a disabled source can still
-    be inspected for warning purposes.
+    the loader's sanitise phase, so even a disabled source can still be
+    inspected for warning purposes.
     """
 
     SOURCE_KEY = "project_toml"
