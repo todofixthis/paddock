@@ -2,8 +2,10 @@ import filters as f
 import pytest
 from filters.pytest import skip_value_check
 
+from paddock.config.fields import CONFIG_FIELDS, allowlist_directives
 from paddock.config.filters import VolumeSpec
 from paddock.config.schema import (
+    BUILD_POLICIES,
     ConfigSchema,
     config_meta_schema,
     standard_config_schema,
@@ -268,3 +270,42 @@ def test_allowlist_entry_rejects_unknown_dotted_path(assert_filter_errors):
     assert_filter_errors(
         AllowlistEntry, ["bogus"], {"0": [f.Choice.CODE_INVALID]}, skip_value_check
     )
+
+
+def test_every_directive_is_accepted_by_the_schema(tmp_path):
+    """Each declared directive round-trips through the real schema."""
+    # Top-level keys whose schema value is itself a mapping (nested build
+    # keys, or the volumes dict) need a dict placeholder; ``build.context``
+    # and ``build.dockerfile`` are filesystem paths validated by ``Filepath``
+    # and need a real directory/file; every other directive is a scalar leaf
+    # and accepts a plain string.
+    mapping_valued = {"volumes", *(key for key, subs in CONFIG_FIELDS.items() if subs)}
+    dockerfile = tmp_path / "Dockerfile"
+    dockerfile.write_text("")
+    path_leaves = {"build.context": str(tmp_path), "build.dockerfile": str(dockerfile)}
+    other_leaves = {"build.policy": BUILD_POLICIES[0]}
+    for directive in allowlist_directives():
+        parts = directive.split(".")
+        config: dict = {}
+        node = config
+        for part in parts[:-1]:
+            node = node.setdefault(part, {})
+        if directive in path_leaves:
+            leaf_value: object = path_leaves[directive]
+        elif directive in other_leaves:
+            leaf_value = other_leaves[directive]
+        elif len(parts) == 1 and parts[0] in mapping_valued:
+            leaf_value = {}
+        else:
+            leaf_value = "x"
+        node[parts[-1]] = leaf_value
+        runner = f.FilterRunner(standard_config_schema(merged=False), config)
+        assert runner.is_valid(), (directive, runner.errors)
+
+
+def test_unknown_nested_key_is_rejected():
+    """A path outside the declaration fails schema validation."""
+    runner = f.FilterRunner(
+        standard_config_schema(merged=False), {"build": {"bogus": "x"}}
+    )
+    assert not runner.is_valid()

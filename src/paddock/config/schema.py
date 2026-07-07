@@ -1,10 +1,10 @@
 import sys
-from collections.abc import Iterable
 
 import filters as f
 from filters.base import BaseFilter
 from filters.macros import filter_macro
 
+from paddock.config.fields import CONFIG_FIELDS, allowlist_directives  # noqa: F401
 from paddock.config.filters import Agent, AllowlistEntry, Filepath, VolumeMap
 
 BUILD_POLICIES = ("always", "daily", "if-missing", "weekly")
@@ -69,12 +69,6 @@ def _standard_fields(merged: bool) -> dict[str, object]:
     }
 
 
-# A read-only sample of the standard field set used only for reflection by
-# `allowlist_directives()` — its values are dropped, only the keys (and any
-# nested mapper keys) are surfaced. Keep in sync with `_standard_fields()`.
-_STANDARD_FIELDS: dict[str, object] = _standard_fields(merged=False)
-
-
 @filter_macro
 def standard_config_schema(extra_keys: dict | None = None, merged: bool = False):
     """Macro returning the standard-config filter chain.
@@ -137,40 +131,6 @@ user_config_schema = f.TomlDecode | f.FilterMapper(
     allow_extra_keys=False,
     allow_missing_keys=True,
 )
-
-
-def allowlist_directives() -> Iterable[str]:
-    """Return the set of valid dotted paths for ``allowlist`` list entries.
-
-    Derived by walking ``_STANDARD_FIELDS`` and recursing into nested
-    ``FilterMapper`` chains. Includes top-level keys (``image``, ``agent``,
-    ``network``, ``volumes``) and nested ones (``build.dockerfile`` etc.).
-    """
-    out: list[str] = []
-    for key, schema in _STANDARD_FIELDS.items():
-        out.append(key)
-        for sub in _nested_fields(schema):
-            out.append(f"{key}.{sub}")
-    return out
-
-
-def _nested_fields(schema: object) -> list[str]:
-    """Return the top-level keys of an embedded ``FilterMapper``, if any.
-
-    Walks a filter chain looking for a ``FilterMapper``. Both ``_filters``
-    attribute layouts (dict for ``FilterMapper``, list for ``FilterChain``) are
-    private to the ``filters`` library — verify against the installed version
-    when the library is upgraded.
-    """
-    if isinstance(schema, f.FilterMapper):
-        return list(schema._filters.keys())
-    sub_filters = getattr(schema, "_filters", None)
-    if isinstance(sub_filters, list):
-        for sub in sub_filters:
-            nested = _nested_fields(sub)
-            if nested:
-                return nested
-    return []
 
 
 class ConfigSchema:
