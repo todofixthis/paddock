@@ -62,7 +62,42 @@ class ConfigLoader:
             ExceptionGroup: If any enabled source fails validation, or if the
                 final merged config fails validation.
         """
-        context = ConfigContext(
+        context = self._build_context(parsed, workdir, environ)
+        results = self._load_sources(context)
+        allowlist, readonly = self._extract_meta(results)
+        self._validate(results, allowlist)
+        self._warn_ignored(results, allowlist)
+        merged = self._merge(self._sanitise(results, allowlist))
+
+        final = f.FilterRunner(standard_config_schema(merged=True), merged)
+        if not final.is_valid():
+            raise self._error_group([("final", final)])
+
+        return ResolvedConfig(
+            config=final.cleaned_data,
+            project_toml_enabled=allowlist.is_enabled("project_toml"),
+            project_dir_readonly=readonly,
+        )
+
+    # ------------------------------------------------------------------
+
+    def _build_context(
+        self,
+        parsed: ParsedArgs,
+        workdir: Path,
+        environ: dict[str, str],
+    ) -> ConfigContext:
+        """Assemble the :class:`ConfigContext` shared by every source.
+
+        Args:
+            parsed: Parsed CLI arguments object.
+            workdir: The project working directory.
+            environ: Environment variable mapping (e.g. ``dict(os.environ)``).
+
+        Returns:
+            A :class:`ConfigContext` ready to pass to each source's ``load``.
+        """
+        return ConfigContext(
             parsed=parsed,
             environ=dict(environ),
             workdir=workdir,
@@ -71,15 +106,41 @@ class ConfigLoader:
             ),
         )
 
-        # Phase 1: Load every source via registry iteration (WEIGHT-ascending).
-        results: dict[str, LoadResult] = {
-            str(key): cls().load(context) for key, cls in source_registry.items()
-        }
+    def _load_sources(self, context: ConfigContext) -> dict[str, LoadResult]:
+        """Load every registered source (WEIGHT-ascending) against ``context``.
 
-        # Phase 2: Build allowlist + project_dir_readonly from source meta.
-        allowlist, project_dir_readonly = self._extract_meta(results)
+        # class_registry instantiates on subscription. Iterating keys +
+        # subscripting (rather than .items()/cls()) lets a future
+        # ClassRegistryInstanceCache slot in transparently. The str()
+        # coercion drops once todofixthis/class-registry#100 ships a typed
+        # key.
 
-        # Phase 3a: Aggregate validation errors generically.
+        Args:
+            context: The shared config context to load each source with.
+
+        Returns:
+            The loaded results keyed by source key.
+        """
+        return {str(key): source_registry[key].load(context) for key in source_registry}
+
+    def _validate(
+        self,
+        results: dict[str, LoadResult],
+        allowlist: Allowlist,
+    ) -> None:
+        """Raise on validation errors from any allowlisted source.
+
+        Errors from sources disabled by the allowlist are logged and
+        otherwise ignored.
+
+        Args:
+            results: The loaded results keyed by source key.
+            allowlist: The resolved allowlist controlling which sources'
+                errors are fatal.
+
+        Raises:
+            ExceptionGroup: If any allowlisted source failed validation.
+        """
         bad: list[tuple[str, f.FilterRunner]] = []
         for key, result in results.items():
             if result.instance.is_valid():
@@ -94,8 +155,18 @@ class ConfigLoader:
         if bad:
             raise self._error_group(bad)
 
-        # Phase 3b: Warn-if-ignored generically for any source that
-        # contributed content while disabled.
+    def _warn_ignored(
+        self,
+        results: dict[str, LoadResult],
+        allowlist: Allowlist,
+    ) -> None:
+        """Warn about disabled sources that would otherwise contribute config.
+
+        Args:
+            results: The loaded results keyed by source key.
+            allowlist: The resolved allowlist controlling which sources are
+                enabled.
+        """
         for key, result in results.items():
             if allowlist.is_enabled(key):
                 continue
@@ -107,10 +178,26 @@ class ConfigLoader:
                     key,
                 )
 
-        # Phase 3c: Sanitise — every source is filtered through the allowlist,
-        # which consolidates the dropped keys into a single warning per source.
+    def _sanitise(
+        self,
+        results: dict[str, LoadResult],
+        allowlist: Allowlist,
+    ) -> dict[str, dict]:
+        """Filter every source's cleaned data through the allowlist.
+
+        Consolidates the dropped keys into a single warning per source.
+
+        Args:
+            results: The loaded results keyed by source key.
+            allowlist: The resolved allowlist controlling which keys survive.
+
+        Returns:
+            The allowlisted config data keyed by source key.
+        """
         sanitised: dict[str, dict] = {}
         for key, result in results.items():
+            # dict() coercion drops once todofixthis/filters#98 types
+            # cleaned_data.
             data = (
                 dict(result.instance.cleaned_data) if result.instance.is_valid() else {}
             )
@@ -124,24 +211,21 @@ class ConfigLoader:
                     ", ".join(dropped),
                     key,
                 )
+        return sanitised
 
-        # Phase 4: Merge in registry (= WEIGHT) order, then validate the final dict.
+    def _merge(self, sanitised: dict[str, dict]) -> dict:
+        """Deep-merge sanitised source data in registry (= WEIGHT) order.
+
+        Args:
+            sanitised: The allowlisted config data keyed by source key.
+
+        Returns:
+            The merged config dict with defaults applied.
+        """
         merged: dict = {}
         for key in sanitised:
             merged = self._deep_merge(merged, sanitised[key])
-        merged = self._apply_defaults(merged)
-
-        final = f.FilterRunner(standard_config_schema(merged=True), merged)
-        if not final.is_valid():
-            raise self._error_group([("final", final)])
-
-        return ResolvedConfig(
-            config=final.cleaned_data,
-            project_toml_enabled=allowlist.is_enabled("project_toml"),
-            project_dir_readonly=project_dir_readonly,
-        )
-
-    # ------------------------------------------------------------------
+        return self._apply_defaults(merged)
 
     def _extract_meta(self, results: dict[str, LoadResult]) -> tuple[Allowlist, bool]:
         """Build the Allowlist + project_dir_readonly from source-provided meta.
