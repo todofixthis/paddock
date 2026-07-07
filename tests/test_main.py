@@ -93,6 +93,26 @@ def test_dry_run_skips_image_build(capsys, tmp_path: Path, mocker, monkeypatch):
     mock_maybe_build.assert_not_called()
 
 
+def test_paddock_dir_not_a_directory_exits_one(capsys, tmp_path: Path, monkeypatch):
+    """A ``.paddock`` file (not a directory) exits 1 with a stderr message."""
+    # isolate_environment (autouse) sets $HOME to tmp_path, so the user config
+    # path resolves to tmp_path / ".config" / "paddock" / "config.toml".
+    config_dir = tmp_path / ".config" / "paddock"
+    config_dir.mkdir(parents=True)
+    cfg = config_dir / "config.toml"
+    cfg.write_text(
+        'image = "ubuntu:22.04"\nagent = "claude"\n'
+        "[config.allowlist]\nproject_toml = true\n"
+    )
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".paddock").write_text("oops")
+    with pytest.raises(SystemExit) as exc:
+        run([])
+    assert exc.value.code == 1
+    captured = capsys.readouterr()
+    assert ".paddock" in captured.err
+
+
 def test_help_flag(capsys):
     """--help prints usage and exits 0."""
     with pytest.raises(SystemExit) as exc:
