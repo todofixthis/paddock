@@ -109,18 +109,17 @@ class ConfigLoader:
     def _load_sources(self, context: ConfigContext) -> dict[str, LoadResult]:
         """Load every registered source (WEIGHT-ascending) against ``context``.
 
-        # class_registry instantiates on subscription. Iterating keys +
-        # subscripting (rather than .items()/cls()) lets a future
-        # ClassRegistryInstanceCache slot in transparently. The str()
-        # coercion drops once todofixthis/class-registry#100 ships a typed
-        # key.
-
         Args:
             context: The shared config context to load each source with.
 
         Returns:
             The loaded results keyed by source key.
         """
+        # class_registry instantiates on subscription. Iterating keys +
+        # subscripting (rather than .items()/cls()) lets a future
+        # ClassRegistryInstanceCache slot in transparently. The str()
+        # coercion drops once todofixthis/class-registry#100 ships a typed
+        # key.
         return {str(key): source_registry[key].load(context) for key in source_registry}
 
     def _validate(
