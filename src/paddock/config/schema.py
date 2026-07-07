@@ -4,7 +4,6 @@ import filters as f
 from filters.base import BaseFilter
 from filters.macros import filter_macro
 
-from paddock.config.fields import CONFIG_FIELDS, allowlist_directives  # noqa: F401
 from paddock.config.filters import Agent, AllowlistEntry, Filepath, VolumeMap
 
 BUILD_POLICIES = ("always", "daily", "if-missing", "weekly")
