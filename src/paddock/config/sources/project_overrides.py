@@ -11,6 +11,7 @@ class ProjectOverridesSource(ConfigSource):
 
     SOURCE_KEY = "project_overrides"
     WEIGHT = 30
+    ALLOWLIST_DEFAULT = True
 
     def load(self, context: ConfigContext) -> LoadResult:
         """Load per-project overrides from the user config file.

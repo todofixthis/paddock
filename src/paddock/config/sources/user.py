@@ -17,6 +17,7 @@ class UserConfigSource(ConfigSource):
 
     SOURCE_KEY = "user"
     WEIGHT = 20
+    ALLOWLIST_DEFAULT = True
 
     def load(self, context: ConfigContext) -> LoadResult:
         """Load user config from ``context.user_config_path``.

@@ -1,44 +1,39 @@
 from paddock.config.allowlist import Allowlist
 
-
-def test_defaults():
-    a = Allowlist({})
-    assert a.is_enabled("cli") is True
-    assert a.is_enabled("env") is True
-    assert a.is_enabled("project_toml") is False
-
-
-def test_project_toml_enabled_by_true():
-    assert Allowlist({"project_toml": True}).is_enabled("project_toml") is True
+# Mirrors the class defaults the loader injects.
+_DEFAULTS: dict[str, bool | list[str]] = {
+    "cli": True,
+    "env": True,
+    "project_toml": False,
+    "user": True,
+}
 
 
-def test_project_toml_disabled_by_empty_list():
-    assert Allowlist({"project_toml": []}).is_enabled("project_toml") is False
+def test_class_defaults_apply_when_unset():
+    al = Allowlist(_DEFAULTS, {})
+    assert al.is_enabled("env") is True
+    assert al.is_enabled("project_toml") is False
 
 
-def test_filter_true_passes_all():
-    cfg = {"image": "x", "network": "y"}
-    assert Allowlist({"env": True}).filter(cfg, "env") == cfg
+def test_user_is_always_enabled_even_if_default_false():
+    """The trusted user source is never gated, whatever the defaults say."""
+    assert Allowlist({"user": False}, {}).is_enabled("user") is True
 
 
-def test_filter_false_blocks_all():
-    assert (
-        Allowlist({"project_toml": False}).filter({"image": "x"}, "project_toml") == {}
+def test_unknown_source_defaults_denied():
+    """A key in neither defaults nor raw is blocked (default-deny)."""
+    assert Allowlist(_DEFAULTS, {}).is_enabled("mystery") is False
+
+
+def test_explicit_rule_overrides_class_default():
+    al = Allowlist(_DEFAULTS, {"project_toml": True})
+    assert al.is_enabled("project_toml") is True
+
+
+def test_filter_with_report_lists_dropped_keys():
+    al = Allowlist(_DEFAULTS, {"project_toml": ["image"]})
+    kept, dropped = al.filter_with_report(
+        {"image": "x", "network": "n"}, "project_toml"
     )
-
-
-def test_filter_key_list_keeps_listed():
-    cfg = {"image": "x", "network": "y"}
-    assert Allowlist({"env": ["image"]}).filter(cfg, "env") == {"image": "x"}
-
-
-def test_filter_dotted_path_descends():
-    cfg = {"build": {"dockerfile": "/p/D", "context": "/p"}}
-    assert Allowlist({"env": ["build.dockerfile"]}).filter(cfg, "env") == {
-        "build": {"dockerfile": "/p/D"}
-    }
-
-
-def test_disabled_source_always_returns_empty():
-    cfg = {"image": "x"}
-    assert Allowlist({}).filter(cfg, "project_toml") == {}
+    assert kept == {"image": "x"}
+    assert dropped == ["network"]

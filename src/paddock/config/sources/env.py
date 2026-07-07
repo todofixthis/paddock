@@ -39,6 +39,7 @@ class EnvConfigSource(ConfigSource):
 
     SOURCE_KEY = "env"
     WEIGHT = 50
+    ALLOWLIST_DEFAULT = True
     PREFIX: ClassVar[str] = "PADDOCK_"
 
     # PADDOCK_* keys deliberately excluded from the env-to-config mapping:

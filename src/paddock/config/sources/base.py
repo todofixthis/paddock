@@ -60,6 +60,11 @@ class ConfigSource(AutoRegister(source_registry), ABC):  # type: ignore[misc]
     SOURCE_KEY: ClassVar[str]
     WEIGHT: ClassVar[int]
 
+    # Default [config.allowlist] rule when the user sets none explicitly.
+    # Default-deny: any new source that forgets to override this is blocked
+    # until its author makes a deliberate choice.
+    ALLOWLIST_DEFAULT: ClassVar[bool | list[str]] = False
+
     # Sections valid in a user-shaped TOML file but not part of a source's
     # standard-config output. Sources that read user-shaped files strip these
     # before returning. Hoisted to the base so the set is defined once and is

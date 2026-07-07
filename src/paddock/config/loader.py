@@ -14,9 +14,6 @@ from paddock.config.sources.base import LoadResult
 
 logger = logging.getLogger("paddock")
 
-# Sources whose load output is allowlist-gated. Trusted sources skip this.
-_GATED_SOURCES = frozenset({"project_toml", "env", "cli"})
-
 
 @dataclass
 class ResolvedConfig:
@@ -87,7 +84,7 @@ class ConfigLoader:
         for key, result in results.items():
             if result.instance.is_valid():
                 continue
-            if key in _GATED_SOURCES and not allowlist.is_enabled(key):
+            if not allowlist.is_enabled(key):
                 logger.warning(
                     "%s source had errors but is disabled by [config.allowlist] — ignored",
                     key,
@@ -97,12 +94,12 @@ class ConfigLoader:
         if bad:
             raise self._error_group(bad)
 
-        # Phase 3b: Warn-if-ignored generically for any gated source that
+        # Phase 3b: Warn-if-ignored generically for any source that
         # contributed content while disabled.
-        for key in _GATED_SOURCES:
+        for key, result in results.items():
             if allowlist.is_enabled(key):
                 continue
-            instance = results[key].instance
+            instance = result.instance
             if instance.is_valid() and instance.cleaned_data:
                 logger.warning(
                     "%s contributed config but %s is not in [config.allowlist] — ignored",
@@ -110,16 +107,23 @@ class ConfigLoader:
                     key,
                 )
 
-        # Phase 3c: Sanitise — allowlist-gated sources are filtered; everything
-        # else passes through unchanged. Task 3 makes this fully generic.
+        # Phase 3c: Sanitise — every source is filtered through the allowlist,
+        # which consolidates the dropped keys into a single warning per source.
         sanitised: dict[str, dict] = {}
         for key, result in results.items():
             data = (
                 dict(result.instance.cleaned_data) if result.instance.is_valid() else {}
             )
-            sanitised[key] = (
-                allowlist.filter(data, key) if key in _GATED_SOURCES else data
-            )
+            kept, dropped = allowlist.filter_with_report(data, key)
+            sanitised[key] = kept
+            if dropped:
+                logger.warning(
+                    "%s: dropped non-allowlisted keys %s — add them to "
+                    "[config.allowlist].%s to keep them",
+                    key,
+                    ", ".join(dropped),
+                    key,
+                )
 
         # Phase 4: Merge in registry (= WEIGHT) order, then validate the final dict.
         merged: dict = {}
@@ -168,7 +172,10 @@ class ConfigLoader:
         if readonly is None:
             readonly = True
 
-        return Allowlist(allowlist_raw), bool(readonly)
+        defaults = {
+            str(key): source_registry[key].ALLOWLIST_DEFAULT for key in source_registry
+        }
+        return Allowlist(defaults, allowlist_raw), bool(readonly)
 
     def _error_group(self, bad: list[tuple[str, f.FilterRunner]]) -> ExceptionGroup:
         """Build an ``ExceptionGroup`` from a list of invalid runners.

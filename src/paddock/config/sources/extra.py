@@ -18,6 +18,7 @@ class ExtraConfigSource(ConfigSource):
 
     SOURCE_KEY = "extra"
     WEIGHT = 40
+    ALLOWLIST_DEFAULT = True
 
     def load(self, context: ConfigContext) -> LoadResult:
         """Load config from the extra config file, if any.

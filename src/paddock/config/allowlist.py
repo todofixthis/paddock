@@ -1,11 +1,5 @@
 from typing import Any, cast
 
-_DEFAULTS: dict[str, bool | list[str]] = {
-    "cli": True,
-    "env": True,
-    "project_toml": False,
-}
-
 
 class Allowlist:
     """Applies ``[config.allowlist]`` rules to a source's validated config.
@@ -14,31 +8,32 @@ class Allowlist:
     everything), or a list of dotted paths (e.g. ``["image", "build.dockerfile"]``)
     naming the allowed keys.
 
-    Sources without an explicit rule default per :data:`_DEFAULTS`. Trusted
-    sources (``user``, ``project_overrides``, ``extra``) are not allowlist-gated
-    and are not represented here — callers query only the three untrusted
-    source keys.
+    Sources without an explicit rule default per the ``defaults`` mapping
+    passed to the constructor — the loader builds this from each source
+    class's ``ALLOWLIST_DEFAULT``. A key present in neither ``defaults`` nor
+    the user-supplied ``raw`` rules is default-denied. The trusted ``user``
+    source is always enabled regardless of any rule.
     """
 
-    def __init__(self, raw: dict[str, Any]) -> None:
-        """Initialises the allowlist from a raw rules dict.
+    def __init__(
+        self, defaults: dict[str, bool | list[str]], raw: dict[str, Any]
+    ) -> None:
+        """Initialises the allowlist from class defaults overlaid by user rules.
 
         Args:
-            raw: Mapping of source keys to their rules. Missing keys fall back
-                to :data:`_DEFAULTS`.
+            defaults: Mapping of source keys to their class-declared
+                ``ALLOWLIST_DEFAULT``.
+            raw: Mapping of source keys to user-supplied rules. Present keys
+                override the matching entry in ``defaults``.
         """
-        self._rules: dict[str, bool | list[str]] = {**_DEFAULTS, **(raw or {})}
+        self._rules: dict[str, bool | list[str]] = {**defaults, **(raw or {})}
 
     def is_enabled(self, source_key: str) -> bool:
-        """Return whether a source is permitted to contribute any config.
-
-        Args:
-            source_key: The canonical source identifier (e.g. ``"env"``).
-
-        Returns:
-            ``True`` if the source is enabled; ``False`` otherwise.
-        """
-        value = self._rules.get(source_key, True)
+        """Whether a source may contribute. ``user`` is always enabled; an
+        unknown key is blocked (default-deny)."""
+        if source_key == "user":
+            return True
+        value = self._rules.get(source_key, False)
         if isinstance(value, bool):
             return value
         return len(value) > 0
@@ -54,12 +49,21 @@ class Allowlist:
             A filtered copy of ``config`` containing only the allowed keys.
             Returns ``{}`` if the source is disabled.
         """
+        return self.filter_with_report(config, source_key)[0]
+
+    def filter_with_report(
+        self, config: dict, source_key: str
+    ) -> tuple[dict, list[str]]:
+        """Return (kept, dropped) — the permitted config plus the sorted list of
+        dropped top-level keys, for a single consolidated warning."""
         if not self.is_enabled(source_key):
-            return {}
-        value = self._rules.get(source_key, True)
+            return {}, sorted(config)
+        value = self._rules.get(source_key, True if source_key == "user" else False)
         if value is True:
-            return config
-        return self._project(config, cast(list[str], value))
+            return dict(config), []
+        kept = self._project(config, cast(list[str], value))
+        dropped = sorted(set(config) - set(kept))
+        return kept, dropped
 
     def _project(self, config: dict, paths: list[str]) -> dict:
         """Build a new dict from ``config`` containing only the given dotted paths.

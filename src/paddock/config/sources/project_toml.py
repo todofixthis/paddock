@@ -20,6 +20,7 @@ class ProjectTomlSource(ConfigSource):
 
     SOURCE_KEY = "project_toml"
     WEIGHT = 10
+    ALLOWLIST_DEFAULT = False
 
     def load(self, context: ConfigContext) -> LoadResult:
         """Load config from ``<workdir>/.paddock/config.toml``.

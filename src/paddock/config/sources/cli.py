@@ -12,6 +12,7 @@ class CliConfigSource(ConfigSource):
 
     SOURCE_KEY = "cli"
     WEIGHT = 60
+    ALLOWLIST_DEFAULT = True
 
     def load(self, context: ConfigContext) -> LoadResult:
         """Load config from ``context.parsed``.
