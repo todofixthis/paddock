@@ -2,20 +2,25 @@
 
 ## Overview
 
-paddock supports two levels of configuration:
+paddock supports three levels of file-based configuration:
 
 - **User-level** (`~/.config/paddock/config.toml`) — your personal defaults, applied to every project.
 - **Project-level** (`.paddock/config.toml` in the project workdir) — settings committed alongside a project and shared with everyone who works on it.
+- **Extra** (`--config-file` / `PADDOCK_CONFIG_FILE`) — an additional file, named explicitly at run time, that overrides both of the above. Handy for one-off runs and for CI, where the config file is chosen by the invoking command rather than found on disk.
+
+The extra file has the same shape as your user config, but only its standard global fields (`image`, `network`, and friends) are applied — a `[projects]` or `[config]` section inside an extra file is ignored. If the named file does not exist, paddock carries on without it.
 
 Because project-level config lives inside a project repository, paddock treats it as **untrusted by default**. A malicious or misconfigured project could otherwise redirect your Docker image, override your network settings, or mount sensitive paths. You must explicitly grant each project (or all projects) permission to contribute config before paddock will honour it.
+
+The other two levels are trusted: your user config is yours, and an extra file is only ever loaded because you pointed paddock at it.
 
 ### What this protects against
 
 The threat model is an **untrusted change landing in a repository** — a `.paddock/config.toml` committed by another contributor (or pulled in by an automated dependency update) that silently changes how your container runs. It is *not* designed to defend against an attacker who already controls your shell: anyone who can set `PADDOCK_*` environment variables or pass CLI flags can already run arbitrary commands, so paddock trusts those inputs by default.
 
-Environment variables (`PADDOCK_*`) and CLI flags are therefore **permitted by default**. The same allowlist mechanism can still restrict or disable them when you need it to — see [The allowlist](#the-allowlist).
+Environment variables (`PADDOCK_*`), CLI flags, and the extra config file are therefore **permitted by default** — reaching for any of the three already requires control of the invoking shell. `env` and `cli` can still be restricted or disabled through the allowlist when you want them to be — see [The allowlist](#the-allowlist). The extra config file cannot be restricted: pointing paddock at one takes the very shell access the allowlist exists to defend, so gating it would buy nothing.
 
-> **CI environments:** continuous-integration runners are the one place where these two worlds overlap — the checked-in files and the process environment are often shaped by the same, potentially untrusted, pull request. If you run paddock in CI against untrusted branches, gate `env` (and `cli`) explicitly rather than relying on their permissive defaults.
+> **CI environments:** continuous-integration runners are the one place where these two worlds overlap — the checked-in files and the process environment are often shaped by the same, potentially untrusted, pull request. If you run paddock in CI against untrusted branches, gate `env` (and `cli`) explicitly rather than relying on their permissive defaults. Note that a pull request able to edit the CI command line can also pass `--config-file`, which no allowlist will stop — keep the paddock invocation itself under your control, not the branch's.
 
 ## Enabling project-level config
 
@@ -49,6 +54,8 @@ In this example:
 ## The allowlist
 
 The allowlist is more than the switch that turns project config on — it is the single mechanism for controlling **every** gated source: project files (`project_toml`), environment variables (`env`), and CLI flags (`cli`). Enabling `project_toml` and restricting `env` are two applications of the same rule, not separate features.
+
+The remaining sources — `user`, `extra`, and `project_overrides` — have no allowlist entry and cannot be gated. Each is your own file or your own invocation, so there is no untrusted party to defend against; listing one in `[config.allowlist]` is rejected as an unknown key.
 
 Each gated source has an entry in `[config.allowlist]`. Valid values are:
 
