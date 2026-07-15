@@ -46,6 +46,34 @@ def test_no_path_returns_empty(tmp_path):
     assert result.instance.cleaned_data == {}
 
 
+def test_missing_file_returns_empty(tmp_path):
+    """A path naming a file that does not exist yields a valid empty instance."""
+    p = _empty()
+    p.config_file = str(tmp_path / "absent.toml")
+    result = ExtraConfigSource().load(_ctx(tmp_path, p, {}))
+    assert result.instance.is_valid()
+    assert result.instance.cleaned_data == {}
+
+
+def test_strips_meta_sections(tmp_path):
+    """[projects] and [config] in an extra file are ignored; globals survive."""
+    cfg = tmp_path / "extra.toml"
+    cfg.write_text(
+        'image = "e:1"\n'
+        "\n"
+        '[projects."/somewhere"]\n'
+        'image = "ignored:1"\n'
+        "\n"
+        "[config.allowlist]\n"
+        "project_toml = true\n"
+    )
+    p = _empty()
+    p.config_file = str(cfg)
+    result = ExtraConfigSource().load(_ctx(tmp_path, p, {}))
+    assert result.instance.cleaned_data == {"image": "e:1"}
+    assert result.meta == {}
+
+
 def test_env_path(tmp_path):
     """PADDOCK_CONFIG_FILE env var is used when no CLI path is set."""
     cfg = tmp_path / "extra.toml"

@@ -38,6 +38,8 @@ uvx --from pip pip index versions <package>            # check available version
 uv run git commit                                      # always use instead of git commit (runs autohooks)
 ```
 
+> **Run `uv run` from the repo (or worktree) root** — it resolves the project from the working directory, so `cd`-ing to a scratchpad first breaks imports with `ModuleNotFoundError: No module named 'paddock'`. Keep the cwd at the root and reference throwaway files by absolute path.
+
 ## Docstrings
 
 Google-style format (`Args:`, `Returns:`, `Note:`) — not the `:param:` field-list style. Max 80 chars per line. Escape backslashes (e.g. `'\\n'` not `'\n'`). Blank line before lists inside `Args:` sections.
