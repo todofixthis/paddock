@@ -1,9 +1,12 @@
 > **Symlinks for Claude Code compatibility:**
 > - `CLAUDE.md` → `AGENTS.md` — edit `AGENTS.md` only
-> - `.claude/` → `.agents/` — edit files under `.agents/` only
+> - `.claude/skills/` → `.agents/skills/` — edit skills under `.agents/skills/` only
 >
-> Git refuses to stage files through a symlink directory. Always use the real paths
-> (`.agents/`, `AGENTS.md`) when staging, never the symlink paths.
+> `.claude/` is a real directory (`settings.json` plus the `skills` symlink); only
+> `.claude/skills` symlinks into `.agents/skills`. Keep `.claude/` a real directory —
+> the native worktree tool refuses to run against a committed `.claude` symlink. Git
+> refuses to stage files through a symlink directory, so stage skills and `AGENTS.md`
+> via their real paths (`.agents/skills/`, `AGENTS.md`), never the symlink paths.
 
 ## Getting Started
 
@@ -89,3 +92,5 @@ Always commit via `uv run git commit`. Never use bare `git commit` — it bypass
 Use `.worktrees/` for isolated workspaces (project-local, gitignored).
 
 After switching to a worktree, run the autohooks activate command (see Commands) to install the pre-commit hook for that worktree.
+
+The native worktree tool refuses to run while `.claude` is a committed symlink, so `.claude/` must stay a real directory (only `.claude/skills` symlinks into `.agents/skills`). Fall back to a manual `git worktree add` if the native tool ever balks.
