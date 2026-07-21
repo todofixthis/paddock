@@ -1,9 +1,12 @@
 > **Symlinks for Claude Code compatibility:**
 > - `CLAUDE.md` → `AGENTS.md` — edit `AGENTS.md` only
-> - `.claude/` → `.agents/` — edit files under `.agents/` only
+> - `.claude/skills/` → `.agents/skills/` — edit skills under `.agents/skills/` only
 >
-> Git refuses to stage files through a symlink directory. Always use the real paths
-> (`.agents/`, `AGENTS.md`) when staging, never the symlink paths.
+> `.claude/` is a real directory (`settings.json` plus the `skills` symlink); only
+> `.claude/skills` symlinks into `.agents/skills`. Keep `.claude/` a real directory —
+> the native worktree tool refuses to run against a committed `.claude` symlink. Git
+> refuses to stage files through a symlink directory, so stage skills and `AGENTS.md`
+> via their real paths (`.agents/skills/`, `AGENTS.md`), never the symlink paths.
 
 ## Getting Started
 
@@ -31,16 +34,13 @@ uv run tox -p                                          # run tests (all supporte
 uv run pytest --collect-only                           # verify test count (note at start of mahi; confirm it increases when done)
 uv run mypy src/                                       # type check
 uv run ruff check                                      # lint
-uv run make -C docs clean && uv run make -C docs html  # build docs
 uvx --from pip pip index versions <package>            # check available versions on PyPI
 uv run git commit                                      # always use instead of git commit (runs autohooks)
 ```
 
-> **Never write bare `git commit` in plans or step-by-step instructions.** Autohooks requires the `uv run` prefix — a bare `git commit` will fail with "autohooks is not installed."
-
 ## Docstrings
 
-Google/Napoleon format (`Args:`, `Returns:`, `Note:`) — not Sphinx `:param:` style. Max 80 chars per line. Escape backslashes (e.g. `'\\n'` not `'\n'`). Blank line before lists inside `Args:` sections to avoid Sphinx indentation warnings. ReadTheDocs treats all Sphinx warnings as errors — resolve them before pushing.
+Google-style format (`Args:`, `Returns:`, `Note:`) — not Sphinx `:param:` style. Max 80 chars per line. Escape backslashes (e.g. `'\\n'` not `'\n'`).
 
 All non-trivial functions and methods require a docstring explaining their purpose. This includes cases where the reason for a function's existence is non-obvious even if its implementation is simple — e.g. a wrapper that defers evaluation to runtime.
 
@@ -82,10 +82,10 @@ Place comments on the line preceding the code they document, not as trailing com
 
 ## Git Commits
 
-Always commit via `uv run git commit`. Never use bare `git commit` — it bypasses autohooks and will fail. This rule applies in plan steps, commit instructions, and any other context where a commit command is written.
+Always commit via `uv run git commit`, never bare `git commit` — the bare form bypasses autohooks and fails with "autohooks is not installed". This applies everywhere a commit command is written, including plan steps and instructions.
 
 ## Git Worktrees
 
-Use `.worktrees/` for isolated workspaces (project-local, gitignored).
+Use `.agents/worktrees/` for isolated workspaces (project-local, gitignored).
 
 After switching to a worktree, run the autohooks activate command (see Commands) to install the pre-commit hook for that worktree.
