@@ -2,6 +2,6 @@
 
 # ADR Index
 
-| # | Status | Title | Tags | Summary |
-|---|--------|-------|------|---------|
-| [0001](0001-add-mypy-type-checker.md) | Accepted | Add mypy as Type Checker | tooling, type-checking, pre-commit, autohooks | Use mypy for static type checking, integrated via autohooks-plugin-mypy. |
+| # | Status | Title | Scope | Summary | Revisit |
+|---|--------|-------|-------|---------|---------|
+| [0001](0001-add-mypy-type-checker.md) | Accepted | Add mypy as Type Checker | pyproject.toml | Use mypy for static type checking, integrated via autohooks-plugin-mypy. | ty stabilises (leaves 0.0.x) and ships a published autohooks plugin. |
