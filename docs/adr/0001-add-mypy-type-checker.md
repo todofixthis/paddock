@@ -1,7 +1,8 @@
 ---
 status: Accepted
 date: 2026-05-09
-tags: [tooling, type-checking, pre-commit, autohooks]
+revisit-when: ty stabilises (leaves 0.0.x) and ships a published autohooks plugin.
+scope: [pyproject.toml]
 summary: Use mypy for static type checking, integrated via autohooks-plugin-mypy.
 ---
 
