@@ -68,9 +68,7 @@ well-named method instead.
 
 ## Branches
 
-- `main` — releases only; merge from `develop` via PR
-- `develop` — main development branch
-- Feature branches off `develop` for all new work
+`main` is the development branch and feature branches come off it. A `develop` branch is added at the 1.0 release, after which `main` carries releases only.
 
 ## Configuration
 

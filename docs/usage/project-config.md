@@ -38,7 +38,7 @@ project_toml = ["volumes"]
 - `agent` — selecting `claude` mounts your `~/.claude` read-write.
 - `network` — including `host`.
 
-Reserve `true` for repositories you would run a script from.
+Granting `true` is the same decision as ticking "I trust this project" when an IDE or coding agent opens a repository, taken once for every repository at once. Reserve it for repositories you would run a script from.
 
 ```toml
 [config.allowlist]
