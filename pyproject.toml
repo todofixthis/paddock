@@ -52,7 +52,7 @@ false = "paddock.agents.shell:ShellAgent"
 paddock = "paddock.__main__:main"
 
 [project.urls]
-Repository = "https://github.com/phx/paddock"
+Repository = "https://github.com/todofixthis/paddock"
 
 [tool.autohooks]
 mode = "pythonpath"
