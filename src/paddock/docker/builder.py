@@ -13,10 +13,27 @@ def sanitise_volume_name(image: str, agent_key: str) -> str:
 
 
 class DockerCommandBuilder:
-    def __init__(self, *, config: dict, agent: BaseAgent, workdir: Path) -> None:
+    def __init__(
+        self,
+        *,
+        config: dict,
+        agent: BaseAgent,
+        workdir: Path,
+        project_dir_volume: tuple[str, VolumeSpec] | None = None,
+    ) -> None:
+        """Initialises the builder with config, agent, workdir, and optional project dir.
+
+        Args:
+            config: The resolved configuration dict.
+            agent: The agent instance providing volumes and commands.
+            workdir: The project working directory to mount.
+            project_dir_volume: Optional ``(host_path, VolumeSpec)`` pair for
+                the ``.paddock`` bind-mount. Emitted after the workdir volume.
+        """
         self._config = config
         self._agent = agent
         self._workdir = workdir
+        self._project_dir_volume = project_dir_volume
 
     def build(self, *, command: list[str]) -> list[str]:
         """Assemble the full 'docker run' argv list."""
@@ -26,6 +43,9 @@ class DockerCommandBuilder:
         argv += self._volume_flag(
             str(self._workdir), VolumeSpec(str(self._workdir), "rw")
         )
+        if self._project_dir_volume is not None:
+            host_path, container_spec = self._project_dir_volume
+            argv += self._volume_flag(host_path, container_spec)
         for host, container in self._agent.get_volumes().items():
             argv += self._volume_flag(host, container)
         for host, container in self._config.get("volumes", {}).items():

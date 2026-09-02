@@ -3,7 +3,7 @@ status: Accepted
 date: 2026-05-09
 revisit-when: ty stabilises (leaves 0.0.x) and ships a published autohooks plugin.
 scope: [pyproject.toml]
-summary: Use mypy for static type checking, integrated via autohooks-plugin-mypy.
+summary: Use mypy (not Astral ty) for static type checking via autohooks-plugin-mypy.
 ---
 
 # 0001: Add mypy as Type Checker
@@ -32,13 +32,12 @@ type-grounded IDE feedback.
 ### Option 2: Add mypy (Accepted)
 
 Add `mypy` and `autohooks-plugin-mypy` as dev dependencies. Configure a
-`[[tool.mypy.overrides]]` section to suppress `import-untyped` for the
+`[[tool.mypy.overrides]]` section with `ignore_missing_imports` for the
 `filters` package globally. Enable `check_untyped_defs` so that unannotated
 methods (e.g. `_apply` overrides) are still checked.
 
 **Pros:** Battle-tested; `autohooks-plugin-mypy` is published on PyPI (no
-custom plugin needed); `[[tool.mypy.overrides]]` suppresses the phx-filters
-noise at the package level rather than at individual call sites.
+custom plugin needed).
 **Cons:** Slower than newer checkers; second ecosystem alongside Astral
 tooling (uv, ruff).
 **Risks:** phx-filters gains types in a future release, making the override
@@ -66,13 +65,24 @@ ecosystem fit is appealing but its pre-release status and per-call-site
 suppression requirement make mypy the lower-friction choice today. This
 decision can be revisited once ty stabilises and ships an autohooks plugin.
 
+A non-strict posture is deliberate: only `check_untyped_defs` is enabled, not
+`strict` or `disallow_untyped_defs`. Strict mode is deferred to avoid a large
+up-front annotation burden on an as-yet-unannotated codebase; it can be
+tightened incrementally later.
+
 ## Consequences
 
 - `mypy` and `autohooks-plugin-mypy` added to the `dev` dependency group.
 - `[tool.mypy]` section in `pyproject.toml` sets `files = ["src"]` and
-  `check_untyped_defs = true`.
-- `[[tool.mypy.overrides]]` suppresses `import-untyped` for `filters` and
-  `filters.*`; remove once phx-filters ships type information.
+  `check_untyped_defs = true`. `files = ["src"]` means `tests/` is not
+  type-checked.
+- `[[tool.mypy.overrides]]` sets `ignore_missing_imports = true` for `filters`
+  and `filters.*`. This is broader than the `import-untyped` marker: it silences
+  *all* import-resolution errors for those modules, so a genuinely wrong filters
+  import path would go unflagged. Accepted as a false-negative trade-off; remove
+  the override once phx-filters ships type information.
+- mypy runs on every commit via `autohooks.plugins.mypy`, adding wall-clock time
+  to the pre-commit gate.
 - One real type error surfaced and fixed: `build.py` list annotation and a
   re-annotated parameter in `filters.py` (replaced with `cast`).
 - `uv run mypy src/` added to the commands documented in `AGENTS.md`.

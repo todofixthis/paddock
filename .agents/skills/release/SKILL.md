@@ -39,8 +39,8 @@ Based on the changes, recommend a semver bump:
 
 ## Phase 2 — Publish (after confirmation)
 
-### 5. Bump version on `develop`
-Edit `__version__` in `src/paddock/__init__.py` directly (Hatch reads the version from there). Commit the file and push to `develop`.
+### 5. Bump version on a release branch
+Create `release/v<version>` off `main` (off `develop` once that branch exists after 1.0). Edit `__version__` in `src/paddock/__init__.py` directly (Hatch reads the version from there). Commit the file and push the branch.
 
 ### 6. Open release PR
 ```bash

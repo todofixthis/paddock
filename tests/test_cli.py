@@ -127,6 +127,15 @@ def test_config_file_flag():
     assert result.config_file == "/tmp/extra.toml"
 
 
+def test_help_documents_build_args_flag(capsys):
+    """--help documents --build-args-KEY=VALUE, which argparse never sees."""
+    with pytest.raises(SystemExit) as exc:
+        parse_args(["--help"])
+    assert exc.value.code == 0
+    captured = capsys.readouterr()
+    assert "--build-args-KEY=VALUE" in captured.out
+
+
 def test_build_flags():
     """Build config can be overridden via CLI flags."""
     result = parse_args(

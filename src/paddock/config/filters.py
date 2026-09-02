@@ -5,6 +5,8 @@ import filters as f
 from filters.base import BaseFilter
 from filters.macros import filter_macro
 
+from paddock.config.fields import allowlist_directives
+
 
 class Agent(BaseFilter):
     """Validates a coding agent value.
@@ -232,3 +234,30 @@ class VolumeMap(BaseFilter):
                 result[str(host_path)] = container_spec
 
         return result if not self._has_errors else None
+
+
+class AllowlistEntry(BaseFilter):
+    """Validates a single ``[config.allowlist]`` entry.
+
+    Accepts ``True``, ``False``, or a list of dotted-path strings naming keys
+    in the standard config schema. The valid dotted paths come from
+    :func:`paddock.config.fields.allowlist_directives`, resolved once in
+    ``__init__`` so ``_apply`` stays pure.
+    """
+
+    CODE_INVALID = "invalid"
+    templates = {
+        CODE_INVALID: "Expected True, False, or a list of known config key paths.",
+    }
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._directives = allowlist_directives()
+
+    def _apply(self, value):
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, list):
+            cleaned = self._filter(value, f.FilterRepeater(f.Choice(self._directives)))
+            return cleaned if not self._has_errors else None
+        return self._invalid_value(value, self.CODE_INVALID)

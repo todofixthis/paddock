@@ -14,7 +14,7 @@ Before writing code, check:
 
 - `docs/adr/INDEX.md` — prior decisions (don't re-litigate)
 - `docs/future/` — deferred features (don't re-discuss)
-- `docs/superpowers/plans/` — current implementation plan
+- `docs/superpowers/plans/` — the implementation plan in progress, if any (removed once its mahi lands)
 
 ## Architecture Decision Records
 
@@ -38,15 +38,22 @@ uvx --from pip pip index versions <package>            # check available version
 uv run git commit                                      # always use instead of git commit (runs autohooks)
 ```
 
+> **Run `uv run` from the repo (or worktree) root** — it resolves the project from the working directory, so `cd`-ing to a scratchpad first breaks imports with `ModuleNotFoundError: No module named 'paddock'`. Keep the cwd at the root and reference throwaway files by absolute path.
+
 ## Docstrings
 
-Google-style format (`Args:`, `Returns:`, `Note:`) — not Sphinx `:param:` style. Max 80 chars per line. Escape backslashes (e.g. `'\\n'` not `'\n'`).
+Google-style format (`Args:`, `Returns:`, `Note:`) — not the `:param:` field-list style. Max 80 chars per line. Escape backslashes (e.g. `'\\n'` not `'\n'`). Blank line before lists inside `Args:` sections.
 
 All non-trivial functions and methods require a docstring explaining their purpose. This includes cases where the reason for a function's existence is non-obvious even if its implementation is simple — e.g. a wrapper that defers evaluation to runtime.
 
 ## Code Comments
 
 Place comments on the line preceding the code they document, not as trailing comments.
+
+**No divider comments.** Never use banner/section-divider comments (e.g. `# ----` or
+`# Phase 3c: ...`) to carve a long function into labelled regions. The need for one is a
+smell that the function is doing too much — extract each labelled region into its own
+well-named method instead.
 
 ## Language and Style
 
@@ -61,9 +68,7 @@ Place comments on the line preceding the code they document, not as trailing com
 
 ## Branches
 
-- `main` — releases only; merge from `develop` via PR
-- `develop` — main development branch
-- Feature branches off `develop` for all new work
+`main` is the development branch and feature branches come off it. A `develop` branch is added at the 1.0 release, after which `main` carries releases only.
 
 ## Configuration
 
@@ -74,6 +79,13 @@ Place comments on the line preceding the code they document, not as trailing com
 - **Object-oriented implementation**: All implementation code (non-test) uses classes. Standalone functions are the exception, not the rule.
 - **Flat test functions**: Tests are always flat functions (not methods on a class), even when testing class behaviour.
 - **Naming convention**: Methods that produce a config dict from a specific source are named `config_from_<source>` (e.g. `config_from_env`, `config_from_cli`), not `<source>_to_config`.
+- **Registry-driven extensibility**: where a registry drives behaviour (e.g. config sources, agents), adding a new member must require only defining a new class — no edits to the orchestrator or to any shared constant. Let the registry own instantiation (`registry[key]`, not `cls()`), and push per-member metadata (defaults, weights, flags) onto the member class rather than into a central lookup the orchestrator maintains. A constant the orchestrator must update for each new member is the anti-pattern this rule exists to prevent.
+
+### Imports
+
+Prefer restructuring module boundaries over deferring imports. If two modules cycle, the
+right fix is to extract the shared symbol into a third module (e.g. `errors.py` for shared
+exception types). Do not use function-body `import` statements as a workaround.
 
 ## Testing
 
