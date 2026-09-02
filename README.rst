@@ -24,16 +24,24 @@ Overview
 --------
 
 ``paddock`` assembles and executes a ``docker run`` command from a layered
-configuration system.  Config is resolved in priority order:
+configuration system.  Sources are merged in ascending priority — later
+sources overwrite earlier ones:
 
-1. User-level TOML  (``~/.config/paddock/config.toml``)
-2. Project-level TOML  (``<workdir>/.paddock/config.toml``)
-3. Extra TOML file via ``PADDOCK_CONFIG_FILE`` env var
-4. Extra TOML file via ``--config-file`` CLI flag
+1. Project-level TOML  (``<workdir>/.paddock/config.toml``)
+2. User-level TOML  (``~/.config/paddock/config.toml``)
+3. ``[projects."<path>"]`` overrides in the user TOML
+4. Extra TOML file via ``PADDOCK_CONFIG_FILE`` env var, or via the
+   ``--config-file`` CLI flag — the CLI path replaces the env path, so the two
+   are one source, not two
 5. ``PADDOCK_*`` environment variables
 6. CLI flags
 
-Later sources overwrite earlier ones; ``volumes`` entries are additive.
+``volumes`` entries are additive per host path — the same host path set by a
+higher-priority source replaces the earlier mapping.
+
+The project-level file is off by default (blocked) — enable it in the user
+file's ``[config.allowlist]``; see
+`project-level configuration and the allowlist <https://github.com/phx/paddock/blob/main/docs/usage/project-config.md>`__.
 
 Requirements
 ------------
@@ -82,7 +90,20 @@ TOML files
 ~~~~~~~~~~
 
 Place a ``config.toml`` at ``~/.config/paddock/`` (user-level) or
-``<project>/.paddock/`` (project-level).  Both files are optional.
+``<project>/.paddock/`` (project-level).  Both are optional, and the
+project-level file is off by default until you opt in from your user config:
+
+.. code-block:: toml
+
+   [config.allowlist]
+   project_toml = true
+
+``true`` is the blanket grant; a list such as ``project_toml = ["volumes"]``
+permits only the keys it names.  See
+`project-level configuration and the allowlist <https://github.com/phx/paddock/blob/main/docs/usage/project-config.md>`__
+for what each grant hands a committed file.
+
+A config file looks like this:
 
 .. code-block:: toml
 
@@ -141,16 +162,30 @@ Build sub-table
 Environment variables
 ~~~~~~~~~~~~~~~~~~~~~
 
-Any config field can be set via an environment variable by uppercasing its
-name and prefixing with ``PADDOCK_``.  Nested keys are joined with ``_``:
+Six config fields can be set via an environment variable, by uppercasing the
+field name and prefixing it with ``PADDOCK_``.  Nested keys are joined with
+``_``:
 
 .. code-block:: bash
 
-   PADDOCK_IMAGE=my-claude-image
    PADDOCK_AGENT=claude
+   PADDOCK_BUILD_CONTEXT=.
    PADDOCK_BUILD_DOCKERFILE=images/Dockerfile
    PADDOCK_BUILD_POLICY=daily
+   PADDOCK_IMAGE=my-claude-image
+   PADDOCK_NETWORK=my-docker-network
+
    PADDOCK_CONFIG_FILE=/path/to/extra.toml   # loads an additional TOML file
+
+``volumes`` and ``build.args`` have no environment-variable form — set them in a
+TOML file, or pass ``--volume`` / ``--build-args-KEY=VALUE`` on the command
+line.  ``PADDOCK_BUILD_ARGS`` is ignored rather than rejected.  Any other
+unrecognised ``PADDOCK_*`` name is a fatal config error, so a typo stops the
+run:
+
+.. code-block:: text
+
+   [env:foo] Unexpected key "foo".
 
 CLI flags
 ~~~~~~~~~
@@ -171,6 +206,13 @@ CLI flags
    --quiet                      Suppress all logging and the docker command printout
    --volume HOST:CONTAINER[:MODE]  Extra bind-mount (repeatable)
    --workdir PATH               Host path to use as the workspace (default: CWD)
+
+``--build-args-KEY=VALUE`` is not listed by ``paddock --help``, but it is
+supported.  ``--workdir`` is resolved to an absolute real path — symlinks
+followed — before it is used for the ``[projects]`` lookup and for the mounts.
+
+paddock exits with the container's exit status; ``--dry-run`` exits 0 and a
+config error exits 1.
 
 Everything after the first positional argument (or after ``--``) is passed
 as the container command:

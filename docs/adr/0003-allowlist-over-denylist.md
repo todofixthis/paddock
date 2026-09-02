@@ -46,9 +46,12 @@ special-cased code path, just the same mechanism any source uses. Users opt in v
 inconvenient, not a security regression. The same mechanism applies uniformly to `cli`,
 `env`, `extra`, `project_overrides`, and `project_toml`.
 
-**Cons:** Disallowed keys are dropped silently: a user who allowlists one path but
-mistypes a sibling key gets it discarded with no error or warning (the source-level
-warning fires only when a whole source is disabled) — a real debugging cost.
+**Cons:** A key the rule does not permit is dropped with a warning, not an error:
+paddock names the dropped leaf paths whether the source is wholly or partly disabled,
+but the run continues without the config the operator believed was applied, and
+`--quiet` hides the warning altogether — a real debugging cost. (A mistyped *allowlist
+entry* is a separate matter: it is rejected when the user config loads, with
+`[user:config.allowlist.project_toml.0] Valid options are: […]`.)
 
 **Risks:** In CI, or any context where `PADDOCK_*` env vars are untrusted, `env`'s
 default-trusted posture is wrong for that environment; operators must gate `env`
@@ -108,8 +111,10 @@ Subsidiary decisions recorded here to avoid re-litigation:
 - Operators running paddock in CI, or any context where `PADDOCK_*` env vars are not
   fully trusted, must explicitly gate `env` via `[config.allowlist]` — the default
   assumes an interactively-operated shell.
-- A mistyped allowlist entry fails silently (the key is dropped, not rejected), which is
-  a debugging cost accepted in exchange for a safe-by-default posture.
+- A grant that omits a key a source sets costs a warning rather than an error: the
+  dropped leaf paths are logged at `WARNING` level and the run continues, so a
+  misconfigured grant surfaces only in the logs — and `--quiet` suppresses it. That
+  debugging cost is accepted in exchange for a safe-by-default posture.
 - Because the valid allowlist keys are static rather than registry-derived (see
   [0002](0002-registry-driven-config-sources.md)), an operator auditing "what may
   `project_toml` set today" must read `ALLOWLIST_DEFAULT` across the source classes;

@@ -10,7 +10,7 @@ paddock supports three levels of file-based configuration:
 
 The extra file has the same shape as your user config, but only its standard global fields (`image`, `network`, and friends) are applied — a `[projects]` or `[config]` section inside an extra file is ignored. If the named file does not exist, paddock carries on without it.
 
-Because project-level config lives inside a project repository, paddock treats it as **untrusted by default**. A malicious or misconfigured project could otherwise redirect your Docker image, override your network settings, or mount sensitive paths. You must explicitly grant each project (or all projects) permission to contribute config before paddock will honour it.
+Because project-level config lives inside a project repository, paddock treats it as **untrusted by default**. A malicious or misconfigured project could otherwise redirect your Docker image, override your network settings, or mount sensitive paths. Even once enabled it carries the lowest [weight](#precedence) of any source, so the exposure is only the keys you leave unset. You must explicitly grant each project (or all projects) permission to contribute config before paddock will honour it.
 
 The other two levels are trusted: your user config is yours, and an extra file is only ever loaded because you pointed paddock at it.
 
@@ -24,14 +24,28 @@ Environment variables (`PADDOCK_*`), CLI flags, and the extra config file are th
 
 ## Enabling project-level config
 
-Add the following to your user config (`~/.config/paddock/config.toml`):
+Project-level config is **off by default (blocked)**. Grant it the narrowest set of keys the project needs, in your user config (`~/.config/paddock/config.toml`):
+
+```toml
+[config.allowlist]
+project_toml = ["volumes"]
+```
+
+`project_toml = true` instead permits every key, in every repository you run paddock from — still at the lowest [weight](#precedence), so the exposure is the keys you leave unset. Weigh what that hands a committed file:
+
+- `build.dockerfile` / `build.context` — paddock runs `docker build` on the host, from the project's Dockerfile and context.
+- `volumes` — any existing host path, including `~`-relative ones expanded against *your* home, mounted `rw` if the mapping says so.
+- `agent` — selecting `claude` mounts your `~/.claude` read-write.
+- `network` — including `host`.
+
+Reserve `true` for repositories you would run a script from.
 
 ```toml
 [config.allowlist]
 project_toml = true
 ```
 
-This globally permits any project's `.paddock/config.toml` to contribute configuration. If you prefer a narrower grant, see [The allowlist](#the-allowlist) below.
+For the key names a list may contain, see [The allowlist](#the-allowlist); for a grant scoped to a single project, see [Per-project overrides](#per-project-overrides).
 
 ## Per-project overrides
 
@@ -49,7 +63,7 @@ In this example:
 - When paddock runs from `/Users/alice/code/widgets`, it uses `widgets-dev:latest` as the base image.
 - Project-level config is permitted, but only the `volumes` key — not `image`, `network`, or anything else.
 
-**Note:** project paths must be **absolute** and match the workdir exactly. Tilde expansion (e.g. `[projects."~/code/widgets"]`) is not yet supported — follow [phx-filters#92](https://github.com/phx-nz/phx-filters/issues/92) for updates.
+**Note:** project paths must be **absolute** and match the *resolved* workdir exactly. paddock resolves the workdir — making it absolute and following symlinks — before both the `[projects]` lookup and the mounts, so the key must be the real path, not a symlinked one. Tilde expansion (e.g. `[projects."~/code/widgets"]`) is not yet supported — follow [phx-filters#92](https://github.com/phx-nz/phx-filters/issues/92) for updates.
 
 ## The allowlist
 
@@ -68,6 +82,8 @@ Each gated source has an entry in `[config.allowlist]`. Valid values are:
 
 List entries are validated against the known config key paths. An unknown path (e.g. a typo like `"imgae"`) is rejected when the user config is loaded.
 
+**Validation runs before filtering.** An enabled source is validated as a whole, and only then does the allowlist project it down to the permitted keys. An invalid value in a key the rule would have dropped still aborts the run: under `project_toml = ["volumes"]`, a project file containing `image = ""` fails with `[project_toml:image] Non-empty value expected.` A malformed project file therefore aborts the run for every operator who has opted in, however narrow their grant.
+
 To disable env-var overrides entirely:
 
 ```toml
@@ -75,12 +91,14 @@ To disable env-var overrides entirely:
 env = false
 ```
 
-To restrict CLI flags to `--image` only:
+To let the command line contribute only `image`:
 
 ```toml
 [config.allowlist]
 cli = ["image"]
 ```
+
+Flags that carry no config key — `--config-file`, `--dry-run`, `--quiet`, `--workdir` — keep working regardless.
 
 ## Precedence
 
@@ -114,6 +132,14 @@ When project-level config is enabled, paddock:
 2. Mounts it into the container at the same absolute path, **read-only** by default.
 3. After the container exits, removes `.paddock/` — but only if paddock created it and it is still empty. If it has contents, paddock logs a warning and leaves the directory in place for you to inspect.
 
+A `.paddock` that is a symlink is rejected rather than followed:
+
+```
+<path> is a symlink; paddock will not mount a symlinked project config directory
+```
+
+When project-level config is *disabled*, none of this happens: paddock leaves any `.paddock` file, directory, or symlink alone and makes no mount.
+
 To allow the agent to write files into `.paddock/` (e.g. to persist state between runs), disable read-only mounting:
 
 ```toml
@@ -131,17 +157,29 @@ project_dir_readonly = false
 
 ## Warning behaviour
 
-Whenever a gated source (`project_toml`, `env`, or `cli`) contributes config but is blocked by the allowlist, paddock logs a warning at `WARNING` level:
+The allowlist produces two warnings at `WARNING` level.
+
+A gated source (`project_toml`, `env`, or `cli`) contributed keys the rule does not permit — whether the source is wholly or partly disabled:
 
 ```
-project_toml contributed config but project_toml is not in [config.allowlist] — ignored
+<source>: dropped non-allowlisted keys <paths> — add them to [config.allowlist].<source> to keep them
 ```
 
-This is intentional: paddock loads every source unconditionally so it can warn you when config is being silently dropped, rather than failing in unexpected ways or hiding the fact that a project file was present.
+`<paths>` lists the dotted leaf paths dropped (`image`, `build.dockerfile`), with `volumes` and `build.args` reported as single paths rather than one entry per mapping.
+
+A source that is disabled failed validation — malformed TOML, an unknown key, or a bad value. Its errors are discarded with it rather than aborting the run, and it contributes nothing, so no keys are dropped:
+
+```
+<source> source had errors but is disabled by [config.allowlist] — ignored
+```
+
+This is intentional: paddock loads every source unconditionally so it can warn you when config is being silently dropped, rather than hiding the fact that a project file was present.
+
+`--quiet` disables all logging, these warnings included; fatal config errors still print.
 
 ## Troubleshooting
 
-**`ExceptionGroup: config validation failed` / `[user:...] ...`**
+**`[user:<key>] ...`**
 
 Your user config contains invalid TOML or a value that fails schema validation. Run paddock with a minimal user config to isolate the problem. Common causes:
 
@@ -149,13 +187,37 @@ Your user config contains invalid TOML or a value that fails schema validation. 
 - An unrecognised allowlist source key (only `cli`, `env`, and `project_toml` are valid).
 - An allowlist value that is neither `true`, `false`, nor a list of strings.
 
-**`[final:image] Non-empty value expected`**
+**`[project_toml] This value is not valid TOML.`**
+
+The project file (`<workdir>/.paddock/config.toml`) does not parse. It aborts the run for anyone who has opted in — see [The allowlist](#the-allowlist).
+
+**`[env:foo] Unexpected key "foo".`**
+
+A `PADDOCK_*` variable whose name maps to no config field — usually a typo. Unset it, or correct the name.
+
+**`[env:volumes] str is not valid (allowed types: dict).`**
+
+`volumes` has no environment-variable form. Set it in a TOML file, or pass `--volume` on the command line. (`build.args` has none either, but `PADDOCK_BUILD_ARGS` is ignored rather than rejected — use `--build-args-KEY=VALUE`.)
+
+**`[agent] Unknown agent "…"; installed agents: …`**
+
+The configured agent key is not registered. Use one of the agents the message lists, or install the package that provides the one you want.
+
+**`[final:image] Non-empty value expected.`**
 
 No source supplied a Docker image. Set `image` in your user config or pass `--image` on the command line.
 
-**`.paddock exists but is not a directory`**
+**`<path> exists but is not a directory; paddock cannot mount it as the project config directory`**
 
 A file named `.paddock` exists in the project workdir. Rename or remove it, then run paddock again.
+
+**`[workdir] Path "…" does not exist or is not a directory`**
+
+`--workdir` (or the current directory) does not resolve to a directory. paddock exits before reading any config.
+
+**`project_toml: dropped non-allowlisted keys ... — add them to [config.allowlist].project_toml to keep them`**
+
+Every key in the project file was dropped: your user config has no `[config.allowlist]` grant for `project_toml` — which is off by default (blocked) — or a grant that names none of the keys the file sets. See [Enabling project-level config](#enabling-project-level-config).
 
 **Project config is loaded but some keys are ignored**
 
