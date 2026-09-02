@@ -111,7 +111,16 @@ def parse_args(argv: list[str]) -> ParsedArgs:
         else:
             filtered.append(entry)
 
-    parser = argparse.ArgumentParser(prog="paddock", add_help=True)
+    parser = argparse.ArgumentParser(
+        prog="paddock",
+        usage="paddock [FLAGS] [--] [COMMAND...]",
+        epilog="  --build-args-KEY=VALUE   Build-time ARG (repeatable)\n"
+        "\n"
+        "Everything after the first positional argument, or after '--', "
+        "is passed to the container as its command.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        add_help=True,
+    )
     parser.add_argument("--agent")
     parser.add_argument("--build-context")
     parser.add_argument("--build-dockerfile")

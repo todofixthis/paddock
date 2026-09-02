@@ -42,6 +42,31 @@ def test_dry_run_exits_zero(capsys, minimal_config: Path, mocker, monkeypatch):
     assert "docker" in captured.out
 
 
+def test_dry_run_prints_a_re_runnable_command(
+    capsys, minimal_config: Path, mocker, monkeypatch
+):
+    """The echoed docker command quotes argv elements containing spaces.
+
+    A container command like ``bash -c 'cat /probe.txt'`` must be echoed
+    with the single-quoted argument intact, so pasting the printed line
+    back into a shell reproduces the same argv rather than splitting
+    "cat /probe.txt" into two words.
+    """
+    monkeypatch.chdir(minimal_config)
+    mock_run = mocker.patch("paddock.__main__.subprocess.run")
+    mocker.patch(
+        "paddock.docker.builder.DockerCommandBuilder._container_name_available",
+        return_value=True,
+    )
+    with pytest.raises(SystemExit) as exc:
+        run(["--dry-run", "--", "bash", "-c", "cat /probe.txt"])
+    assert exc.value.code == 0
+    mock_run.assert_not_called()
+    captured = capsys.readouterr()
+    assert "bash -c 'cat /probe.txt'" in captured.out
+    assert captured.out.split()[0] == "docker"
+
+
 def test_quiet_suppresses_all_output(capsys, minimal_config: Path, mocker, monkeypatch):
     """--quiet produces no output at all."""
     monkeypatch.chdir(minimal_config)

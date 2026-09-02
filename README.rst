@@ -207,9 +207,8 @@ CLI flags
    --volume HOST:CONTAINER[:MODE]  Extra bind-mount (repeatable)
    --workdir PATH               Host path to use as the workspace (default: CWD)
 
-``--build-args-KEY=VALUE`` is not listed by ``paddock --help``, but it is
-supported.  ``--workdir`` is resolved to an absolute real path — symlinks
-followed — before it is used for the ``[projects]`` lookup and for the mounts.
+``--workdir`` is resolved to an absolute real path — symlinks followed —
+before it is used for the ``[projects]`` lookup and for the mounts.
 
 paddock exits with the container's exit status; ``--dry-run`` exits 0 and a
 config error exits 1.

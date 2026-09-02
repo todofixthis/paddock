@@ -1,5 +1,6 @@
 import logging
 import os
+import shlex
 import subprocess
 import sys
 from pathlib import Path
@@ -138,7 +139,7 @@ def run(argv: list[str] | None = None) -> None:
             ).build(command=parsed.command)
 
             if not parsed.quiet:
-                print(" ".join(docker_argv))
+                print(shlex.join(docker_argv))
 
             if parsed.dry_run:
                 sys.exit(0)
