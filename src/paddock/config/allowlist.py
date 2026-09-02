@@ -1,5 +1,7 @@
 from typing import Any, cast
 
+from paddock.config.fields import CONFIG_FIELDS
+
 
 class Allowlist:
     """Applies ``[config.allowlist]`` rules to a source's validated config.
@@ -80,19 +82,45 @@ class Allowlist:
         Returns:
             A ``(kept, dropped)`` tuple: ``kept`` is a filtered copy of
             ``config`` containing only the allowed keys, and ``dropped`` is
-            the sorted list of top-level keys removed, for a single
+            the sorted list of dotted leaf paths removed, for a single
             consolidated warning.
         """
         if source_key == "user":
             return dict(config), []
         if not self.is_enabled(source_key):
-            return {}, sorted(config)
+            return {}, sorted(self._leaf_paths(config))
         value = self._rules.get(source_key, False)
         if value is True:
             return dict(config), []
         kept = self._project(config, cast(list[str], value))
-        dropped = sorted(set(config) - set(kept))
+        dropped = sorted(set(self._leaf_paths(config)) - set(self._leaf_paths(kept)))
         return kept, dropped
+
+    def _leaf_paths(self, config: dict, prefix: str = "") -> list[str]:
+        """List every leaf of ``config`` as a dotted path.
+
+        Descends only where :data:`CONFIG_FIELDS` declares children, so a
+        dropped sibling is named in full (``build.dockerfile``) while a
+        free-form map (``build.args``, ``volumes``) stays one path — its
+        keys are user data, not schema fields, and must never reach a
+        warning. ``CONFIG_FIELDS`` keys are top-level only, so any nested
+        path is a leaf; an empty table is likewise a leaf.
+
+        Args:
+            config: Dict to walk.
+            prefix: Dotted path of ``config`` itself, ``"."``-terminated.
+
+        Returns:
+            The dotted paths of every leaf, in traversal order.
+        """
+        paths: list[str] = []
+        for key, value in config.items():
+            path = f"{prefix}{key}"
+            if isinstance(value, dict) and value and CONFIG_FIELDS.get(path):
+                paths.extend(self._leaf_paths(value, f"{path}."))
+            else:
+                paths.append(path)
+        return paths
 
     def _project(self, config: dict, paths: list[str]) -> dict:
         """Build a new dict from ``config`` containing only the given dotted paths.

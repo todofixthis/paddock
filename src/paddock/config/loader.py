@@ -248,8 +248,11 @@ class ConfigLoader:
         errors: list[ConfigError] = []
         for source_key, runner in bad:
             for key, messages in runner.errors.items():
+                # A failure at the root of a source's chain (e.g. undecodable
+                # TOML) has no key, so the label is the source alone.
+                label = f"{source_key}:{key}" if key else source_key
                 for msg in messages:
-                    errors.append(ConfigError(f"[{source_key}:{key}] {msg['message']}"))
+                    errors.append(ConfigError(f"[{label}] {msg['message']}"))
         return ExceptionGroup("config validation failed", errors)
 
     def _deep_merge(self, base: dict, override: dict) -> dict:

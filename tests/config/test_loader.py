@@ -452,3 +452,59 @@ def test_project_dir_readonly_false(tmp_path: Path, monkeypatch):
     )
     r = ConfigLoader().resolve(_empty_parsed(), workdir=tmp_path, environ={})
     assert r.project_dir_readonly is False
+
+
+def test_dropped_nested_key_warns_with_its_dotted_path(
+    tmp_path: Path, monkeypatch, caplog
+):
+    """A nested key dropped from a kept table is named in full."""
+    _setup_home(
+        tmp_path,
+        monkeypatch,
+        'agent = "claude"\n[config.allowlist]\nproject_toml = ["image"]\n',
+    )
+    dockerfile = tmp_path / "Dockerfile"
+    dockerfile.write_text("FROM ubuntu:22.04\n")
+    pd = tmp_path / ".paddock"
+    pd.mkdir()
+    (pd / "config.toml").write_text(
+        f'image = "p:2"\n[build]\ndockerfile = "{dockerfile}"\n'
+    )
+    with caplog.at_level(logging.WARNING, logger="paddock"):
+        r = ConfigLoader().resolve(_empty_parsed(), workdir=tmp_path, environ={})
+    assert r.config["image"] == "p:2"
+    assert r.config.get("build") is None
+    warnings = [rec.message for rec in caplog.records]
+    assert (
+        "project_toml: dropped non-allowlisted keys build.dockerfile — add them "
+        "to [config.allowlist].project_toml to keep them" in warnings
+    )
+
+
+def test_root_error_omits_the_empty_key(tmp_path: Path, monkeypatch):
+    """A failure with no key (undecodable TOML) reads ``[project_toml]``."""
+    _setup_home(
+        tmp_path,
+        monkeypatch,
+        'image = "u"\nagent = "claude"\n' "[config.allowlist]\nproject_toml = true\n",
+    )
+    pd = tmp_path / ".paddock"
+    pd.mkdir()
+    (pd / "config.toml").write_text("not = valid = toml")
+    with pytest.raises(ExceptionGroup) as exc:
+        ConfigLoader().resolve(_empty_parsed(), workdir=tmp_path, environ={})
+    messages = [str(e) for e in exc.value.exceptions]
+    assert messages == ["[project_toml] This value is not valid TOML."]
+
+
+def test_keyed_error_keeps_source_and_key(tmp_path: Path, monkeypatch):
+    """A failure on a named key still reads ``[source:key]``."""
+    _setup_home(tmp_path, monkeypatch, 'image = "u"\nagent = "claude"\n')
+    with pytest.raises(ExceptionGroup) as exc:
+        ConfigLoader().resolve(
+            _empty_parsed(),
+            workdir=tmp_path,
+            environ={"PADDOCK_BUILD_POLICY": "bogus"},
+        )
+    messages = [str(e) for e in exc.value.exceptions]
+    assert messages[0].startswith("[env:PADDOCK_BUILD_POLICY] ")
