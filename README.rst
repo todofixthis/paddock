@@ -41,7 +41,7 @@ higher-priority source replaces the earlier mapping.
 
 The project-level file is off by default (blocked) — enable it in the user
 file's ``[config.allowlist]``; see
-`project-level configuration and the allowlist <https://github.com/phx/paddock/blob/main/docs/usage/project-config.md>`__.
+`project-level configuration and the allowlist <https://github.com/todofixthis/paddock/blob/main/docs/usage/project-config.md>`__.
 
 Requirements
 ------------
@@ -100,7 +100,7 @@ project-level file is off by default until you opt in from your user config:
 
 ``true`` is the blanket grant; a list such as ``project_toml = ["volumes"]``
 permits only the keys it names.  See
-`project-level configuration and the allowlist <https://github.com/phx/paddock/blob/main/docs/usage/project-config.md>`__
+`project-level configuration and the allowlist <https://github.com/todofixthis/paddock/blob/main/docs/usage/project-config.md>`__
 for what each grant hands a committed file.
 
 A config file looks like this:
