@@ -36,20 +36,28 @@ class ProjectDirManager:
     def __enter__(self) -> tuple[str, VolumeSpec] | None:
         """Ensures ``.paddock`` exists and returns its mount spec.
 
-        Creates the directory if it does not exist. Raises if the path exists
-        but is not a directory. Returns ``None`` without touching the
-        filesystem when the manager is disabled.
+        Creates the directory if it does not exist. Raises if the path is a
+        symlink, or exists but is not a directory. Returns ``None`` without
+        touching the filesystem when the manager is disabled.
 
         Returns:
             A 2-tuple of ``(host_path, VolumeSpec)``, or ``None`` when
             disabled.
 
         Raises:
-            PaddockEnvironmentError: When ``.paddock`` exists but is not a
-                directory.
+            PaddockEnvironmentError: When ``.paddock`` is a symlink, or
+                exists but is not a directory.
         """
         if not self._enabled:
             return None
+        # Checked first because exists()/is_dir() follow the link: a symlinked
+        # directory would pass the check below, and a dangling one reports
+        # exists() False and falls through to mkdir().
+        if self._dir.is_symlink():
+            raise PaddockEnvironmentError(
+                f"{self._dir} is a symlink; paddock will not mount a symlinked "
+                "project config directory"
+            )
         if self._dir.exists() and not self._dir.is_dir():
             raise PaddockEnvironmentError(
                 f"{self._dir} exists but is not a directory; paddock cannot "

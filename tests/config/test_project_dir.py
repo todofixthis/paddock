@@ -66,3 +66,50 @@ def test_exit_silent_when_dir_removed_inside_context(tmp_path: Path):
     with ProjectDirManager(tmp_path, readonly=True, enabled=True):
         (tmp_path / ".paddock").rmdir()
     assert not (tmp_path / ".paddock").exists()
+
+
+def test_symlink_to_directory_raises_and_is_left_untouched(tmp_path: Path):
+    target = tmp_path / "elsewhere"
+    target.mkdir()
+    link = tmp_path / ".paddock"
+    link.symlink_to(target)
+    with pytest.raises(
+        PaddockEnvironmentError, match="is a symlink; paddock will not mount"
+    ):
+        with ProjectDirManager(tmp_path, readonly=False, enabled=True):
+            pass
+    assert link.is_symlink()
+    assert link.readlink() == target
+
+
+def test_symlink_to_file_raises_and_is_left_untouched(tmp_path: Path):
+    target = tmp_path / "secret.txt"
+    target.write_text("secret")
+    link = tmp_path / ".paddock"
+    link.symlink_to(target)
+    with pytest.raises(
+        PaddockEnvironmentError, match="is a symlink; paddock will not mount"
+    ):
+        with ProjectDirManager(tmp_path, readonly=True, enabled=True):
+            pass
+    assert link.is_symlink()
+    assert target.read_text() == "secret"
+
+
+def test_dangling_symlink_raises_and_is_left_untouched(tmp_path: Path):
+    link = tmp_path / ".paddock"
+    link.symlink_to(tmp_path / "gone")
+    with pytest.raises(
+        PaddockEnvironmentError, match="is a symlink; paddock will not mount"
+    ):
+        with ProjectDirManager(tmp_path, readonly=True, enabled=True):
+            pass
+    assert link.is_symlink()
+
+
+def test_disabled_ignores_a_symlinked_project_dir(tmp_path: Path):
+    """The symlink check sits inside the ``enabled`` guard."""
+    link = tmp_path / ".paddock"
+    link.symlink_to(tmp_path)
+    with ProjectDirManager(tmp_path, readonly=True, enabled=False) as vol:
+        assert vol is None
