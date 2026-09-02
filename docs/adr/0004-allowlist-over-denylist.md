@@ -1,16 +1,16 @@
 ---
 status: Accepted
 date: 2026-06-17
-tags: [allowlist, config, security, threat-model]
+scope: [src/paddock/config/allowlist.py, src/paddock/config/loader.py, src/paddock/config/schema.py, src/paddock/config/sources/]
 summary: Gate untrusted config sources with a per-source allowlist (opt-in), not a denylist, and disable project_toml by default as its application.
 ---
 
-# 0003: Allowlist Over Denylist for Untrusted Config Sources
+# 0004: Allowlist Over Denylist for Untrusted Config Sources
 
 ## Context
 
 As project-level config (`.paddock/config.toml`) is introduced on top of the source
-architecture in [0002](0002-registry-driven-config-sources.md), the risk of an untrusted
+architecture in [0003](0003-registry-driven-config-sources.md), the risk of an untrusted
 source (a checked-in project file, an unreviewed env override) silently taking over
 container behaviour — image, volumes, network — increases. Project contributors must
 not be able to force arbitrary container behaviour on team members simply by committing
@@ -99,7 +99,7 @@ Subsidiary decisions recorded here to avoid re-litigation:
   on a per-source-key basis for that project only.
 
 - **`AllowlistEntry` defers `allowlist_directives()` resolution** — the set of valid
-  dotted paths (see [0002](0002-registry-driven-config-sources.md) for the declarative
+  dotted paths (see [0003](0003-registry-driven-config-sources.md) for the declarative
   `CONFIG_FIELDS` source) is fetched at validation time, not import time, to avoid a
   circular import between `filters.py` and `schema.py`. This is the one permitted
   deferred-import location in this branch.
@@ -116,6 +116,6 @@ Subsidiary decisions recorded here to avoid re-litigation:
   misconfigured grant surfaces only in the logs — and `--quiet` suppresses it. That
   debugging cost is accepted in exchange for a safe-by-default posture.
 - Because the valid allowlist keys are static rather than registry-derived (see
-  [0002](0002-registry-driven-config-sources.md)), an operator auditing "what may
+  [0003](0003-registry-driven-config-sources.md)), an operator auditing "what may
   `project_toml` set today" must read `ALLOWLIST_DEFAULT` across the source classes;
   there is no single enumerated list to consult.

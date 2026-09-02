@@ -1,11 +1,11 @@
 ---
 status: Accepted
 date: 2026-06-17
-tags: [architecture, config, config-sources, registry]
+scope: [src/paddock/config/loader.py, src/paddock/config/sources/]
 summary: Load configuration through a registry-driven ConfigSource architecture with a source-owned LoadResult boundary, replacing the monolithic flat loader.
 ---
 
-# 0002: Registry-Driven Config Source Architecture
+# 0003: Registry-Driven Config Source Architecture
 
 ## Context
 
@@ -120,7 +120,7 @@ Subsidiary decisions recorded here to avoid re-litigation:
 
 Allowlist gating of *which keys* an untrusted source may contribute — including the
 `project_toml` off-by-default posture — is a separate security decision; see
-[0003](0003-allowlist-over-denylist.md).
+[0004](0004-allowlist-over-denylist.md).
 
 ## Consequences
 

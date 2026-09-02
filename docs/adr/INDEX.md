@@ -2,8 +2,8 @@
 
 # ADR Index
 
-| # | Status | Title | Tags | Summary |
-|---|--------|-------|------|---------|
-| [0001](0001-add-mypy-type-checker.md) | Accepted | Add mypy as Type Checker | autohooks, mypy, pre-commit, tooling, ty, type-checking | Use mypy (not Astral ty) for static type checking via autohooks-plugin-mypy; revisit ty once it stabilises and ships an autohooks plugin. |
-| [0002](0002-registry-driven-config-sources.md) | Accepted | Registry-Driven Config Source Architecture | architecture, config, config-sources, registry | Load configuration through a registry-driven ConfigSource architecture with a source-owned LoadResult boundary, replacing the monolithic flat loader. |
-| [0003](0003-allowlist-over-denylist.md) | Accepted | Allowlist Over Denylist for Untrusted Config Sources | allowlist, config, security, threat-model | Gate untrusted config sources with a per-source allowlist (opt-in), not a denylist, and disable project_toml by default as its application. |
+| # | Status | Title | Scope | Summary | Revisit |
+|---|--------|-------|-------|---------|---------|
+| [0001](0001-add-mypy-type-checker.md) | Accepted | Add mypy as Type Checker | pyproject.toml | Use mypy (not Astral ty) for static type checking via autohooks-plugin-mypy. | ty stabilises (leaves 0.0.x) and ships a published autohooks plugin. |
+| [0003](0003-registry-driven-config-sources.md) | Accepted | Registry-Driven Config Source Architecture | src/paddock/config/loader.py, src/paddock/config/sources/ | Load configuration through a registry-driven ConfigSource architecture with a source-owned LoadResult boundary, replacing the monolithic flat loader. |  |
+| [0004](0004-allowlist-over-denylist.md) | Accepted | Allowlist Over Denylist for Untrusted Config Sources | src/paddock/config/allowlist.py, src/paddock/config/loader.py, src/paddock/config/schema.py, src/paddock/config/sources/ | Gate untrusted config sources with a per-source allowlist (opt-in), not a denylist, and disable project_toml by default as its application. |  |
