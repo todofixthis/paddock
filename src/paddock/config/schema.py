@@ -50,7 +50,7 @@ def _build_schema(merged: bool):
     )
 
 
-def _standard_fields(merged: bool) -> dict[str, object]:
+def _standard_fields(merged: bool) -> dict[str, f.FilterCompatible]:
     """Top-level standard config fields. Mode-aware.
 
     In merged mode required fields disallow ``None``; in per-source mode they
