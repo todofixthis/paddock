@@ -13,7 +13,6 @@ def _ctx(tmp_path, user_path) -> ConfigContext:
         build_dockerfile=None,
         build_policy=None,
         command=[],
-        config_file=None,
         dry_run=False,
         image=None,
         network=None,
