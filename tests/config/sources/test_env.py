@@ -13,7 +13,6 @@ def _ctx(tmp_path: Path, environ: dict) -> ConfigContext:
         build_dockerfile=None,
         build_policy=None,
         command=[],
-        config_file=None,
         dry_run=False,
         image=None,
         network=None,
@@ -82,8 +81,6 @@ def test_non_paddock_vars_ignored(tmp_path):
 
 
 def test_loader_keys_are_skipped(tmp_path):
-    """PADDOCK_CONFIG_FILE and PADDOCK_BUILD_ARGS are handled by other sources."""
-    result = EnvConfigSource().load(
-        _ctx(tmp_path, {"PADDOCK_CONFIG_FILE": "/x", "PADDOCK_BUILD_ARGS": "foo"})
-    )
+    """PADDOCK_BUILD_ARGS is handled by another source."""
+    result = EnvConfigSource().load(_ctx(tmp_path, {"PADDOCK_BUILD_ARGS": "foo"}))
     assert result.instance.cleaned_data == {}

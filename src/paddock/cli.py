@@ -8,7 +8,6 @@ _KNOWN_VALUE_FLAGS = frozenset(
         "--build-context",
         "--build-dockerfile",
         "--build-policy",
-        "--config-file",
         "--image",
         "--network",
         "--volume",
@@ -25,7 +24,6 @@ class ParsedArgs:
     build_dockerfile: str | None
     build_policy: str | None
     command: list[str]
-    config_file: str | None
     dry_run: bool
     image: str | None
     network: str | None
@@ -125,7 +123,6 @@ def parse_args(argv: list[str]) -> ParsedArgs:
     parser.add_argument("--build-context")
     parser.add_argument("--build-dockerfile")
     parser.add_argument("--build-policy")
-    parser.add_argument("--config-file")
     parser.add_argument("--dry-run", action="store_true", default=False)
     parser.add_argument("--image")
     parser.add_argument("--network")
@@ -147,7 +144,6 @@ def parse_args(argv: list[str]) -> ParsedArgs:
         build_dockerfile=namespace.build_dockerfile,
         build_policy=namespace.build_policy,
         command=command,
-        config_file=namespace.config_file,
         dry_run=namespace.dry_run,
         image=namespace.image,
         network=namespace.network,

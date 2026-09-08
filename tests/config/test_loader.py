@@ -20,7 +20,6 @@ def _empty_parsed() -> ParsedArgs:
         build_dockerfile=None,
         build_policy=None,
         command=[],
-        config_file=None,
         dry_run=False,
         image=None,
         network=None,
@@ -395,19 +394,6 @@ def test_project_toml_invalid_but_blocked_downgraded_to_warning(
     with caplog.at_level(logging.WARNING, logger="paddock"):
         r = ConfigLoader().resolve(_empty_parsed(), workdir=tmp_path, environ={})
     assert r.config["image"] == "u"
-
-
-def test_extra_config_section_is_ignored(tmp_path: Path, monkeypatch):
-    """[config] in an extra config file is intentionally not treated as meta."""
-    _setup_home(tmp_path, monkeypatch, 'agent = "claude"\nimage = "u"\n')
-    extra = tmp_path / "extra.toml"
-    extra.write_text('network = "extra-net"\n[config.allowlist]\nproject_toml = true\n')
-    parsed = _empty_parsed()
-    parsed.config_file = str(extra)
-    r = ConfigLoader().resolve(parsed, workdir=tmp_path, environ={})
-    assert r.config["network"] == "extra-net"
-    # project_toml is not enabled by the ignored [config] block in the extra file.
-    assert r.project_toml_enabled is False
 
 
 def test_invalid_source_raises_exception_group(tmp_path: Path, monkeypatch):

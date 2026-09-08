@@ -12,7 +12,6 @@ def _empty_parsed() -> ParsedArgs:
         build_dockerfile=None,
         build_policy=None,
         command=[],
-        config_file=None,
         dry_run=False,
         image=None,
         network=None,

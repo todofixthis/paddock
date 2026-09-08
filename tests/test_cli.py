@@ -121,12 +121,6 @@ def test_workdir_flag():
     assert result.workdir == "/tmp/myproject"
 
 
-def test_config_file_flag():
-    """--config-file injects an extra config file into the hierarchy after project config."""
-    result = parse_args(["--config-file=/tmp/extra.toml"])
-    assert result.config_file == "/tmp/extra.toml"
-
-
 def test_help_documents_build_args_flag(capsys):
     """--help documents --build-args-KEY=VALUE, which argparse never sees."""
     with pytest.raises(SystemExit) as exc:

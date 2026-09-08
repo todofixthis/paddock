@@ -16,7 +16,6 @@ def _ctx(tmp_path: Path) -> ConfigContext:
         build_dockerfile=None,
         build_policy=None,
         command=[],
-        config_file=None,
         dry_run=False,
         image=None,
         network=None,
@@ -48,7 +47,7 @@ def test_registry_iteration_is_weight_ordered():
 
     keys_in_order = list(source_registry.keys())
     # The five "real" sources in their expected order:
-    expected = ["project_toml", "user", "project_overrides", "extra", "env", "cli"]
+    expected = ["project_toml", "user", "project_overrides", "env", "cli"]
     # Filter out the test class
     keys_in_order = [k for k in keys_in_order if k in expected]
     assert keys_in_order == expected
