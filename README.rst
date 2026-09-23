@@ -204,6 +204,7 @@ CLI flags
    --image IMAGE                Docker image
    --network NETWORK            Docker network
    --quiet                      Suppress all logging and the docker command printout
+   --version                    Print the paddock version and exit
    --volume HOST:CONTAINER[:MODE]  Extra bind-mount (repeatable)
    --workdir PATH               Host path to use as the workspace (default: CWD)
 

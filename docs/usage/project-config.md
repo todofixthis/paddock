@@ -95,7 +95,7 @@ To let the command line contribute only `image`:
 cli = ["image"]
 ```
 
-Flags that carry no config key — `--dry-run`, `--quiet`, `--workdir` — keep working regardless.
+Flags that carry no config key — `--dry-run`, `--quiet`, `--version`, `--workdir` — keep working regardless.
 
 ## Precedence
 
