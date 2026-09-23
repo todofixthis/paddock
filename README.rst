@@ -285,6 +285,9 @@ Build the image manually:
 Or set a ``[build]`` table in your config and let paddock build it
 automatically according to your chosen policy.
 
+For what a custom image needs, and troubleshooting one that won't start, see
+`custom Docker images <https://github.com/todofixthis/paddock/blob/main/docs/usage/docker-images.md>`__.
+
 Licence
 -------
 
