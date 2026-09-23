@@ -1,5 +1,6 @@
 import pytest
 
+from paddock import __version__
 from paddock.cli import parse_args
 
 
@@ -128,6 +129,21 @@ def test_help_documents_build_args_flag(capsys):
     assert exc.value.code == 0
     captured = capsys.readouterr()
     assert "--build-args-KEY=VALUE" in captured.out
+
+
+def test_version_flag(capsys):
+    """--version prints the package version and exits 0."""
+    with pytest.raises(SystemExit) as exc:
+        parse_args(["--version"])
+    assert exc.value.code == 0
+    captured = capsys.readouterr()
+    assert captured.out == f"paddock {__version__}\n"
+
+
+def test_version_after_positional_passes_to_command():
+    """--version after a positional belongs to the container command."""
+    result = parse_args(["claude", "--version"])
+    assert result.command == ["claude", "--version"]
 
 
 def test_build_flags():

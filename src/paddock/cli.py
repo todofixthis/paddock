@@ -1,7 +1,9 @@
 import argparse
 from dataclasses import dataclass
 
-_KNOWN_BOOL_FLAGS = frozenset({"--dry-run", "--quiet"})
+from paddock import __version__
+
+_KNOWN_BOOL_FLAGS = frozenset({"--dry-run", "--quiet", "--version"})
 _KNOWN_VALUE_FLAGS = frozenset(
     {
         "--agent",
@@ -127,6 +129,9 @@ def parse_args(argv: list[str]) -> ParsedArgs:
     parser.add_argument("--image")
     parser.add_argument("--network")
     parser.add_argument("--quiet", action="store_true", default=False)
+    parser.add_argument(
+        "--version", action="version", version=f"%(prog)s {__version__}"
+    )
     parser.add_argument("--volume", action="append", default=[])
     parser.add_argument("--workdir")
 
