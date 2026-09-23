@@ -32,7 +32,7 @@ project_toml = ["volumes"]
 
 - `build.dockerfile` / `build.context` — paddock runs `docker build` on the host, from the project's Dockerfile and context.
 - `volumes` — any existing host path, including `~`-relative ones expanded against *your* home, mounted `rw` if the mapping says so.
-- `agent` — selecting `claude` mounts your `~/.claude` read-write.
+- `agent` — selecting `claude` mounts your `~/.claude` read-write, plus `~/.claude.json` if it exists.
 - `network` — including `host`.
 
 Granting `true` is the same decision as ticking "I trust this project" when an IDE or coding agent opens a repository, taken once for every repository at once. Reserve it for repositories you would run a script from.
