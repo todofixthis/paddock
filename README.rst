@@ -230,7 +230,8 @@ Agents
 ~~~~~~~~~~
 
 Runs ``claude`` inside the container.  Mounts ``~/.claude`` from the host
-to ``/root/.claude:rw`` so authentication and configuration persist between
+to ``/root/.claude:rw``, and ``~/.claude.json`` to ``/root/.claude.json:rw``
+if it exists, so authentication, onboarding and configuration persist between
 sessions.
 
 ``false`` (shell)
