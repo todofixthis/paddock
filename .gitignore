@@ -6,6 +6,9 @@ __pycache__/
 .agents/worktrees/
 .claude/settings.local.json
 
+# Docs build output
+docs/_build/
+
 # Distribution / packaging
 *.egg-info/
 dist/
