@@ -35,8 +35,14 @@ class DockerCommandBuilder:
         self._workdir = workdir
         self._project_dir_volume = project_dir_volume
 
-    def build(self, *, command: list[str]) -> list[str]:
-        """Assemble the full 'docker run' argv list."""
+    def build(self, *, agent_args: list[str], command: list[str]) -> list[str]:
+        """Assemble the full 'docker run' argv list.
+
+        Args:
+            agent_args: Arguments appended to the agent's default command.
+                Ignored when ``command`` is non-empty.
+            command: Replaces the agent's default command when non-empty.
+        """
         argv = ["docker", "run", "--rm", "-it"]
         argv += ["--name", self._resolve_container_name()]
         argv += [f"--workdir={self._workdir}"]
@@ -57,7 +63,7 @@ class DockerCommandBuilder:
         if self._config.get("network"):
             argv += ["--network", self._config["network"]]
         argv.append(self._config["image"])
-        argv += command if command else self._agent.get_command()
+        argv += command if command else self._agent.get_command() + agent_args
         return argv
 
     def _resolve_container_name(self) -> str:

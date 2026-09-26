@@ -136,7 +136,7 @@ def run(argv: list[str] | None = None) -> None:
                 agent=agent,
                 workdir=workdir,
                 project_dir_volume=project_dir_volume,
-            ).build(command=parsed.command)
+            ).build(agent_args=parsed.agent_args, command=parsed.command)
 
             if not parsed.quiet:
                 print(shlex.join(docker_argv))

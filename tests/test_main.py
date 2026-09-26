@@ -59,12 +59,30 @@ def test_dry_run_prints_a_re_runnable_command(
         return_value=True,
     )
     with pytest.raises(SystemExit) as exc:
-        run(["--dry-run", "--", "bash", "-c", "cat /probe.txt"])
+        run(["--dry-run", "bash", "-c", "cat /probe.txt"])
     assert exc.value.code == 0
     mock_run.assert_not_called()
     captured = capsys.readouterr()
     assert "bash -c 'cat /probe.txt'" in captured.out
     assert captured.out.split()[0] == "docker"
+
+
+def test_double_dash_args_reach_the_agent_command(
+    capsys, minimal_config: Path, mocker, monkeypatch
+):
+    """Arguments after '--' extend the agent's command rather than replace it."""
+    monkeypatch.chdir(minimal_config)
+    mocker.patch("paddock.__main__.subprocess.run")
+    mocker.patch(
+        "paddock.docker.builder.DockerCommandBuilder._container_name_available",
+        return_value=True,
+    )
+    with pytest.raises(SystemExit):
+        run(["--dry-run", "--", "--allow-dangerously-skip-permissions"])
+    captured = capsys.readouterr()
+    assert captured.out.strip().endswith(
+        "ubuntu:22.04 claude --allow-dangerously-skip-permissions"
+    )
 
 
 def test_quiet_suppresses_all_output(capsys, minimal_config: Path, mocker, monkeypatch):

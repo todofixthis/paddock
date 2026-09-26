@@ -8,6 +8,7 @@ from paddock.config.sources.project_toml import ProjectTomlSource
 def _ctx(tmp_path) -> ConfigContext:
     parsed = ParsedArgs(
         agent=None,
+        agent_args=[],
         build_args={},
         build_context=None,
         build_dockerfile=None,

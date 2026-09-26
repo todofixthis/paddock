@@ -192,7 +192,7 @@ CLI flags
 
 .. code-block:: text
 
-   paddock [FLAGS] [--] [COMMAND...]
+   paddock [FLAGS] [COMMAND... | -- AGENT_ARGS...]
 
    --agent AGENT                Agent key (e.g. "claude") or "false" for a shell
    --build-args-KEY=VALUE        Build-time ARG (repeatable)
@@ -214,13 +214,15 @@ before it is used for the ``[projects]`` lookup and for the mounts.
 paddock exits with the container's exit status; ``--dry-run`` exits 0 and a
 config error exits 1.
 
-Everything after the first positional argument (or after ``--``) is passed
-as the container command:
+Arguments after ``--`` are appended to the agent's command. A positional
+argument and everything after it replace the agent's command instead:
 
 .. code-block:: bash
 
-   paddock claude --allow-dangerously-skip-permissions --continue
-   paddock --image=my-claude-image -- --allow-dangerously-skip-permissions --continue
+   # Runs: claude --allow-dangerously-skip-permissions --continue
+   paddock --agent=claude -- --allow-dangerously-skip-permissions --continue
+   # Runs: bash
+   paddock bash
 
 
 Agents

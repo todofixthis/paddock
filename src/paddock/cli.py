@@ -21,6 +21,7 @@ _KNOWN_VALUE_FLAGS = frozenset(
 @dataclass
 class ParsedArgs:
     agent: str | bool | None
+    agent_args: list[str]
     build_args: dict[str, str]
     build_context: str | None
     build_dockerfile: str | None
@@ -34,13 +35,14 @@ class ParsedArgs:
     workdir: str | None
 
 
-def _split_argv(argv: list[str]) -> tuple[list[str], list[str]]:
+def _split_argv(argv: list[str]) -> tuple[list[str], list[str], list[str]]:
     """
-    Split argv into (paddock_flags, container_command).
+    Split argv into (paddock_flags, agent_args, container_command).
 
     Scans left-to-right collecting known paddock flags. Stops at:
-    - '--' (explicit split, consumed): rest becomes the command
-    - A non-flag token (positional): this token and everything after become the command
+    - '--' (consumed): the rest become arguments appended to the agent's command
+    - A non-flag token (positional): this token and everything after replace
+      the agent's command
 
     Unknown flags (starting with '--' but not in the known set) remain in
     paddock_flags so argparse can report them as errors.
@@ -51,7 +53,7 @@ def _split_argv(argv: list[str]) -> tuple[list[str], list[str]]:
         token = argv[i]
 
         if token == "--":
-            return paddock, argv[i + 1 :]
+            return paddock, argv[i + 1 :], []
 
         if token in _KNOWN_BOOL_FLAGS:
             paddock.append(token)
@@ -75,9 +77,9 @@ def _split_argv(argv: list[str]) -> tuple[list[str], list[str]]:
             continue
 
         # Positional — this token and everything after is the container command.
-        return paddock, argv[i:]
+        return paddock, [], argv[i:]
 
-    return paddock, []
+    return paddock, [], []
 
 
 def _parse_volume(value: str) -> tuple[str, str]:
@@ -97,9 +99,10 @@ def parse_args(argv: list[str]) -> ParsedArgs:
 
     Stops consuming paddock flags at the first positional arg or '--'. Unknown
     flags before either stop-point are errors. '--' is consumed; everything
-    after it becomes the container command, preserving any subsequent '--'.
+    after it is appended to the agent's command, preserving any subsequent
+    '--'. A positional and everything after it replace the agent's command.
     """
-    paddock_argv, command = _split_argv(argv)
+    paddock_argv, agent_args, command = _split_argv(argv)
 
     # Extract --build-args-<key>=<value> entries before argparse sees them.
     build_args: dict[str, str] = {}
@@ -113,11 +116,11 @@ def parse_args(argv: list[str]) -> ParsedArgs:
 
     parser = argparse.ArgumentParser(
         prog="paddock",
-        usage="paddock [FLAGS] [--] [COMMAND...]",
+        usage="paddock [FLAGS] [COMMAND... | -- AGENT_ARGS...]",
         epilog="  --build-args-KEY=VALUE   Build-time ARG (repeatable)\n"
         "\n"
-        "Everything after the first positional argument, or after '--', "
-        "is passed to the container as its command.",
+        "Arguments after '--' are appended to the agent's command. A positional "
+        "argument and everything after it replace the agent's command.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         add_help=True,
     )
@@ -144,6 +147,7 @@ def parse_args(argv: list[str]) -> ParsedArgs:
 
     return ParsedArgs(
         agent=namespace.agent,
+        agent_args=agent_args,
         build_args=build_args,
         build_context=namespace.build_context,
         build_dockerfile=namespace.build_dockerfile,

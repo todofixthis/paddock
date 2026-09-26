@@ -15,6 +15,7 @@ from paddock.config.sources.env import _env_schema
 def _empty_parsed() -> ParsedArgs:
     return ParsedArgs(
         agent=None,
+        agent_args=[],
         build_args={},
         build_context=None,
         build_dockerfile=None,
@@ -366,7 +367,7 @@ def test_project_toml_allowlist_restricts_keys(tmp_path: Path, monkeypatch, capl
     _setup_home(
         tmp_path,
         monkeypatch,
-        'agent = "claude"\n' '[config.allowlist]\nproject_toml = ["image"]\n',
+        'agent = "claude"\n[config.allowlist]\nproject_toml = ["image"]\n',
     )
     pd = tmp_path / ".paddock"
     pd.mkdir()
@@ -472,7 +473,7 @@ def test_root_error_omits_the_empty_key(tmp_path: Path, monkeypatch):
     _setup_home(
         tmp_path,
         monkeypatch,
-        'image = "u"\nagent = "claude"\n' "[config.allowlist]\nproject_toml = true\n",
+        'image = "u"\nagent = "claude"\n[config.allowlist]\nproject_toml = true\n',
     )
     pd = tmp_path / ".paddock"
     pd.mkdir()

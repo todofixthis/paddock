@@ -33,12 +33,13 @@ def test_positional_becomes_command():
     A bare positional argument and everything after it becomes the container command.
     'claude' is interpreted as a program name, not the paddock --agent flag.
     '--agent=plan' is a flag passed to the claude program, not to paddock.
-    Users who want to pass both --agent and a positional command must use '--'
-    to disambiguate (e.g. paddock --agent=opencode -- claude --agent=plan).
+    Arguments after '--' extend the agent's command instead
+    (e.g. paddock --agent=claude -- --agent=plan runs claude --agent=plan).
     """
     result = parse_args(["claude", "--agent=plan"])
     assert result.command == ["claude", "--agent=plan"]
     assert result.agent is None
+    assert result.agent_args == []
 
 
 def test_paddock_flags_before_positional():
@@ -49,20 +50,24 @@ def test_paddock_flags_before_positional():
 
 
 def test_double_dash_splits():
-    """'--' explicitly ends paddock arguments; everything after is the container command."""
+    """
+    '--' explicitly ends paddock arguments; everything after extends the agent's
+    command rather than replacing it.
+    """
     result = parse_args(["--image=foo", "--", "--resume"])
     assert result.image == "foo"
-    assert result.command == ["--resume"]
+    assert result.agent_args == ["--resume"]
+    assert result.command == []
 
 
 def test_double_dash_multiple_occurrences():
     """
-    Multiple '--' occurrences: only the first is treated as a paddock/command split.
-    Subsequent '--' are passed through to the container command unchanged.
+    Multiple '--' occurrences: only the first is treated as a paddock/agent split.
+    Subsequent '--' are passed through to the agent's command unchanged.
     """
     result = parse_args(["--agent=opencode", "--", "--continue", "--", "auth", "login"])
     assert result.agent == "opencode"
-    assert result.command == ["--continue", "--", "auth", "login"]
+    assert result.agent_args == ["--continue", "--", "auth", "login"]
 
 
 def test_double_dash_after_positional():
@@ -73,6 +78,7 @@ def test_double_dash_after_positional():
     result = parse_args(["--agent=opencode", "web", "--", "--port=4096"])
     assert result.agent == "opencode"
     assert result.command == ["web", "--", "--port=4096"]
+    assert result.agent_args == []
 
 
 def test_unknown_flag_is_error():
