@@ -16,8 +16,8 @@ is the container command, and it used to replace the agent's command outright. S
 `claude --continue`. The main reason to reach for `--` is passing flags to the agent, and
 to do that the user had to name the agent again: `paddock -- claude --continue`. The
 README's own example, `paddock --image=my-claude-image -- --allow-dangerously-skip-permissions
---continue`, was broken for this reason. `images/Dockerfile` sets no `ENTRYPOINT`, so Docker
-tried to run the flag as a program.
+--continue`, was broken for this reason. The README builds `my-claude-image` from
+`images/Dockerfile`, which sets no `ENTRYPOINT`, so Docker tried to run the flag as a program.
 
 Replacing the command is still needed. `paddock --agent=claude -- /bin/bash` opens a shell
 in a container that `ClaudeAgent` set up, with its mounts and container name, which makes
