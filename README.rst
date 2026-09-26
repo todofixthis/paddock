@@ -221,8 +221,17 @@ argument and everything after it replace the agent's command instead:
 
    # Runs: claude --allow-dangerously-skip-permissions --continue
    paddock --agent=claude -- --allow-dangerously-skip-permissions --continue
-   # Runs: bash
-   paddock bash
+   # Runs: bash -c ls
+   paddock bash -c ls
+
+paddock reads its own flags only before the first ``--`` or positional, so put
+them first: ``paddock bash --dry-run`` passes ``--dry-run`` to bash and runs
+the container. Only that first ``--`` is special; any later ``--`` reaches the
+command as-is (``paddock bash -- --foo`` runs ``bash -- --foo``).
+
+In paddock 0.4 and earlier, arguments after ``--`` replaced the agent's
+command, so ``paddock -- claude --continue`` now runs
+``claude claude --continue``. Drop the agent's name: ``paddock -- --continue``.
 
 
 Agents

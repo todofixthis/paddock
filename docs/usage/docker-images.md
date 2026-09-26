@@ -13,8 +13,8 @@ docker run --rm -it --name paddock-<dir>-<agent> --workdir=<workdir> \
 ```
 
 `<command>` is the agent's command (`claude` for the `claude` agent, `/bin/bash` for
-`false`), plus any arguments you pass after `--`: `paddock -- --continue` runs
-`claude --continue`. A positional replaces the command instead: `paddock bash` runs
+`false`), plus any arguments you pass after `--`: `paddock --agent=claude -- --continue`
+runs `claude --continue`. A positional replaces the command instead: `paddock bash` runs
 `bash`. paddock never passes `--entrypoint`, so the
 image's own `ENTRYPOINT`, if it has one, receives `<command>` as its arguments.
 
