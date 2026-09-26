@@ -35,6 +35,7 @@ uv run pytest --collect-only                           # verify test count (note
 uv run mypy src/                                       # type check
 uv run ruff check                                      # lint
 uvx --from pip pip index versions <package>            # check available versions on PyPI
+uv run make -C docs html SPHINXOPTS="-W --keep-going -E"  # build docs strictly (-E: full re-read, else a rerun hides warnings)
 uv run git commit                                      # always use instead of git commit (runs autohooks)
 ```
 

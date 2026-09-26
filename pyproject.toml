@@ -14,6 +14,13 @@ dev = [
     "pytest-mock>=3.15.1,<4.0.0",
     "pyyaml>=6.0.3,<7.0.0",
     "types-pyyaml>=6.0.12.20260508,<7.0.0.0",
+    # Lets the docs_build pre-commit hook run Sphinx from the dev environment
+    { include-group = "docs" },
+]
+docs = [
+    "myst-parser>=5.1.0,<6.0.0",
+    "sphinx>=9.1.0,<10.0.0",
+    "sphinx-rtd-theme>=3.1.0,<4.0.0",
 ]
 
 [project]
@@ -62,6 +69,9 @@ pre-commit = [
     "autohooks.plugins.mypy",
     "autohooks.plugins.pytest",
     "autohooks.plugins.ruff",
+    # Strict (-W), full re-read Sphinx build on staged docs/docstring changes;
+    # see docs/adr/0006-publish-docs-with-sphinx-and-myst.md
+    "docs_build",
 ]
 
 [tool.hatch.build.targets.sdist]

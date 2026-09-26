@@ -14,3 +14,6 @@ dist/
 release-*-body.md
 release-*.md
 release-*.md.asc
+
+# Sphinx build output
+docs/_build/
