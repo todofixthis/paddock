@@ -6,9 +6,6 @@ __pycache__/
 .agents/worktrees/
 .claude/settings.local.json
 
-# Docs build output
-docs/_build/
-
 # Distribution / packaging
 *.egg-info/
 dist/
@@ -17,3 +14,6 @@ dist/
 release-*-body.md
 release-*.md
 release-*.md.asc
+
+# Sphinx build output
+docs/_build/
