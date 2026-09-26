@@ -141,6 +141,25 @@ def test_command_override(mocker, tmp_path: Path):
     assert argv[-2:] == ["opencode", "--flag"]
 
 
+def test_agent_args_extend_agent_command(mocker, tmp_path: Path):
+    """Agent args are appended to the agent's default command."""
+    config: dict[str, object] = {
+        "image": "ubuntu:22.04",
+        "agent": "claude",
+        "volumes": {},
+        "network": None,
+    }
+    agent = make_agent(command=["claude"])
+    mocker.patch(
+        "paddock.docker.builder.DockerCommandBuilder._container_name_available",
+        return_value=True,
+    )
+    argv = DockerCommandBuilder(config=config, agent=agent, workdir=tmp_path).build(
+        command=[], agent_args=["fix this bug"]
+    )
+    assert argv[-3:] == ["ubuntu:22.04", "claude", "fix this bug"]
+
+
 def test_config_volumes(mocker, tmp_path: Path):
     """Config volumes are passed as -v flags."""
     config: dict[str, object] = {

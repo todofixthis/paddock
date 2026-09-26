@@ -59,12 +59,44 @@ def test_dry_run_prints_a_re_runnable_command(
         return_value=True,
     )
     with pytest.raises(SystemExit) as exc:
-        run(["--dry-run", "--", "bash", "-c", "cat /probe.txt"])
+        run(["--dry-run", "bash", "-c", "cat /probe.txt"])
     assert exc.value.code == 0
     mock_run.assert_not_called()
     captured = capsys.readouterr()
     assert "bash -c 'cat /probe.txt'" in captured.out
     assert captured.out.split()[0] == "docker"
+
+
+@pytest.mark.parametrize(
+    ("argv", "expected_tail"),
+    [
+        (["--", "fix this bug"], "ubuntu:22.04 claude 'fix this bug'"),
+        (["--", "--resume"], "ubuntu:22.04 claude --resume"),
+        (["--", "claude"], "ubuntu:22.04 claude claude"),
+        (["--", "/bin/bash"], "ubuntu:22.04 claude /bin/bash"),
+        (["/bin/bash"], "ubuntu:22.04 /bin/bash"),
+        (["fix this bug"], "ubuntu:22.04 'fix this bug'"),
+    ],
+)
+def test_container_command(
+    argv: list[str],
+    expected_tail: str,
+    capsys,
+    minimal_config: Path,
+    mocker,
+    monkeypatch,
+):
+    """Args after '--' extend the agent's command; a positional replaces it."""
+    monkeypatch.chdir(minimal_config)
+    mocker.patch("paddock.__main__.subprocess.run")
+    mocker.patch(
+        "paddock.docker.builder.DockerCommandBuilder._container_name_available",
+        return_value=True,
+    )
+    with pytest.raises(SystemExit) as exc:
+        run(["--dry-run", "--agent=claude", *argv])
+    assert exc.value.code == 0
+    assert capsys.readouterr().out.rstrip("\n").endswith(expected_tail)
 
 
 def test_quiet_suppresses_all_output(capsys, minimal_config: Path, mocker, monkeypatch):

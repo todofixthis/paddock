@@ -21,6 +21,7 @@ _KNOWN_VALUE_FLAGS = frozenset(
 @dataclass
 class ParsedArgs:
     agent: str | bool | None
+    agent_args: list[str]
     build_args: dict[str, str]
     build_context: str | None
     build_dockerfile: str | None
@@ -34,15 +35,18 @@ class ParsedArgs:
     workdir: str | None
 
 
-def _split_argv(argv: list[str]) -> tuple[list[str], list[str]]:
+def _split_argv(argv: list[str]) -> tuple[list[str], list[str], list[str]]:
     """
-    Split argv into (paddock_flags, container_command).
+    Split argv into (paddock_flags, command, agent_args).
 
     Scans left-to-right collecting known paddock flags. Stops at:
-    - '--' (explicit split, consumed): rest becomes the command
-    - A non-flag token (positional): this token and everything after become the command
 
-    Unknown flags (starting with '--' but not in the known set) remain in
+    - '--' (consumed): everything after becomes agent_args, appended to the
+      agent's command
+    - A non-flag token (positional): this token and everything after become
+      command, replacing the agent's command; a later '--' is part of it
+
+    Unknown flags (starting with '-' but not in the known set) remain in
     paddock_flags so argparse can report them as errors.
     """
     paddock: list[str] = []
@@ -51,7 +55,7 @@ def _split_argv(argv: list[str]) -> tuple[list[str], list[str]]:
         token = argv[i]
 
         if token == "--":
-            return paddock, argv[i + 1 :]
+            return paddock, [], argv[i + 1 :]
 
         if token in _KNOWN_BOOL_FLAGS:
             paddock.append(token)
@@ -74,10 +78,10 @@ def _split_argv(argv: list[str]) -> tuple[list[str], list[str]]:
             i += 1
             continue
 
-        # Positional — this token and everything after is the container command.
-        return paddock, argv[i:]
+        # Positional — this token and everything after replaces the agent's command.
+        return paddock, argv[i:], []
 
-    return paddock, []
+    return paddock, [], []
 
 
 def _parse_volume(value: str) -> tuple[str, str]:
@@ -96,10 +100,11 @@ def parse_args(argv: list[str]) -> ParsedArgs:
     Parse paddock CLI arguments.
 
     Stops consuming paddock flags at the first positional arg or '--'. Unknown
-    flags before either stop-point are errors. '--' is consumed; everything
-    after it becomes the container command, preserving any subsequent '--'.
+    flags before either stop-point are errors. A positional and everything
+    after it replaces the agent's command. '--' is consumed; everything after
+    it is appended to the agent's command, preserving any subsequent '--'.
     """
-    paddock_argv, command = _split_argv(argv)
+    paddock_argv, command, agent_args = _split_argv(argv)
 
     # Extract --build-args-<key>=<value> entries before argparse sees them.
     build_args: dict[str, str] = {}
@@ -113,13 +118,17 @@ def parse_args(argv: list[str]) -> ParsedArgs:
 
     parser = argparse.ArgumentParser(
         prog="paddock",
-        usage="paddock [FLAGS] [--] [COMMAND...]",
+        usage="paddock [FLAGS] [COMMAND...] | paddock [FLAGS] -- [ARGS...]",
         epilog="  --build-args-KEY=VALUE   Build-time ARG (repeatable)\n"
         "\n"
-        "Everything after the first positional argument, or after '--', "
-        "is passed to the container as its command.",
+        "COMMAND (the first positional argument and everything after it)\n"
+        "replaces the agent's command. ARGS (everything after '--') are\n"
+        "appended to the agent's command.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         add_help=True,
+        # _split_argv matches flags exactly, so an abbreviation it passed through
+        # as unknown must stay unknown rather than resolve to a paddock flag.
+        allow_abbrev=False,
     )
     parser.add_argument("--agent")
     parser.add_argument("--build-context")
@@ -144,6 +153,7 @@ def parse_args(argv: list[str]) -> ParsedArgs:
 
     return ParsedArgs(
         agent=namespace.agent,
+        agent_args=agent_args,
         build_args=build_args,
         build_context=namespace.build_context,
         build_dockerfile=namespace.build_dockerfile,

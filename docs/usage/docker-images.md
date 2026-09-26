@@ -13,9 +13,10 @@ docker run --rm -it --name paddock-<dir>-<agent> --workdir=<workdir> \
 ```
 
 `<command>` is the agent's command (`claude` for the `claude` agent, `/bin/bash` for
-`false`). A command you pass after `--` replaces it rather than extending it, so name the
-agent too: `paddock -- claude --continue`. paddock never passes `--entrypoint`, so the
-image's own `ENTRYPOINT`, if it has one, receives `<command>` as its arguments.
+`false`). A command before `--` replaces it (`paddock /bin/bash`); with none, arguments
+after `--` extend it (`paddock -- --continue` runs `claude --continue`). paddock never
+passes `--entrypoint`, so the image's own `ENTRYPOINT`, if it has one, receives
+`<command>` as its arguments.
 
 A custom image therefore needs:
 

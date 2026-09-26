@@ -192,14 +192,14 @@ CLI flags
 
 .. code-block:: text
 
-   paddock [FLAGS] [--] [COMMAND...]
+   paddock [FLAGS] [COMMAND...]
+   paddock [FLAGS] -- [ARGS...]
 
    --agent AGENT                Agent key (e.g. "claude") or "false" for a shell
    --build-args-KEY=VALUE        Build-time ARG (repeatable)
    --build-context PATH         Docker build context
    --build-dockerfile PATH      Path to Dockerfile
    --build-policy POLICY        Build policy (always|daily|if-missing|weekly)
-   --config-file PATH           Load an additional TOML config file
    --dry-run                    Print the docker command and exit without running it
    --image IMAGE                Docker image
    --network NETWORK            Docker network
@@ -211,16 +211,34 @@ CLI flags
 ``--workdir`` is resolved to an absolute real path — symlinks followed —
 before it is used for the ``[projects]`` lookup and for the mounts.
 
-paddock exits with the container's exit status; ``--dry-run`` exits 0 and a
-config error exits 1.
+paddock exits with the container's exit status; ``--dry-run`` exits 0, a
+config error exits 1 and an unknown flag exits 2.
 
-Everything after the first positional argument (or after ``--``) is passed
-as the container command:
+With no command before it, everything after ``--`` is appended to the agent's
+command:
 
 .. code-block:: bash
 
-   paddock claude --allow-dangerously-skip-permissions --continue
-   paddock --image=my-claude-image -- --allow-dangerously-skip-permissions --continue
+   # runs: claude "fix this bug"
+   paddock --agent=claude -- "fix this bug"
+   # runs: claude --resume
+   paddock --agent=claude -- --resume
+
+The first positional argument before ``--`` starts a command that replaces
+the agent's, running in a container still configured for that agent (its
+volumes and build args).  Everything after it — ``--`` and anything that looks
+like a paddock flag included — belongs to that command, so put paddock flags
+first:
+
+.. code-block:: bash
+
+   # runs: /bin/bash
+   paddock --agent=claude /bin/bash
+
+A prompt without ``--`` in front is therefore a command: ``paddock
+--agent=claude "fix this bug"`` tries to execute ``fix this bug``.  Anything
+else before ``--`` must be a paddock flag, spelled in full, so ``paddock --agent=claude
+--resume`` fails.
 
 
 Agents
