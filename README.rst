@@ -194,7 +194,7 @@ CLI flags
 
    paddock [FLAGS] [--] [COMMAND...]
 
-   --agent AGENT                Agent key (e.g. "claude") or "false" for a shell
+   --agent AGENT                Agent key, or "false" for a shell (default: claude)
    --build-args-KEY=VALUE        Build-time ARG (repeatable)
    --build-context PATH         Docker build context
    --build-dockerfile PATH      Path to Dockerfile
@@ -216,7 +216,7 @@ config error exits 1.
 
 Everything after the first positional argument (or after ``--``) is the
 container command. It replaces the agent's command, unless it starts with a
-flag, in which case it is appended to the agent's command:
+flag (``--`` included), in which case it is appended to the agent's command:
 
 .. code-block:: bash
 
@@ -225,8 +225,8 @@ flag, in which case it is appended to the agent's command:
    # Runs /bin/bash in a container set up for claude (mounts, container name)
    paddock --agent=claude -- /bin/bash
 
-To pass the agent a prompt or subcommand, name the agent too:
-``paddock -- claude mcp list``.
+To pass the agent a prompt or subcommand, repeat the agent's command:
+``paddock --agent=claude -- claude mcp list``.
 
 paddock reads its own flags only before the first ``--`` or positional, so put
 them first: ``paddock bash --dry-run`` passes ``--dry-run`` to bash and runs

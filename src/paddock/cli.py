@@ -117,8 +117,10 @@ def parse_args(argv: list[str]) -> ParsedArgs:
         epilog="  --build-args-KEY=VALUE   Build-time ARG (repeatable)\n"
         "\n"
         "Everything after the first positional argument, or after '--', "
-        "is the container command. If it starts with a flag, it is appended "
-        "to the agent's command instead.",
+        "is the container command. It replaces the agent's command, unless it "
+        "starts with a flag, in which case it is appended to the agent's "
+        "command. To pass a prompt or subcommand, repeat the agent's command "
+        "(e.g. -- claude mcp list).",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         add_help=True,
     )
