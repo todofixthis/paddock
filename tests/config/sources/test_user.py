@@ -9,7 +9,6 @@ from paddock.config.sources.user import UserConfigSource
 def _ctx(tmp_path, user_path) -> ConfigContext:
     parsed = ParsedArgs(
         agent=None,
-        agent_args=[],
         build_args={},
         build_context=None,
         build_dockerfile=None,

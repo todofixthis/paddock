@@ -8,7 +8,6 @@ from paddock.config.sources.env import EnvConfigSource
 def _ctx(tmp_path: Path, environ: dict) -> ConfigContext:
     parsed = ParsedArgs(
         agent=None,
-        agent_args=[],
         build_args={},
         build_context=None,
         build_dockerfile=None,

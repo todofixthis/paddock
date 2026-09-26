@@ -15,7 +15,6 @@ from paddock.config.sources.env import _env_schema
 def _empty_parsed() -> ParsedArgs:
     return ParsedArgs(
         agent=None,
-        agent_args=[],
         build_args={},
         build_context=None,
         build_dockerfile=None,

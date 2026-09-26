@@ -192,7 +192,7 @@ CLI flags
 
 .. code-block:: text
 
-   paddock [FLAGS] [COMMAND... | -- AGENT_ARGS...]
+   paddock [FLAGS] [--] [COMMAND...]
 
    --agent AGENT                Agent key (e.g. "claude") or "false" for a shell
    --build-args-KEY=VALUE        Build-time ARG (repeatable)
@@ -214,24 +214,24 @@ before it is used for the ``[projects]`` lookup and for the mounts.
 paddock exits with the container's exit status; ``--dry-run`` exits 0 and a
 config error exits 1.
 
-Arguments after ``--`` are appended to the agent's command. A positional
-argument and everything after it replace the agent's command instead:
+Everything after the first positional argument (or after ``--``) is the
+container command. It replaces the agent's command, unless it starts with a
+flag, in which case it is appended to the agent's command:
 
 .. code-block:: bash
 
    # Runs: claude --allow-dangerously-skip-permissions --continue
    paddock --agent=claude -- --allow-dangerously-skip-permissions --continue
-   # Runs: bash -c ls
-   paddock bash -c ls
+   # Runs /bin/bash in a container set up for claude (mounts, container name)
+   paddock --agent=claude -- /bin/bash
+
+To pass the agent a prompt or subcommand, name the agent too:
+``paddock -- claude mcp list``.
 
 paddock reads its own flags only before the first ``--`` or positional, so put
 them first: ``paddock bash --dry-run`` passes ``--dry-run`` to bash and runs
 the container. Only that first ``--`` is special; any later ``--`` reaches the
-command as-is (``paddock bash -- --foo`` runs ``bash -- --foo``).
-
-In paddock 0.4 and earlier, arguments after ``--`` replaced the agent's
-command, so ``paddock -- claude --continue`` now runs
-``claude claude --continue``. Drop the agent's name: ``paddock -- --continue``.
+command as-is.
 
 
 Agents

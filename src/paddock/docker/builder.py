@@ -35,13 +35,13 @@ class DockerCommandBuilder:
         self._workdir = workdir
         self._project_dir_volume = project_dir_volume
 
-    def build(self, *, agent_args: list[str], command: list[str]) -> list[str]:
+    def build(self, *, command: list[str]) -> list[str]:
         """Assemble the full 'docker run' argv list.
 
         Args:
-            agent_args: Arguments appended to the agent's default command.
-                Ignored when ``command`` is non-empty.
-            command: Replaces the agent's default command when non-empty.
+            command: The user's container command. Empty runs the agent's
+                command; a leading flag (e.g. ``['--continue']``) is appended
+                to the agent's command; anything else replaces it.
         """
         argv = ["docker", "run", "--rm", "-it"]
         argv += ["--name", self._resolve_container_name()]
@@ -63,8 +63,21 @@ class DockerCommandBuilder:
         if self._config.get("network"):
             argv += ["--network", self._config["network"]]
         argv.append(self._config["image"])
-        argv += command if command else self._agent.get_command() + agent_args
+        argv += self._resolve_command(command)
         return argv
+
+    def _resolve_command(self, command: list[str]) -> list[str]:
+        """Combine the user's command with the agent's default command.
+
+        A leading flag means the user is passing arguments to the agent, so
+        they need not restate its command (``paddock -- --continue`` runs
+        ``claude --continue``). See ADR 0007.
+        """
+        if not command:
+            return self._agent.get_command()
+        if command[0].startswith("-"):
+            return self._agent.get_command() + command
+        return command
 
     def _resolve_container_name(self) -> str:
         """Derive container name from workdir; append numeric suffix if taken."""

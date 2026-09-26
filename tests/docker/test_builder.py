@@ -47,7 +47,7 @@ def test_minimal_command(mocker, tmp_path: Path):
         return_value=True,
     )
     argv = DockerCommandBuilder(config=config, agent=agent, workdir=tmp_path).build(
-        agent_args=[], command=[]
+        command=[]
     )
     assert argv[0] == "docker"
     assert "run" in argv
@@ -76,7 +76,7 @@ def test_container_name_from_workdir(mocker, tmp_path: Path):
         return_value=True,
     )
     argv = DockerCommandBuilder(config=config, agent=agent, workdir=workdir).build(
-        agent_args=[], command=[]
+        command=[]
     )
     assert "--name" in argv
     name_idx = argv.index("--name")
@@ -97,7 +97,7 @@ def test_container_name_suffix_on_conflict(mocker, tmp_path: Path):
         side_effect=[False, True],
     )
     argv = DockerCommandBuilder(config=config, agent=agent, workdir=tmp_path).build(
-        agent_args=[], command=[]
+        command=[]
     )
     name_idx = argv.index("--name")
     assert argv[name_idx + 1].endswith("-1")
@@ -117,7 +117,7 @@ def test_uses_agent_command(mocker, tmp_path: Path):
         return_value=True,
     )
     argv = DockerCommandBuilder(config=config, agent=agent, workdir=tmp_path).build(
-        agent_args=[], command=[]
+        command=[]
     )
     assert argv[-1] == "claude"
 
@@ -136,13 +136,13 @@ def test_command_override(mocker, tmp_path: Path):
         return_value=True,
     )
     argv = DockerCommandBuilder(config=config, agent=agent, workdir=tmp_path).build(
-        agent_args=[], command=["opencode", "--flag"]
+        command=["opencode", "--flag"]
     )
     assert argv[-2:] == ["opencode", "--flag"]
 
 
-def test_agent_args_extend_agent_command(mocker, tmp_path: Path):
-    """Agent args are appended to the agent's default command."""
+def test_leading_flag_extends_agent_command(mocker, tmp_path: Path):
+    """A command starting with a flag is appended to the agent's command."""
     config: dict[str, object] = {
         "image": "ubuntu:22.04",
         "agent": "claude",
@@ -155,28 +155,9 @@ def test_agent_args_extend_agent_command(mocker, tmp_path: Path):
         return_value=True,
     )
     argv = DockerCommandBuilder(config=config, agent=agent, workdir=tmp_path).build(
-        agent_args=["--continue"], command=[]
+        command=["--continue", "--", "x"]
     )
-    assert argv[-3:] == ["ubuntu:22.04", "claude", "--continue"]
-
-
-def test_command_override_ignores_agent_args(mocker, tmp_path: Path):
-    """A command override replaces the agent's command, agent args included."""
-    config: dict[str, object] = {
-        "image": "ubuntu:22.04",
-        "agent": "claude",
-        "volumes": {},
-        "network": None,
-    }
-    agent = make_agent(command=["claude"])
-    mocker.patch(
-        "paddock.docker.builder.DockerCommandBuilder._container_name_available",
-        return_value=True,
-    )
-    argv = DockerCommandBuilder(config=config, agent=agent, workdir=tmp_path).build(
-        agent_args=["--continue"], command=["bash"]
-    )
-    assert argv[-2:] == ["ubuntu:22.04", "bash"]
+    assert argv[-5:] == ["ubuntu:22.04", "claude", "--continue", "--", "x"]
 
 
 def test_config_volumes(mocker, tmp_path: Path):
@@ -193,7 +174,7 @@ def test_config_volumes(mocker, tmp_path: Path):
         return_value=True,
     )
     argv = DockerCommandBuilder(config=config, agent=agent, workdir=tmp_path).build(
-        agent_args=[], command=[]
+        command=[]
     )
     vol_args = [argv[i + 1] for i, a in enumerate(argv) if a == "-v"]
     assert any("/host/data:/data:ro" in v for v in vol_args)
@@ -213,7 +194,7 @@ def test_network(mocker, tmp_path: Path):
         return_value=True,
     )
     argv = DockerCommandBuilder(config=config, agent=agent, workdir=tmp_path).build(
-        agent_args=[], command=[]
+        command=[]
     )
     assert "--network" in argv
     assert "mynet" in argv
@@ -235,7 +216,7 @@ def test_scratch_volume(mocker, tmp_path: Path):
         return_value=True,
     )
     argv = DockerCommandBuilder(config=config, agent=agent, workdir=tmp_path).build(
-        agent_args=[], command=[]
+        command=[]
     )
     vol_args = [argv[i + 1] for i, a in enumerate(argv) if a == "-v"]
     assert any("paddock_ubuntu_22_04_claude:/scratch:rw" in v for v in vol_args)
@@ -259,7 +240,7 @@ def test_project_dir_volume_added_after_workdir(mocker, tmp_path: Path):
         agent=make_agent(),
         workdir=tmp_path,
         project_dir_volume=(str(pd), VolumeSpec(str(pd), "ro")),
-    ).build(agent_args=[], command=[])
+    ).build(command=[])
     vols = [argv[i + 1] for i, a in enumerate(argv) if a == "-v"]
     workdir_i = next(i for i, v in enumerate(vols) if f"{tmp_path}:{tmp_path}:rw" in v)
     paddock_i = next(i for i, v in enumerate(vols) if str(pd) in v and "ro" in v)
@@ -282,6 +263,6 @@ def test_no_project_dir_volume_when_none(mocker, tmp_path: Path):
         agent=make_agent(),
         workdir=tmp_path,
         project_dir_volume=None,
-    ).build(agent_args=[], command=[])
+    ).build(command=[])
     vols = [argv[i + 1] for i, a in enumerate(argv) if a == "-v"]
     assert not any(".paddock" in v for v in vols)

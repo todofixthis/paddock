@@ -16,6 +16,10 @@ class BaseAgent(ABC):
         """
         Default command to run in the container.
 
+        User arguments starting with a flag are appended to this list, so it
+        must accept trailing arguments (``['sh', '-c', 'claude']`` would
+        swallow them).
+
         Example: ['claude'] for ClaudeAgent, ['/bin/bash'] for ShellAgent.
         """
 
