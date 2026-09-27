@@ -30,7 +30,7 @@ uv add --bounds major <package>                        # add a runtime dependenc
 uv add --bounds major --group dev <package>            # add a dev dependency at latest version
 uv sync --group=dev                                    # sync deps after pulling
 uv run pytest                                          # run tests (current Python)
-uv run tox -p                                          # run tests (all supported versions)
+bash -c 'for v in 3.12 3.13 3.14; do uv run --isolated --python "$v" pytest -q || exit 1; done'  # run tests (all supported versions, as CI's test matrix); stops at the first failing version
 uv run pytest --collect-only                           # verify test count (note at start of mahi; confirm it increases when done)
 uv run mypy src/                                       # type check
 uv run ruff check                                      # lint
