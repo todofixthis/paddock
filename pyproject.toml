@@ -106,6 +106,8 @@ testpaths = ["tests"]
 
 [tool.tox]
 env_list = ["3.12", "3.13", "3.14"]
+# Stops tox writing a stray `.venv` redirect file into the project root
+venv_redirect = false
 
 [tool.tox.env_run_base]
 commands = [["pytest", { replace = "posargs", default = [], extend = true }]]
