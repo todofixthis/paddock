@@ -13,6 +13,8 @@ dev = [
     "pytest>=9.0.3,<10.0.0",
     "pytest-mock>=3.15.1,<4.0.0",
     "pyyaml>=6.0.3,<7.0.0",
+    "tox>=4.64.7,<5.0.0",
+    "tox-uv>=1.36.1,<2.0.0",
     "types-pyyaml>=6.0.12.20260508,<7.0.0.0",
     # Lets the docs_build pre-commit hook run Sphinx from the dev environment
     { include-group = "docs" },
@@ -101,6 +103,15 @@ ignore_missing_imports = true
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"]
+
+[tool.tox]
+env_list = ["3.12", "3.13", "3.14"]
+
+[tool.tox.env_run_base]
+commands = [["pytest", { replace = "posargs", default = [], extend = true }]]
+dependency_groups = ["dev"]
+# Installs from uv.lock so each version tests the locked dependencies
+runner = "uv-venv-lock-runner"
 
 [tool.uv]
 keyring-provider = "subprocess"

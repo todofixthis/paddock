@@ -17,3 +17,6 @@ release-*.md.asc
 
 # Sphinx build output
 docs/_build/
+
+# tox environments
+.tox/
