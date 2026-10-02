@@ -266,3 +266,32 @@ def test_no_project_dir_volume_when_none(mocker, tmp_path: Path):
     ).build(command=[])
     vols = [argv[i + 1] for i, a in enumerate(argv) if a == "-v"]
     assert not any(".paddock" in v for v in vols)
+
+
+def test_volumes_snapshot_shared_with_build(mocker, tmp_path: Path):
+    """``build()`` reuses the volumes already read, not a fresh probe.
+
+    Agent volumes probe the filesystem, and an image build can run between
+    the "Mounting" log and ``build()``; both must report the same mounts.
+    """
+    config: dict[str, object] = {
+        "image": "ubuntu:22.04",
+        "agent": "claude",
+        "volumes": {},
+        "network": None,
+    }
+    agent = make_agent()
+    agent.get_volumes.side_effect = [
+        {"/host/.claude.json": VolumeSpec("/root/.claude.json", "rw")},
+        {},
+    ]
+    mocker.patch(
+        "paddock.docker.builder.DockerCommandBuilder._container_name_available",
+        return_value=True,
+    )
+    builder = DockerCommandBuilder(config=config, agent=agent, workdir=tmp_path)
+    logged = builder.volumes
+    argv = builder.build(command=[])
+    vol_args = [argv[i + 1] for i, a in enumerate(argv) if a == "-v"]
+    assert vol_args == [f"{host}:{spec}" for host, spec in logged]
+    assert "/host/.claude.json:/root/.claude.json:rw" in vol_args
