@@ -18,10 +18,18 @@ _DOCS_DIR = _PROJECT_ROOT / "docs"
 _BUILD_DIR = _DOCS_DIR / "_build" / "precommit"
 _BUILD_TIMEOUT_SECONDS = 120
 
-# autodoc pulls docstrings under src/ into the API page, so they can break the
-# build the same way a docs page can; pyproject.toml pins the Sphinx versions.
-# fnmatch's `*` crosses `/`, so these match nested paths too.
-INCLUDE = ("docs/*.md", "docs/*.rst", "docs/conf.py", "pyproject.toml", "src/*.py")
+# autodoc pulls docstrings under src/ into the API page, and the docs index
+# includes README.rst, so both can break the build the same way a docs page
+# can; pyproject.toml pins the Sphinx versions. fnmatch's `*` crosses `/`, so
+# these match nested paths too.
+INCLUDE = (
+    "README.rst",
+    "docs/*.md",
+    "docs/*.rst",
+    "docs/conf.py",
+    "pyproject.toml",
+    "src/*.py",
+)
 
 
 def precommit(
