@@ -107,10 +107,16 @@ def run(argv: list[str] | None = None) -> None:
             readonly=resolved.project_dir_readonly,
             enabled=resolved.project_toml_enabled,
         ) as project_dir_volume:
+            command_builder = DockerCommandBuilder(
+                config=config,
+                agent=agent,
+                workdir=workdir,
+                project_dir_volume=project_dir_volume,
+            )
             logger.info("Using image: %s", config["image"])
             logger.info("Agent: %s", config["agent"])
-            for host, container in config.get("volumes", {}).items():
-                logger.info("Mounting %s -> %s", host, container)
+            for host_or_name, container_spec in command_builder.volumes():
+                logger.info("Mounting %s -> %s", host_or_name, container_spec)
             if config.get("network"):
                 logger.info("Network: %s", config["network"])
                 logger.info("Other containers on this network:")
@@ -131,12 +137,9 @@ def run(argv: list[str] | None = None) -> None:
                     "Image build: %s", "triggered" if built else "skipped (up to date)"
                 )
 
-            docker_argv = DockerCommandBuilder(
-                config=config,
-                agent=agent,
-                workdir=workdir,
-                project_dir_volume=project_dir_volume,
-            ).build(command=parsed.command, agent_args=parsed.agent_args)
+            docker_argv = command_builder.build(
+                command=parsed.command, agent_args=parsed.agent_args
+            )
 
             if not parsed.quiet:
                 print(shlex.join(docker_argv))
