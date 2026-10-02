@@ -296,3 +296,30 @@ def test_container_exit_status_is_propagated(minimal_config: Path, mocker, monke
     with pytest.raises(SystemExit) as exc:
         run([])
     assert exc.value.code == 3
+
+
+def test_logs_every_mounted_volume(
+    caplog, capsys, minimal_config: Path, mocker, monkeypatch
+):
+    """Each ``-v`` in the docker command has a matching "Mounting" line.
+
+    Agent volumes (``~/.claude``, ``~/.claude.json``) were once mounted but
+    never logged, because the log read only the config's volumes.
+    """
+    (minimal_config / ".claude.json").write_text("{}")
+    monkeypatch.chdir(minimal_config)
+    mocker.patch(
+        "paddock.docker.builder.DockerCommandBuilder._container_name_available",
+        return_value=True,
+    )
+    with caplog.at_level("INFO", logger="paddock"), pytest.raises(SystemExit):
+        run(["--dry-run"])
+    argv = capsys.readouterr().out.split()
+    mounted = [argv[i + 1] for i, arg in enumerate(argv) if arg == "-v"]
+    logged = [
+        record.getMessage().removeprefix("Mounting ").replace(" -> ", ":", 1)
+        for record in caplog.records
+        if record.getMessage().startswith("Mounting ")
+    ]
+    assert f"{minimal_config / '.claude.json'}:/root/.claude.json:rw" in mounted
+    assert logged == mounted

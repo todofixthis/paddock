@@ -1,6 +1,7 @@
 import re
 import subprocess
 from collections.abc import Sequence
+from functools import cached_property
 from pathlib import Path
 
 from paddock.agents import BaseAgent
@@ -47,25 +48,35 @@ class DockerCommandBuilder:
         argv = ["docker", "run", "--rm", "-it"]
         argv += ["--name", self._resolve_container_name()]
         argv += [f"--workdir={self._workdir}"]
-        argv += self._volume_flag(
-            str(self._workdir), VolumeSpec(str(self._workdir), "rw")
-        )
-        if self._project_dir_volume is not None:
-            host_path, container_spec = self._project_dir_volume
-            argv += self._volume_flag(host_path, container_spec)
-        for host, container in self._agent.get_volumes().items():
-            argv += self._volume_flag(host, container)
-        for host, container in self._config.get("volumes", {}).items():
-            argv += self._volume_flag(host, container)
-        for vol_name, container_path in self._agent.get_scratch_volumes(
-            self._config["image"]
-        ).items():
-            argv += self._volume_flag(vol_name, container_path)
+        for host_or_name, container_spec in self.volumes:
+            argv += self._volume_flag(host_or_name, container_spec)
         if self._config.get("network"):
             argv += ["--network", self._config["network"]]
         argv.append(self._config["image"])
         argv += command if command else [*self._agent.get_command(), *agent_args]
         return argv
+
+    @cached_property
+    def volumes(self) -> list[tuple[str, VolumeSpec]]:
+        """List every volume the container mounts, in ``-v`` flag order.
+
+        The single source for both :meth:`build` and the "Mounting" log, so
+        the log cannot drift from what the container actually mounts.
+        Cached so both see one snapshot: agent volumes probe the filesystem,
+        and an image build can run between the log and :meth:`build`.
+
+        Returns:
+            ``(host_path_or_volume_name, VolumeSpec)`` pairs: the workdir,
+            then the ``.paddock`` directory, agent volumes, config volumes
+            and agent scratch volumes.
+        """
+        volumes = [(str(self._workdir), VolumeSpec(str(self._workdir), "rw"))]
+        if self._project_dir_volume is not None:
+            volumes.append(self._project_dir_volume)
+        volumes += self._agent.get_volumes().items()
+        volumes += self._config.get("volumes", {}).items()
+        volumes += self._agent.get_scratch_volumes(self._config["image"]).items()
+        return volumes
 
     def _resolve_container_name(self) -> str:
         """Derive container name from workdir; append numeric suffix if taken."""
