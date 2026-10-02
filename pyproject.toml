@@ -28,7 +28,7 @@ docs = [
 [project]
 authors = [{ name = "Phoenix Zerin", email = "phx@phx.nz" }]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.12",
@@ -61,6 +61,7 @@ false = "paddock.agents.shell:ShellAgent"
 paddock = "paddock.__main__:main"
 
 [project.urls]
+Documentation = "https://phx-paddock.readthedocs.io/"
 Repository = "https://github.com/todofixthis/paddock"
 
 [tool.autohooks]

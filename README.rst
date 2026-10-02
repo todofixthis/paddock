@@ -4,6 +4,8 @@ paddock
 Launch coding agents (or a plain shell) in isolated Docker containers,
 with the current working directory mounted as the workspace.
 
+Usage guides and API reference: https://phx-paddock.readthedocs.io/
+
 .. image:: https://img.shields.io/pypi/v/phx-paddock.svg
    :target: https://pypi.org/project/phx-paddock/
    :alt: PyPI version
@@ -13,12 +15,6 @@ with the current working directory mounted as the workspace.
 
 .. image:: https://img.shields.io/badge/licence-MIT-blue.svg
    :alt: MIT Licence
-
-.. caution::
-
-   **Pre-release software — here be dragons.**
-   APIs, configuration formats, and CLI flags may change without notice
-   in future versions. Bugs and crashes are possible.
 
 Overview
 --------
