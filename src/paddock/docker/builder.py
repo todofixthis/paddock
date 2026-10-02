@@ -1,6 +1,7 @@
 import re
 import subprocess
 from collections.abc import Sequence
+from functools import cached_property
 from pathlib import Path
 
 from paddock.agents import BaseAgent
@@ -47,7 +48,7 @@ class DockerCommandBuilder:
         argv = ["docker", "run", "--rm", "-it"]
         argv += ["--name", self._resolve_container_name()]
         argv += [f"--workdir={self._workdir}"]
-        for host_or_name, container_spec in self.volumes():
+        for host_or_name, container_spec in self.volumes:
             argv += self._volume_flag(host_or_name, container_spec)
         if self._config.get("network"):
             argv += ["--network", self._config["network"]]
@@ -55,11 +56,14 @@ class DockerCommandBuilder:
         argv += command if command else [*self._agent.get_command(), *agent_args]
         return argv
 
+    @cached_property
     def volumes(self) -> list[tuple[str, VolumeSpec]]:
         """List every volume the container mounts, in ``-v`` flag order.
 
         The single source for both :meth:`build` and the "Mounting" log, so
         the log cannot drift from what the container actually mounts.
+        Cached so both see one snapshot: agent volumes probe the filesystem,
+        and an image build can run between the log and :meth:`build`.
 
         Returns:
             ``(host_path_or_volume_name, VolumeSpec)`` pairs: the workdir,
