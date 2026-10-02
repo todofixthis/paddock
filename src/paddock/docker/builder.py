@@ -1,5 +1,6 @@
 import re
 import subprocess
+from collections.abc import Sequence
 from pathlib import Path
 
 from paddock.agents import BaseAgent
@@ -35,8 +36,14 @@ class DockerCommandBuilder:
         self._workdir = workdir
         self._project_dir_volume = project_dir_volume
 
-    def build(self, *, command: list[str]) -> list[str]:
-        """Assemble the full 'docker run' argv list."""
+    def build(self, *, command: list[str], agent_args: Sequence[str] = ()) -> list[str]:
+        """Assemble the full 'docker run' argv list.
+
+        Args:
+            command: Replaces the agent's command when non-empty.
+            agent_args: Appended to the agent's command; ignored when
+                ``command`` replaces it.
+        """
         argv = ["docker", "run", "--rm", "-it"]
         argv += ["--name", self._resolve_container_name()]
         argv += [f"--workdir={self._workdir}"]
@@ -57,7 +64,7 @@ class DockerCommandBuilder:
         if self._config.get("network"):
             argv += ["--network", self._config["network"]]
         argv.append(self._config["image"])
-        argv += command if command else self._agent.get_command()
+        argv += command if command else [*self._agent.get_command(), *agent_args]
         return argv
 
     def _resolve_container_name(self) -> str:

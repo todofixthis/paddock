@@ -11,6 +11,7 @@ from paddock.config.sources.base import ConfigSource, LoadResult, source_registr
 def _ctx(tmp_path: Path) -> ConfigContext:
     parsed = ParsedArgs(
         agent=None,
+        agent_args=[],
         build_args={},
         build_context=None,
         build_dockerfile=None,

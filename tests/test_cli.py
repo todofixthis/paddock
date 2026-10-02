@@ -10,6 +10,7 @@ def test_no_args():
     assert result.image is None
     assert result.agent is None
     assert result.command == []
+    assert result.agent_args == []
     assert result.volumes == {}
     assert not result.dry_run
     assert not result.quiet
@@ -30,55 +31,87 @@ def test_agent_flag():
 
 def test_positional_becomes_command():
     """
-    A bare positional argument and everything after it becomes the container command.
+    A bare positional argument and everything after it replaces the agent's command.
     'claude' is interpreted as a program name, not the paddock --agent flag.
     '--agent=plan' is a flag passed to the claude program, not to paddock.
-    Users who want to pass both --agent and a positional command must use '--'
-    to disambiguate (e.g. paddock --agent=opencode -- claude --agent=plan).
     """
     result = parse_args(["claude", "--agent=plan"])
     assert result.command == ["claude", "--agent=plan"]
+    assert result.agent_args == []
     assert result.agent is None
 
 
 def test_paddock_flags_before_positional():
     """Paddock flags before the positional are parsed; the positional starts the command."""
-    result = parse_args(["--image=foo", "claude", "--agent=plan"])
-    assert result.image == "foo"
-    assert result.command == ["claude", "--agent=plan"]
+    result = parse_args(["--agent=claude", "/bin/bash"])
+    assert result.agent == "claude"
+    assert result.command == ["/bin/bash"]
+    assert result.agent_args == []
 
 
-def test_double_dash_splits():
-    """'--' explicitly ends paddock arguments; everything after is the container command."""
-    result = parse_args(["--image=foo", "--", "--resume"])
-    assert result.image == "foo"
-    assert result.command == ["--resume"]
+def test_quoted_positional_is_a_single_command_token():
+    """A quoted prompt before '--' is a command to execute, not a prompt."""
+    result = parse_args(["--agent=claude", "fix this bug"])
+    assert result.command == ["fix this bug"]
+    assert result.agent_args == []
+
+
+def test_double_dash_passes_args_to_agent_command():
+    """Everything after '--' is appended to the agent's command, not replacing it."""
+    result = parse_args(["--agent=claude", "--", "--resume"])
+    assert result.agent == "claude"
+    assert result.command == []
+    assert result.agent_args == ["--resume"]
+
+
+def test_double_dash_program_name_is_an_argument():
+    """A program name after '--' is an argument to the agent's command."""
+    result = parse_args(["--agent=claude", "--", "/bin/bash"])
+    assert result.command == []
+    assert result.agent_args == ["/bin/bash"]
+
+
+def test_double_dash_with_nothing_after():
+    """A trailing '--' with nothing after it runs the agent's command unchanged."""
+    result = parse_args(["--agent=claude", "--"])
+    assert result.command == []
+    assert result.agent_args == []
 
 
 def test_double_dash_multiple_occurrences():
     """
-    Multiple '--' occurrences: only the first is treated as a paddock/command split.
-    Subsequent '--' are passed through to the container command unchanged.
+    Multiple '--' occurrences: only the first is treated as a paddock/args split.
+    Subsequent '--' are passed through to the agent's command unchanged.
     """
     result = parse_args(["--agent=opencode", "--", "--continue", "--", "auth", "login"])
     assert result.agent == "opencode"
-    assert result.command == ["--continue", "--", "auth", "login"]
+    assert result.command == []
+    assert result.agent_args == ["--continue", "--", "auth", "login"]
 
 
 def test_double_dash_after_positional():
     """
     '--' after a positional arg: the positional already ended paddock parsing,
-    so '--' passes through to the container command.
+    so '--' passes through to the replacement command verbatim.
     """
     result = parse_args(["--agent=opencode", "web", "--", "--port=4096"])
     assert result.agent == "opencode"
     assert result.command == ["web", "--", "--port=4096"]
+    assert result.agent_args == []
 
 
 def test_unknown_flag_is_error():
     """An unrecognised flag before any positional or '--' exits non-zero."""
     with pytest.raises(SystemExit):
         parse_args(["--not-a-paddock-flag"])
+
+
+def test_agent_flag_before_double_dash_is_error(capsys):
+    """An agent's own flag before '--' is not a paddock flag, so it is an error."""
+    with pytest.raises(SystemExit) as exc:
+        parse_args(["--agent=claude", "--resume"])
+    assert exc.value.code != 0
+    assert "--resume" in capsys.readouterr().err
 
 
 def test_volume_flag():
@@ -154,3 +187,11 @@ def test_build_flags():
     assert result.build_dockerfile == "/Dockerfile"
     assert result.build_context == "."
     assert result.build_policy == "always"
+
+
+def test_abbreviated_flag_is_error(capsys):
+    """An abbreviation of a paddock flag is not a paddock flag, so it is an error."""
+    with pytest.raises(SystemExit) as exc:
+        parse_args(["--dry"])
+    assert exc.value.code != 0
+    assert "--dry" in capsys.readouterr().err

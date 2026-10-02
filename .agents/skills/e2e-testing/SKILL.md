@@ -14,7 +14,7 @@ Only `mcr.microsoft.com` is reachable through the cloud egress proxy; Docker Hub
 
 Run everything below from the repo root. Use `.venv/bin/paddock`, the editable install. Do not use `uv run paddock`: in cloud sessions it adds an unrelated uv deprecation warning to stderr.
 
-Every scenario passes `--agent=false` and an explicit container command, one `bash -c '…'` after `--`. The exception is a scenario about an agent itself: without the flag the default agent is `claude`, which changes the container command to `claude` and mounts `~/.claude` read-write. Without a container command the shell agent runs an interactive `/bin/bash` that never exits under a pseudo-TTY.
+Every scenario passes `--agent=false` and an explicit container command, one `bash -c '…'` as the positional command, never after `--`, which would append it to the agent's `/bin/bash`. The exception is a scenario about an agent itself: without the flag the default agent is `claude`, which changes the container command to `claude` and mounts `~/.claude` read-write. Without a container command the shell agent runs an interactive `/bin/bash` that never exits under a pseudo-TTY.
 
 Isolate each scenario in its own directory `$S` holding `home/` and a project directory. Give project directories basenames of `[a-z0-9-]` only: the basename goes into the container name, `paddock-<basename>-<agent-key>`, which paddock probes with `docker ps -a --filter name=^…$`, a regex, so a metacharacter silently makes the probe match nothing.
 
@@ -30,7 +30,7 @@ env -i PATH="$PATH" HOME="$S/home" .venv/bin/paddock --workdir="$S/c1-project" -
 # real run
 cat > "$S/run.sh" <<RUN
 #!/bin/bash
-env -i PATH="$PATH" HOME="$S/home" "$PWD/.venv/bin/paddock" --workdir="$S/c1-project" --agent=false -- bash -c 'grep " $S/c1-project/.paddock " /proc/mounts; touch $S/c1-project/.paddock/x || echo RO_OK'
+env -i PATH="$PATH" HOME="$S/home" "$PWD/.venv/bin/paddock" --workdir="$S/c1-project" --agent=false bash -c 'grep " $S/c1-project/.paddock " /proc/mounts; touch $S/c1-project/.paddock/x || echo RO_OK'
 RUN
 chmod +x "$S/run.sh"; timeout 120 script -qec "$S/run.sh" /dev/null >"$S/out" 2>&1; echo "exit=$?"
 grep -c "^RO_OK" "$S/out"; ls -d "$S/c1-project/.paddock" 2>/dev/null || echo "removed after exit"
