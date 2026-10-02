@@ -30,11 +30,8 @@ sources overwrite earlier ones:
 1. Project-level TOML  (``<workdir>/.paddock/config.toml``)
 2. User-level TOML  (``~/.config/paddock/config.toml``)
 3. ``[projects."<path>"]`` overrides in the user TOML
-4. Extra TOML file via ``PADDOCK_CONFIG_FILE`` env var, or via the
-   ``--config-file`` CLI flag — the CLI path replaces the env path, so the two
-   are one source, not two
-5. ``PADDOCK_*`` environment variables
-6. CLI flags
+4. ``PADDOCK_*`` environment variables
+5. CLI flags
 
 ``volumes`` entries are additive per host path — the same host path set by a
 higher-priority source replaces the earlier mapping.
@@ -174,8 +171,6 @@ field name and prefixing it with ``PADDOCK_``.  Nested keys are joined with
    PADDOCK_BUILD_POLICY=daily
    PADDOCK_IMAGE=my-claude-image
    PADDOCK_NETWORK=my-docker-network
-
-   PADDOCK_CONFIG_FILE=/path/to/extra.toml   # loads an additional TOML file
 
 ``volumes`` and ``build.args`` have no environment-variable form — set them in a
 TOML file, or pass ``--volume`` / ``--build-args-KEY=VALUE`` on the command
