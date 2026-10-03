@@ -29,7 +29,8 @@ configuration system.  Sources are merged in ascending priority — later
 sources overwrite earlier ones:
 
 1. Project-level TOML  (``<workdir>/.paddock/config.toml``)
-2. User-level TOML  (``~/.config/paddock/config.toml``)
+2. User-level TOML  (``$XDG_CONFIG_HOME/paddock/config.toml``, by default
+   ``~/.config/paddock/config.toml``)
 3. ``[projects."<path>"]`` overrides in the user TOML
 4. ``PADDOCK_*`` environment variables
 5. CLI flags
@@ -87,9 +88,16 @@ Configuration
 TOML files
 ~~~~~~~~~~
 
-Place a ``config.toml`` at ``~/.config/paddock/`` (user-level) or
-``<project>/.paddock/`` (project-level).  Both are optional, and the
-project-level file is off by default until you opt in from your user config:
+Place a ``config.toml`` at ``$XDG_CONFIG_HOME/paddock/`` (user-level) or
+``<project>/.paddock/`` (project-level).  paddock uses ``~/.config`` in place
+of ``XDG_CONFIG_HOME`` when it is unset, empty or not an absolute path.  If
+``XDG_CONFIG_HOME`` points somewhere other than ``~/.config`` but holds no
+``paddock/config.toml``, paddock falls back to ``~/.config/paddock/config.toml``
+if one exists, with a warning; that fallback is deprecated and will be removed
+in paddock 2.0.  If both exist, paddock reads the XDG one and warns that the
+other is ignored, so move an existing file rather than starting a new one.
+Both files are optional, and the project-level file is off by default until you
+opt in from your user config:
 
 .. code-block:: toml
 
