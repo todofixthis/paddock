@@ -7,7 +7,7 @@ superseded-by: 8
 revisit-when: myst-parser stops supporting the current Sphinx major; the docs stop being hosted on ReadTheDocs; a published page needs to cross-reference Python's own documentation, which intersphinx would provide.
 ---
 
-# 0006: Publish Docs with Sphinx and MyST
+# 006: Publish Docs with Sphinx and MyST
 
 ## Context
 
@@ -93,5 +93,5 @@ stay on GitHub.
 
 [`BaseAgent`]: ../../src/paddock/agents/__init__.py
 [filters]: https://github.com/todofixthis/filters
-[filters ADR 012]: https://github.com/todofixthis/filters/blob/main/docs/adr/012-check-the-docs-build-in-the-pre-commit-hook.md
+[filters ADR 012]: https://github.com/todofixthis/filters/blob/develop/docs/adr/012-check-the-docs-build-in-the-pre-commit-hook.md
 [myst-parser]: https://myst-parser.readthedocs.io/
