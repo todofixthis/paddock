@@ -28,7 +28,7 @@ docs = [
 [project]
 authors = [{ name = "Phoenix Zerin", email = "phx@phx.nz" }]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.12",
@@ -61,6 +61,7 @@ false = "paddock.agents.shell:ShellAgent"
 paddock = "paddock.__main__:main"
 
 [project.urls]
+Documentation = "https://phx-paddock.readthedocs.io/"
 Repository = "https://github.com/todofixthis/paddock"
 
 [tool.autohooks]
@@ -71,8 +72,8 @@ pre-commit = [
     "autohooks.plugins.mypy",
     "autohooks.plugins.pytest",
     "autohooks.plugins.ruff",
-    # Strict (-W), full re-read Sphinx build on staged docs/docstring changes;
-    # see docs/adr/0006-publish-docs-with-sphinx-and-myst.md
+    # Strict (-W), full re-read Sphinx build on staged docs, README or docstring
+    # changes; see docs/adr/0008-publish-docs-with-sphinx-and-myst-landing-on-the-readme.md
     "docs_build",
 ]
 

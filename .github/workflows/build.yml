@@ -27,6 +27,13 @@ jobs:
       # warning past review.
       - name: Check docs build
         run: uv run --no-sync make -C docs html SPHINXOPTS="-W --keep-going"
+      # README.rst is both the docs landing page and PyPI's long description,
+      # and Sphinx accepts roles (`:doc:`, `:ref:`) that PyPI's renderer
+      # rejects, so the docs build alone can't vouch for the PyPI page.
+      - name: Check PyPI renders the README
+        run: |
+          uv build
+          uvx twine@7.0.0 check --strict dist/*
 
   # The jobs below repeat the pre-commit hook's lint, test and type checks, so a
   # commit made with --no-verify can't slip past review.

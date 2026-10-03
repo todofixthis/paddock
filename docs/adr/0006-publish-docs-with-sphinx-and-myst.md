@@ -1,8 +1,9 @@
 ---
-status: Accepted
+status: Superseded
 date: 2026-09-23
 scope: [.autohooks/docs_build.py, .github/workflows/build.yml, .readthedocs.yaml, docs/api.rst, docs/conf.py, docs/index.rst, docs/usage/, pyproject.toml]
 summary: Build the docs with Sphinx and myst-parser, writing user pages in Markdown (not RST, not MkDocs), checked strictly (-W) by a pre-commit hook, CI and ReadTheDocs.
+superseded-by: 8
 revisit-when: myst-parser stops supporting the current Sphinx major; the docs stop being hosted on ReadTheDocs; a published page needs to cross-reference Python's own documentation, which intersphinx would provide.
 ---
 

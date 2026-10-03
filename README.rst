@@ -4,6 +4,8 @@ paddock
 Launch coding agents (or a plain shell) in isolated Docker containers,
 with the current working directory mounted as the workspace.
 
+Usage guides and API reference: https://phx-paddock.readthedocs.io/
+
 .. image:: https://img.shields.io/pypi/v/phx-paddock.svg
    :target: https://pypi.org/project/phx-paddock/
    :alt: PyPI version
@@ -14,11 +16,10 @@ with the current working directory mounted as the workspace.
 .. image:: https://img.shields.io/badge/licence-MIT-blue.svg
    :alt: MIT Licence
 
-.. caution::
-
-   **Pre-release software — here be dragons.**
-   APIs, configuration formats, and CLI flags may change without notice
-   in future versions. Bugs and crashes are possible.
+.. contents:: Contents
+   :backlinks: none
+   :depth: 1
+   :local:
 
 Overview
 --------
@@ -38,7 +39,7 @@ higher-priority source replaces the earlier mapping.
 
 The project-level file is off by default (blocked) — enable it in the user
 file's ``[config.allowlist]``; see
-`project-level configuration and the allowlist <https://github.com/todofixthis/paddock/blob/main/docs/usage/project-config.md>`__.
+`project-level configuration and the allowlist <https://phx-paddock.readthedocs.io/en/latest/usage/project-config.html>`__.
 
 Requirements
 ------------
@@ -97,7 +98,7 @@ project-level file is off by default until you opt in from your user config:
 
 ``true`` is the blanket grant; a list such as ``project_toml = ["volumes"]``
 permits only the keys it names.  See
-`project-level configuration and the allowlist <https://github.com/todofixthis/paddock/blob/main/docs/usage/project-config.md>`__
+`project-level configuration and the allowlist <https://phx-paddock.readthedocs.io/en/latest/usage/project-config.html>`__
 for what each grant hands a committed file.
 
 A config file looks like this:
@@ -270,7 +271,7 @@ Each agent must subclass ``paddock.agents.BaseAgent`` and implement
 Docker Image
 ------------
 
-A ready-to-use ``Dockerfile`` is included in ``images/``.  It installs
+A ready-to-use ``Dockerfile`` is included in `images/ <https://github.com/todofixthis/paddock/tree/main/images>`__.  It installs
 Python (via the deadsnakes PPA), Node.js, and the selected coding agent.
 
 Build arguments:
@@ -300,9 +301,9 @@ Or set a ``[build]`` table in your config and let paddock build it
 automatically according to your chosen policy.
 
 For what a custom image needs, and troubleshooting one that won't start, see
-`custom Docker images <https://github.com/todofixthis/paddock/blob/main/docs/usage/docker-images.md>`__.
+`custom Docker images <https://phx-paddock.readthedocs.io/en/latest/usage/docker-images.html>`__.
 
 Licence
 -------
 
-MIT — see ``LICENCE.txt``.
+MIT — see `LICENCE.txt <https://github.com/todofixthis/paddock/blob/main/LICENCE.txt>`__.
