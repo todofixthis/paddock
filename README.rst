@@ -90,10 +90,14 @@ TOML files
 
 Place a ``config.toml`` at ``$XDG_CONFIG_HOME/paddock/`` (user-level) or
 ``<project>/.paddock/`` (project-level).  paddock uses ``~/.config`` in place
-of ``XDG_CONFIG_HOME`` when it is unset, empty or not an absolute path, and
-reads only that one location: with ``XDG_CONFIG_HOME`` set to an absolute path,
-it never checks ``~/.config/paddock/``.  Both files are optional, and the
-project-level file is off by default until you opt in from your user config:
+of ``XDG_CONFIG_HOME`` when it is unset, empty or not an absolute path.  If
+``XDG_CONFIG_HOME`` points somewhere other than ``~/.config`` but holds no
+``paddock/config.toml``, paddock falls back to ``~/.config/paddock/config.toml``
+if one exists, with a warning; that fallback is deprecated and will be removed
+in paddock 2.0.  If both exist, paddock reads the XDG one and warns that the
+other is ignored, so move an existing file rather than starting a new one.
+Both files are optional, and the project-level file is off by default until you
+opt in from your user config:
 
 .. code-block:: toml
 
