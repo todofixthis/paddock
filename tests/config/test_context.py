@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 from paddock.cli import ParsedArgs
 from paddock.config.context import ConfigContext
 
@@ -62,6 +64,28 @@ def test_default_user_config_path_follows_home(monkeypatch, tmp_path: Path):
     """The default path is resolved per-call against the current $HOME."""
     monkeypatch.setenv("HOME", str(tmp_path))
     assert (
-        ConfigContext.default_user_config_path()
+        ConfigContext.default_user_config_path({})
+        == tmp_path / ".config" / "paddock" / "config.toml"
+    )
+
+
+def test_default_user_config_path_follows_xdg_config_home(tmp_path: Path):
+    """An absolute XDG_CONFIG_HOME replaces ~/.config as the base directory."""
+    xdg = tmp_path / "xdg"
+    assert (
+        ConfigContext.default_user_config_path({"XDG_CONFIG_HOME": str(xdg)})
+        == xdg / "paddock" / "config.toml"
+    )
+
+
+@pytest.mark.parametrize("xdg_config_home", ["", "relative/config"])
+def test_default_user_config_path_ignores_invalid_xdg_config_home(
+    monkeypatch, tmp_path: Path, xdg_config_home: str
+):
+    """An empty or relative XDG_CONFIG_HOME is invalid per the XDG spec, so the
+    path falls back to ~/.config."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    assert (
+        ConfigContext.default_user_config_path({"XDG_CONFIG_HOME": xdg_config_home})
         == tmp_path / ".config" / "paddock" / "config.toml"
     )

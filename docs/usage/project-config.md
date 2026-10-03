@@ -4,7 +4,7 @@
 
 paddock supports three levels of file-based configuration:
 
-- **User-level** (`~/.config/paddock/config.toml`) — your personal defaults, applied to every project.
+- **User-level** (`$XDG_CONFIG_HOME/paddock/config.toml`, which is `~/.config/paddock/config.toml` unless `XDG_CONFIG_HOME` is set to an absolute path) — your personal defaults, applied to every project. paddock reads only this one path: with `XDG_CONFIG_HOME` set to an absolute path, it does not also check `~/.config/paddock/`.
 - **Project-level** (`.paddock/config.toml` in the project workdir) — settings committed alongside a project and shared with everyone who works on it.
 
 Because project-level config lives inside a project repository, paddock treats it as **untrusted by default**. A malicious or misconfigured project could otherwise redirect your Docker image, override your network settings, or mount sensitive paths. Even once enabled it carries the lowest [weight](#precedence) of any source, so the exposure is only the keys you leave unset. You must explicitly grant each project (or all projects) permission to contribute config before paddock will honour it.
@@ -21,7 +21,7 @@ Environment variables (`PADDOCK_*`) and CLI flags are therefore **permitted by d
 
 ## Enabling project-level config
 
-Project-level config is **off by default (blocked)**. Grant it the narrowest set of keys the project needs, in your user config (`~/.config/paddock/config.toml`):
+Project-level config is **off by default (blocked)**. Grant it the narrowest set of keys the project needs, in your user config (`$XDG_CONFIG_HOME/paddock/config.toml`, usually `~/.config/paddock/config.toml`):
 
 ```toml
 [config.allowlist]
@@ -104,7 +104,7 @@ Config sources are merged in ascending weight order — lower weight is merged f
 | Weight | Source | Notes |
 |---|---|---|
 | 10 | `project_toml` | `.paddock/config.toml`; off by default |
-| 20 | `user` | `~/.config/paddock/config.toml` |
+| 20 | `user` | `$XDG_CONFIG_HOME/paddock/config.toml` (default `~/.config/paddock/config.toml`) |
 | 30 | `project_overrides` | `[projects."..."]` section of user config |
 | 50 | `env` | `PADDOCK_*` environment variables |
 | 60 | `cli` | Command-line flags |
@@ -201,7 +201,7 @@ The configured agent key is not registered. Use one of the agents the message li
 
 **`[final:image] Non-empty value expected.`**
 
-No source supplied a Docker image. Set `image` in your user config or pass `--image` on the command line.
+No source supplied a Docker image. Set `image` in your user config or pass `--image` on the command line. If `XDG_CONFIG_HOME` is set to an absolute path, paddock reads your user config only from `$XDG_CONFIG_HOME/paddock/config.toml`, never from `~/.config/paddock/`.
 
 **`<path> exists but is not a directory; paddock cannot mount it as the project config directory`**
 
@@ -213,7 +213,7 @@ A file named `.paddock` exists in the project workdir. Rename or remove it, then
 
 **`project_toml: dropped non-allowlisted keys ... — add them to [config.allowlist].project_toml to keep them`**
 
-Every key in the project file was dropped: your user config has no `[config.allowlist]` grant for `project_toml` — which is off by default (blocked) — or a grant that names none of the keys the file sets. See [Enabling project-level config](#enabling-project-level-config).
+Every key in the project file was dropped: your user config has no `[config.allowlist]` grant for `project_toml` — which is off by default (blocked) — or a grant that names none of the keys the file sets. See [Enabling project-level config](#enabling-project-level-config). If `XDG_CONFIG_HOME` is set to an absolute path, paddock reads your user config only from `$XDG_CONFIG_HOME/paddock/config.toml`, never from `~/.config/paddock/`.
 
 **Project config is loaded but some keys are ignored**
 

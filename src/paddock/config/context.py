@@ -1,3 +1,4 @@
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -36,10 +37,26 @@ class ConfigContext:
         return str(self.workdir.resolve())
 
     @staticmethod
-    def default_user_config_path() -> Path:
-        """Return ``~/.config/paddock/config.toml``, resolved at call time.
+    def default_user_config_path(environ: Mapping[str, str]) -> Path:
+        """Return the user config path, ``$XDG_CONFIG_HOME/paddock/config.toml``.
 
-        Resolved per-call (not import time) so tests that redirect ``$HOME`` see
-        the updated value.
+        Follows the XDG Base Directory spec: an unset or empty
+        ``XDG_CONFIG_HOME`` falls back to ``~/.config``, and a relative one is
+        invalid and ignored. Resolved per-call (not import time) so tests that
+        redirect ``$HOME`` see the updated value.
+
+        Args:
+            environ: Environment variable mapping to read ``XDG_CONFIG_HOME``
+                from.
+
+        Returns:
+            The path to ``paddock/config.toml`` under the config base directory.
+            It may not exist on disk.
         """
-        return Path.home() / ".config" / "paddock" / "config.toml"
+        xdg_config_home = Path(environ.get("XDG_CONFIG_HOME", ""))
+        base = (
+            xdg_config_home
+            if xdg_config_home.is_absolute()
+            else Path.home() / ".config"
+        )
+        return base / "paddock" / "config.toml"
