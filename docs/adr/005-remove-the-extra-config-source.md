@@ -1,17 +1,17 @@
 ---
 status: Accepted
 date: 2026-09-08
-scope: [src/paddock/cli.py, src/paddock/config/sources/, docs/usage/project-config.md, tests/]
+scope: [docs/usage/project-config.md, src/paddock/cli.py, src/paddock/config/sources/]
 summary: Delete the extra config source (--config-file / PADDOCK_CONFIG_FILE) rather than keep it speculative.
 revisit-when: A concrete need for a runtime-named config file emerges.
 ---
 
-# 0005: Remove the Extra Config Source
+# 005: Remove the Extra Config Source
 
 ## Context
 
-`ExtraConfigSource` was introduced alongside the rest of the [0003][] registry —
-one more `ConfigSource` subclass, loading a user-shaped TOML file named at runtime via
+`ExtraConfigSource` was introduced alongside the rest of the [003][] registry — one more
+[`ConfigSource`][] subclass, loading a user-shaped TOML file named at runtime via
 `--config-file` / `PADDOCK_CONFIG_FILE`. It shipped speculatively, without a driving use
 case, on the reasoning that the registry made a source cheap to add.
 
@@ -28,9 +28,7 @@ conventional env-then-CLI order).
 No production caller or issue has ever needed `--config-file` / `PADDOCK_CONFIG_FILE` —
 every place it's exercised is a test: that source's own suite, tests elsewhere that name
 it directly (CLI parsing, loader precedence, registry weight order), or the
-`config_file=None` fixture value every other source test carries for `ParsedArgs`.
-Keeping an unused, arbitrarily-ordered source costs every future reader of the
-precedence table more than it has ever bought a user.
+`config_file=None` fixture value every other source test carries for [`ParsedArgs`][].
 
 ## Options
 
@@ -54,8 +52,6 @@ precedence order.
 their position; nothing left to explain away.
 **Cons:** A real future need for a runtime-named config file starts from zero design
 work instead of an existing (if unmotivated) implementation.
-**Risks:** None beyond the deferred design cost above and the test churn — no
-production caller is affected.
 
 ### Option 3: Keep the source but fix its weight to the network boundary
 
@@ -67,9 +63,9 @@ of which the [project-config][] threat model already treats as trusted, on the s
 **Pros:** Gives the fixed-weight question a principled answer instead of leaving it
 arbitrary.
 **Cons:** Still speculative — repositioning an unused source does not supply the missing
-use case, and a fixed weight is only one of the open design questions the kaupapa
-(purpose) raised (whether an extra file should inherit the precedence of whichever
-source names it, for instance, is untouched by this option).
+use case, and a fixed weight is only one of the source's open design questions (whether
+an extra file should inherit the precedence of whichever source names it, for instance,
+is untouched by this option).
 
 ## Decision
 
@@ -82,17 +78,22 @@ concrete use case would answer them by construction; today none exists to ask.
 - `docs/usage/project-config.md`'s precedence table drops from six sources to five;
   its allowlist section's "sources with no allowlist entry" note drops `extra` from the
   list, leaving `user` and `project_overrides`.
-- [0004][]'s subsidiary decision that `extra` and `project_overrides` stay trusted and
+- [004][]'s subsidiary decision that `extra` and `project_overrides` stay trusted and
   non-restrictable no longer has `extra` to apply to; the decision itself needs no
   change, since `project_overrides` still stands as its subject.
 - `--config-file` and `PADDOCK_CONFIG_FILE` become unrecognised; no deprecation path is
   provided, since neither had a known production caller.
 - `tests/config/sources/test_extra.py` is deleted along with the source it tests. Every
   test elsewhere naming `config_file` or `extra` directly — CLI parsing
-  (`tests/test_cli.py`), loader precedence (`tests/config/test_loader.py`), registry
-  weight order (`tests/config/sources/test_base.py`) — is updated to drop it; every
-  other source test's `ParsedArgs` fixture drops its `config_file=None` field.
+  ([`tests/test_cli.py`][]), loader precedence ([`tests/config/test_loader.py`][]),
+  registry weight order ([`tests/config/sources/test_base.py`][]) — is updated to drop
+  it; every other source test's `ParsedArgs` fixture drops its `config_file=None` field.
 
-[0003]: 0003-registry-driven-config-sources.md
-[0004]: 0004-allowlist-over-denylist.md
+[003]: 003-load-config-through-a-registry-of-sources.md
+[004]: 004-gate-untrusted-config-sources-with-an-allowlist.md
+[`ConfigSource`]: ../../src/paddock/config/sources/base.py
+[`ParsedArgs`]: ../../src/paddock/cli.py
 [project-config]: ../usage/project-config.md
+[`tests/config/sources/test_base.py`]: ../../tests/config/sources/test_base.py
+[`tests/config/test_loader.py`]: ../../tests/config/test_loader.py
+[`tests/test_cli.py`]: ../../tests/test_cli.py
