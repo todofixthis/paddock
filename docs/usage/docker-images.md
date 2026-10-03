@@ -35,8 +35,8 @@ The workdir mounts at the same absolute path as on the host, so paths in agent s
 ## Starting points
 
 paddock ships a Dockerfile in `images/` that installs Python, Node.js and the selected
-agent; see the README's Docker Image section. Point `[build]` at your own Dockerfile to
-have paddock build it for you, or set `image` to a prebuilt one.
+agent; see [Docker Image][docker-image]. Point `[build]` at your own Dockerfile to have
+paddock build it for you, or set `image` to a prebuilt one.
 
 ## Running commands through a login shell
 
@@ -92,4 +92,5 @@ Docker couldn't find the command on the image's `ENV PATH`, usually because the 
 no `ENTRYPOINT` and the tool is only on `PATH` once a shell profile runs. Add its
 directory with `ENV PATH`, or use the login-shell entrypoint above.
 
+[docker-image]: https://phx-paddock.readthedocs.io/en/latest/#docker-image
 [leash]: https://github.com/strongdm/leash
