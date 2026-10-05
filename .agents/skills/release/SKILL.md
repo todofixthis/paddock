@@ -131,23 +131,28 @@ running the upload means failing the release's one irreversible step. Once they
 have published, carry on from step 12.
 
 ### 12. Merge `main` back into `develop`
-```bash
-git checkout develop && git pull
-git checkout -b merge/v<version>
-git merge --no-ff --no-edit origin/main
-git push -u origin merge/v<version>
-gh pr create --base develop --title "Merge v<version> back into develop" \
-  --body "Brings the v<version> release merge and version bump back into \`develop\`, so the next release branch starts from them."
-```
 Without this, `develop` keeps the old `__version__`, and the next release PR
 conflicts with `main` on that line. Merge from a branch rather than opening a PR
 with `main` as its head: `main` is protected, so conflicts can't be resolved
-there. If `git merge` stops on conflicts (likeliest after a hotfix), resolve them
-on `merge/v<version>`, then `git add` the resolved files and
-`uv run git commit --no-edit` (which keeps git's merge message rather than
-opening an editor) before pushing. Merge the PR
-with a merge commit, the only method the branch rulesets allow: a squash would
-leave `main`'s commits out of `develop`'s history and bring the conflict back.
+there.
+
+First, merge on a branch, and check the exit code before going on:
+```bash
+git checkout develop && git pull && git checkout -b merge/v<version> && \
+  git merge --no-ff --no-edit origin/main
+```
+If `git merge` exits non-zero, it stopped on conflicts (likeliest after a
+hotfix). Resolve them on `merge/v<version>`, `git add` the resolved files, then
+`uv run git commit --no-edit`, which keeps git's merge message rather than
+opening an editor. Only once the merge is committed, push it and open the PR:
+```bash
+git push -u origin merge/v<version> && \
+  gh pr create --base develop --title "Merge v<version> back into develop" \
+  --body "Brings the v<version> release merge and version bump back into \`develop\`, so the next release branch starts from them."
+```
+Merge the PR with a merge commit, the only method the branch rulesets allow: a
+squash would leave `main`'s commits out of `develop`'s history and bring the
+conflict back.
 
 **Stop here. Wait for the user to confirm the PR is merged before continuing.**
 
