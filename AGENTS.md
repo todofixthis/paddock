@@ -80,7 +80,7 @@ well-named method instead.
 
 ## Branches
 
-`main` is the development branch and feature branches come off it. A `develop` branch is added at the 1.0 release, after which `main` carries releases only.
+`develop` is the default and development branch: feature branches come off it, and pull requests target it. `main` carries releases only. Changes reach it through the `release` skill, as a release branch off `develop` or a hotfix branch off `main`, and every release ends by merging `main` back into `develop`. A clone made before `develop` became the default still has `origin/HEAD` on `main`; run `git remote set-head origin -a` once to fix it.
 
 ## Configuration
 
