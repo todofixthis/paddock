@@ -37,7 +37,8 @@ class ConfigLoader:
 
         Args:
             user_config_path: If provided, overrides the default user config
-                path (``~/.config/paddock/config.toml``). Useful for testing.
+                path (``$XDG_CONFIG_HOME/paddock/config.toml``, defaulting to
+                ``~/.config/paddock/config.toml``). Useful for testing.
         """
         self._user_path_override = user_config_path
 
@@ -99,7 +100,8 @@ class ConfigLoader:
             environ=dict(environ),
             workdir=workdir,
             user_config_path=(
-                self._user_path_override or ConfigContext.default_user_config_path()
+                self._user_path_override
+                or ConfigContext.default_user_config_path(environ)
             ),
         )
 

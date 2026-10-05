@@ -47,6 +47,30 @@ def test_apply_defaults(tmp_path: Path):
     assert result["volumes"] == {}
 
 
+def test_resolve_reads_user_config_from_xdg_config_home(tmp_path: Path):
+    """resolve() loads the user config from $XDG_CONFIG_HOME/paddock when set."""
+    xdg = tmp_path / "xdg"
+    cfg = xdg / "paddock" / "config.toml"
+    cfg.parent.mkdir(parents=True)
+    cfg.write_text('image = "ubuntu:24.04"\n')
+    r = ConfigLoader().resolve(
+        _empty_parsed(), workdir=tmp_path, environ={"XDG_CONFIG_HOME": str(xdg)}
+    )
+    assert r.config["image"] == "ubuntu:24.04"
+
+
+def test_resolve_falls_back_to_legacy_user_config(tmp_path: Path, monkeypatch):
+    """resolve() still loads ~/.config/paddock/config.toml when XDG_CONFIG_HOME
+    is set but holds no paddock config."""
+    _setup_home(tmp_path, monkeypatch, 'image = "ubuntu:22.04"\n')
+    r = ConfigLoader().resolve(
+        _empty_parsed(),
+        workdir=tmp_path,
+        environ={"XDG_CONFIG_HOME": str(tmp_path / "xdg")},
+    )
+    assert r.config["image"] == "ubuntu:22.04"
+
+
 def test_resolve_returns_config_dict(tmp_path: Path, monkeypatch):
     """resolve() returns a ResolvedConfig with the correct values."""
     _setup_home(tmp_path, monkeypatch, 'image = "ubuntu:22.04"\nagent = "claude"\n')

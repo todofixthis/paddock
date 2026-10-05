@@ -1,16 +1,16 @@
 ---
-status: Archived
+status: Superseded
 date: 2026-08-29
-archived-because: phx:writing-adrs is read before any new ADR is drafted (AGENTS.md requires it), met while the work is still being planned, defending the scope-not-tags convention this ADR adopts.
 scope: [docs/adr/, scripts/adr/generate_index.py, .autohooks/adr_index.py]
 summary: Replace ADR frontmatter's tags field with scope — the exact paths and directory prefixes a decision binds — validated by the index generator.
+superseded-by: 9
 ---
 
-# 0002: Scope ADR Frontmatter by the Paths a Decision Binds
+# 002: Scope ADR Frontmatter by the Paths a Decision Binds
 
 ## Context
 
-ADR 0001 carries a `tags` field: free-text keywords such as `tooling`,
+ADR 001 carries a `tags` field: free-text keywords such as `tooling`,
 `type-checking`, `pre-commit`. `tags` helps a reader who already suspects a decision
 exists search for it, but gives no way to go the other direction — from a file
 someone is editing back to the decisions governing it — since keywords don't name
@@ -84,7 +84,7 @@ dependency here) rather than the canonical script's hand-rolled, stdlib-only lin
 parser — that parser exists because the skill's own repository has no Python project
 root and cannot take a PyYAML dependency, a constraint that doesn't apply here.
 
-`scope` for ADR 0001 was authored by reading what it actually binds: `pyproject.toml`,
+`scope` for ADR 001 was authored by reading what it actually binds: `pyproject.toml`,
 where the mypy dependency, `[tool.mypy]` configuration, and the autohooks pre-commit
 plugin list all live. Its `revisit-when` — "ty stabilises and ships a published
 autohooks plugin" — was already stated in the Decision's closing sentence but never
@@ -99,7 +99,7 @@ captured as a frontmatter field; migrating the ADR was also the moment to surfac
 - `uv run python -m scripts.adr.generate_index --for <path>` reports which ADRs bind
   a given file.
 - `docs/adr/INDEX.md` gains a Scope column and drops Tags; a Revisit column surfaces
-  ADR 0001's newly-captured trigger.
+  ADR 001's newly-captured trigger.
 - Archiving removes this ADR from `INDEX.md`, but `archived-because` only defends the
   scope-not-tags convention. The PyYAML-over-stdlib-parser choice, and the absence of
   CI enforcement, have no comparable defence and could regress unnoticed; accepted,

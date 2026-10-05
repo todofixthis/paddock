@@ -1,20 +1,19 @@
 ---
 status: Accepted
 date: 2026-06-17
-scope: [src/paddock/config/allowlist.py, src/paddock/config/loader.py, src/paddock/config/schema.py, src/paddock/config/sources/]
+scope: [src/paddock/config/allowlist.py, src/paddock/config/fields.py, src/paddock/config/filters.py, src/paddock/config/loader.py, src/paddock/config/schema.py, src/paddock/config/sources/]
 summary: Gate untrusted config sources with a per-source allowlist (opt-in), not a denylist, and disable project_toml by default as its application.
 ---
 
-# 0004: Allowlist Over Denylist for Untrusted Config Sources
+# 004: Gate Untrusted Config Sources with an Allowlist
 
 ## Context
 
 As project-level config (`.paddock/config.toml`) is introduced on top of the source
-architecture in [0003](0003-registry-driven-config-sources.md), the risk of an untrusted
-source (a checked-in project file, an unreviewed env override) silently taking over
-container behaviour — image, volumes, network — increases. Project contributors must
-not be able to force arbitrary container behaviour on team members simply by committing
-a `.paddock/config.toml`.
+architecture in [ADR 003][], the risk of an untrusted source (a checked-in project file,
+an unreviewed env override) silently taking over container behaviour — image, volumes,
+network — increases. Project contributors must not be able to force arbitrary container
+behaviour on team members simply by committing a `.paddock/config.toml`.
 
 The threat model is a checked-in change from an untrusted contributor, not an
 attacker-controlled shell: `env` and `cli` inputs are assumed to come from the operator
@@ -33,18 +32,17 @@ container image, volumes, or network.
 
 ### Option 2: Allowlist, opt-in (Accepted)
 
-Each source declares a per-class `ALLOWLIST_DEFAULT` (`bool | list[str]`). An
-`Allowlist`, built from these class defaults plus user-supplied `[config.allowlist]`
-rules, gates which keys a source may contribute; keys with no rule are default-denied.
-The `user` source is hard-wired always enabled, regardless of any rule — it is the
-operator's own trusted file. `project_toml` defaults to blocked
-(`ALLOWLIST_DEFAULT = False`) as a direct application of the generic rule: no
-special-cased code path, just the same mechanism any source uses. Users opt in via
-`[config.allowlist]\nproject_toml = true`.
+Each source declares a per-class [`ALLOWLIST_DEFAULT`][] (`bool | list[str]`); the base
+class defaults it to `False`, so a new source starts blocked. An [`Allowlist`][], built
+from these class defaults plus user-supplied `[config.allowlist]` rules, gates which
+keys a source may contribute; keys with no rule are default-denied. The `user` source is
+hard-wired always enabled, regardless of any rule — it is the operator's own trusted
+file. `project_toml` defaults to blocked (`ALLOWLIST_DEFAULT = False`) as a direct
+application of the generic rule: no special-cased code path, just the same mechanism any
+source uses. Users opt in via `[config.allowlist]\nproject_toml = true`.
 
-**Pros:** New sources start blocked by default — forgetting to allow a key is merely
-inconvenient, not a security regression. The same mechanism applies uniformly to `cli`,
-`env`, `extra`, `project_overrides`, and `project_toml`.
+**Pros:** The same mechanism applies uniformly to `cli`, `env`, `extra`,
+`project_overrides`, and `project_toml`.
 
 **Cons:** A key the rule does not permit is dropped with a warning, not an error:
 paddock names the dropped leaf paths whether the source is wholly or partly disabled,
@@ -52,10 +50,6 @@ but the run continues without the config the operator believed was applied, and
 `--quiet` hides the warning altogether — a real debugging cost. (A mistyped *allowlist
 entry* is a separate matter: it is rejected when the user config loads, with
 `[user:config.allowlist.project_toml.0] Valid options are: […]`.)
-
-**Risks:** In CI, or any context where `PADDOCK_*` env vars are untrusted, `env`'s
-default-trusted posture is wrong for that environment; operators must gate `env`
-explicitly via `[config.allowlist]`.
 
 ### Option 3: Denylist
 
@@ -83,10 +77,10 @@ Subsidiary decisions recorded here to avoid re-litigation:
 
 - **`extra` and `project_overrides` stay trusted (`ALLOWLIST_DEFAULT = True`) and are
   NOT user-restrictable.** The valid `[config.allowlist]` keys remain the static
-  `{cli, env, project_toml}` (`schema._ALLOWLIST_SOURCES`), not a registry-derived set,
-  because `schema.py` is imported without `sources`; a registry-derived key set would be
-  empty at schema-construction time and reject every allowlist key. Full per-source
-  uniformity here is YAGNI.
+  `{cli, env, project_toml}` ([`schema._ALLOWLIST_SOURCES`][schema.py]), not a
+  registry-derived set, because `schema.py` is imported without `sources`; a
+  registry-derived key set would be empty at schema-construction time and reject every
+  allowlist key. Full per-source uniformity here is YAGNI.
 
 - **`Allowlist` does not import `sources`; the loader injects the defaults.**
   `Allowlist(defaults, raw)` is pure data; the loader (which already imports
@@ -98,11 +92,10 @@ Subsidiary decisions recorded here to avoid re-litigation:
   user TOML applies to all projects; `[projects."<path>".config.allowlist]` shadows it
   on a per-source-key basis for that project only.
 
-- **`AllowlistEntry` defers `allowlist_directives()` resolution** — the set of valid
-  dotted paths (see [0003](0003-registry-driven-config-sources.md) for the declarative
-  `CONFIG_FIELDS` source) is fetched at validation time, not import time, to avoid a
-  circular import between `filters.py` and `schema.py`. This is the one permitted
-  deferred-import location in this branch.
+- **[`AllowlistEntry`][] defers [`allowlist_directives()`][] resolution** — the set of
+  valid dotted paths (see ADR 003 for the declarative `CONFIG_FIELDS` source) is fetched
+  at validation time, not import time, to avoid a circular import between `filters.py`
+  and `schema.py`. This is the one permitted deferred-import location in this branch.
 
 ## Consequences
 
@@ -111,11 +104,13 @@ Subsidiary decisions recorded here to avoid re-litigation:
 - Operators running paddock in CI, or any context where `PADDOCK_*` env vars are not
   fully trusted, must explicitly gate `env` via `[config.allowlist]` — the default
   assumes an interactively-operated shell.
-- A grant that omits a key a source sets costs a warning rather than an error: the
-  dropped leaf paths are logged at `WARNING` level and the run continues, so a
-  misconfigured grant surfaces only in the logs — and `--quiet` suppresses it. That
-  debugging cost is accepted in exchange for a safe-by-default posture.
-- Because the valid allowlist keys are static rather than registry-derived (see
-  [0003](0003-registry-driven-config-sources.md)), an operator auditing "what may
-  `project_toml` set today" must read `ALLOWLIST_DEFAULT` across the source classes;
-  there is no single enumerated list to consult.
+- Because the valid allowlist keys are static rather than registry-derived, an operator
+  auditing "what may `project_toml` set today" must read `ALLOWLIST_DEFAULT` across the
+  source classes; there is no single enumerated list to consult.
+
+[ADR 003]: 003-load-config-through-a-registry-of-sources.md
+[`Allowlist`]: ../../src/paddock/config/allowlist.py
+[`ALLOWLIST_DEFAULT`]: ../../src/paddock/config/sources/base.py
+[`allowlist_directives()`]: ../../src/paddock/config/fields.py
+[`AllowlistEntry`]: ../../src/paddock/config/filters.py
+[schema.py]: ../../src/paddock/config/schema.py

@@ -18,7 +18,7 @@ Before writing code, check:
 
 ## Architecture Decision Records
 
-When making significant decisions — choosing between libraries, patterns, tools, or conventions — you **must** write an ADR before implementing the decision. Use the `writing-adrs` skill for the format and conventions. ADRs live in `docs/adr/`. Before writing, run `ls docs/adr/` to find the highest existing number and increment it.
+When making significant decisions — choosing between libraries, patterns, tools, or conventions — you **must** write an ADR before implementing the decision. Use the `phx:writing-adrs` skill (from the phx plugin, which `.claude/settings.json` enables) for the format, conventions and tooling: its `adr.py` allocates the number, generates `docs/adr/INDEX.md` and validates the corpus. Outside Claude Code, run the same tool as `phx-adr` (see Commands). Don't hand-edit the index or add a repo-local ADR script (ADR 009). ADRs live in `docs/adr/`.
 
 If you find yourself about to establish a new cross-cutting pattern (something that will affect multiple domains or files, e.g. a testing convention, a shared utility, an error-handling approach), stop and write an ADR first even if the immediate task feels local. A pattern adopted once becomes the template for everything that follows.
 
@@ -37,6 +37,17 @@ uv run ruff check                                      # lint
 uvx --from pip pip index versions <package>            # check available versions on PyPI
 uv run make -C docs html SPHINXOPTS="-W --keep-going -E"  # build docs strictly (-E: full re-read, else a rerun hides warnings)
 uv run git commit                                      # always use instead of git commit (runs autohooks)
+```
+
+The phx plugin's ADR tool, for use outside Claude Code (keep the ref in step with the `adrs` CI job):
+
+```bash
+# Scaffold the next ADR
+uvx --from 'git+https://github.com/todofixthis/phx-claude-siat@4b7694d4999440380e5d2a0176435c5a92e7ad4a#subdirectory=skills/writing-adrs' phx-adr new "Title" --summary "…" --scope path/
+# Regenerate docs/adr/INDEX.md
+uvx --from 'git+https://github.com/todofixthis/phx-claude-siat@4b7694d4999440380e5d2a0176435c5a92e7ad4a#subdirectory=skills/writing-adrs' phx-adr index
+# Validate, as CI does
+uvx --from 'git+https://github.com/todofixthis/phx-claude-siat@4b7694d4999440380e5d2a0176435c5a92e7ad4a#subdirectory=skills/writing-adrs' phx-adr check
 ```
 
 > **Run `uv run` from the repo (or worktree) root** — it resolves the project from the working directory, so `cd`-ing to a scratchpad first breaks imports with `ModuleNotFoundError: No module named 'paddock'`. Keep the cwd at the root and reference throwaway files by absolute path.
@@ -69,7 +80,7 @@ well-named method instead.
 
 ## Branches
 
-`main` is the development branch and feature branches come off it. A `develop` branch is added at the 1.0 release, after which `main` carries releases only.
+`develop` is the default and development branch: feature branches come off it, and pull requests target it. `main` carries releases only. Changes reach it through the `release` skill, as a release branch off `develop` or a hotfix branch off `main`, and every release ends by merging `main` back into `develop`. A clone made before `develop` became the default still has `origin/HEAD` on `main`; run `git remote set-head origin -a` once to fix it.
 
 ## Configuration
 

@@ -4,7 +4,7 @@
 
 paddock supports three levels of file-based configuration:
 
-- **User-level** (`~/.config/paddock/config.toml`) — your personal defaults, applied to every project.
+- **User-level** (`$XDG_CONFIG_HOME/paddock/config.toml`, which is `~/.config/paddock/config.toml` unless `XDG_CONFIG_HOME` is set to an absolute path) — your personal defaults, applied to every project. If `XDG_CONFIG_HOME` points somewhere other than `~/.config` and has no `paddock/config.toml`, paddock reads `~/.config/paddock/config.toml` if one exists there, with a warning to move it; that fallback is deprecated and goes in paddock 2.0. When both files exist, paddock reads the XDG one and warns that the other is ignored. `--quiet` hides both warnings.
 - **Project-level** (`.paddock/config.toml` in the project workdir) — settings committed alongside a project and shared with everyone who works on it.
 
 Because project-level config lives inside a project repository, paddock treats it as **untrusted by default**. A malicious or misconfigured project could otherwise redirect your Docker image, override your network settings, or mount sensitive paths. Even once enabled it carries the lowest [weight](#precedence) of any source, so the exposure is only the keys you leave unset. You must explicitly grant each project (or all projects) permission to contribute config before paddock will honour it.
@@ -21,7 +21,7 @@ Environment variables (`PADDOCK_*`) and CLI flags are therefore **permitted by d
 
 ## Enabling project-level config
 
-Project-level config is **off by default (blocked)**. Grant it the narrowest set of keys the project needs, in your user config (`~/.config/paddock/config.toml`):
+Project-level config is **off by default (blocked)**. Grant it the narrowest set of keys the project needs, in your user config — the file paddock reads, described under [Overview](#overview). If `XDG_CONFIG_HOME` points somewhere other than `~/.config` and your config is still at `~/.config/paddock/config.toml`, move it to `$XDG_CONFIG_HOME/paddock/` first rather than starting a new file there, or paddock will stop reading the old one:
 
 ```toml
 [config.allowlist]
@@ -104,7 +104,7 @@ Config sources are merged in ascending weight order — lower weight is merged f
 | Weight | Source | Notes |
 |---|---|---|
 | 10 | `project_toml` | `.paddock/config.toml`; off by default |
-| 20 | `user` | `~/.config/paddock/config.toml` |
+| 20 | `user` | `$XDG_CONFIG_HOME/paddock/config.toml` (default `~/.config/paddock/config.toml`) |
 | 30 | `project_overrides` | `[projects."..."]` section of user config |
 | 50 | `env` | `PADDOCK_*` environment variables |
 | 60 | `cli` | Command-line flags |
@@ -214,6 +214,14 @@ A file named `.paddock` exists in the project workdir. Rename or remove it, then
 **`project_toml: dropped non-allowlisted keys ... — add them to [config.allowlist].project_toml to keep them`**
 
 Every key in the project file was dropped: your user config has no `[config.allowlist]` grant for `project_toml` — which is off by default (blocked) — or a grant that names none of the keys the file sets. See [Enabling project-level config](#enabling-project-level-config).
+
+**`Reading user config from … because XDG_CONFIG_HOME is set and … does not exist. This fallback is deprecated …`**
+
+`XDG_CONFIG_HOME` points somewhere other than `~/.config`, but your user config is still at `~/.config/paddock/config.toml`. Move it to `$XDG_CONFIG_HOME/paddock/config.toml`, the path after "move the file to" in the warning; paddock 2.0 will stop reading the old location. Make sure `XDG_CONFIG_HOME` is set everywhere you run paddock (IDE, cron, `sudo`): a run without it looks only in `~/.config/paddock/`.
+
+**`Ignoring … because XDG_CONFIG_HOME is set; reading user config from ….`**
+
+You have a user config at both `~/.config/paddock/config.toml` and `$XDG_CONFIG_HOME/paddock/config.toml`, and paddock reads only the XDG one. Merge anything the old file still needs into the XDG file, then delete the old one.
 
 **Project config is loaded but some keys are ignored**
 

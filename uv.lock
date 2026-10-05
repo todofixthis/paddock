@@ -862,12 +862,10 @@ dev = [
     { name = "myst-parser" },
     { name = "pytest" },
     { name = "pytest-mock" },
-    { name = "pyyaml" },
     { name = "sphinx" },
     { name = "sphinx-rtd-theme" },
     { name = "tox" },
     { name = "tox-uv" },
-    { name = "types-pyyaml" },
 ]
 docs = [
     { name = "myst-parser" },
@@ -892,12 +890,10 @@ dev = [
     { name = "myst-parser", specifier = ">=5.1.0,<6.0.0" },
     { name = "pytest", specifier = ">=9.0.3,<10.0.0" },
     { name = "pytest-mock", specifier = ">=3.15.1,<4.0.0" },
-    { name = "pyyaml", specifier = ">=6.0.3,<7.0.0" },
     { name = "sphinx", specifier = ">=9.1.0,<10.0.0" },
     { name = "sphinx-rtd-theme", specifier = ">=3.1.0,<4.0.0" },
     { name = "tox", specifier = ">=4.64.7,<5.0.0" },
     { name = "tox-uv", specifier = ">=1.36.1,<2.0.0" },
-    { name = "types-pyyaml", specifier = ">=6.0.12.20260508,<7.0.0.0" },
 ]
 docs = [
     { name = "myst-parser", specifier = ">=5.1.0,<6.0.0" },
@@ -1457,15 +1453,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/42/c1/1f5b4ff553013dfd418485cb9359cf305e7f47b946e02a36f4a4c279ac21/tox_uv_bare-1.36.1.tar.gz", hash = "sha256:33a08e4205c63811dd76590590718539fe87dcadda5882f164f747bd5db31a2c", size = 32648, upload-time = "2026-10-01T23:52:01.302Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/04/64/ed9b351f7ce794df36923fcde243e90cef07f103ea0c24ae4557e9736b7e/tox_uv_bare-1.36.1-py3-none-any.whl", hash = "sha256:de41cf5450b8f37837fd68834dfebef59939cd10fde030e498cd9a48db19f1e8", size = 22469, upload-time = "2026-10-01T23:51:59.906Z" },
-]
-
-[[package]]
-name = "types-pyyaml"
-version = "6.0.12.20260508"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/b9/6b/f9d82598121b2f0532238381aec27734c24a0ff548ac352b358c2857a176/types_pyyaml-6.0.12.20260508.tar.gz", hash = "sha256:5ae42149c3ebf7aaaf6c65ee49af590c80f0ba52e9e3f75a75c5564b33556fa6", size = 17776, upload-time = "2026-05-08T04:48:28.682Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/b0/80/96690460fe7f4e4b4ab0ecd79a8609aec2ae63927ad97625f3c747ca6a1d/types_pyyaml-6.0.12.20260508-py3-none-any.whl", hash = "sha256:edc094ed3a918b0c6232f71a5b67fdf38e76e17517b7d87bfbb9fc27d442fb51", size = 20309, upload-time = "2026-05-08T04:48:27.822Z" },
 ]
 
 [[package]]
