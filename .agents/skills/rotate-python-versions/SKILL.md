@@ -21,7 +21,7 @@ Change only the lower bound of `requires-python` and keep the rest of the specif
 
 Add a version only once it has a final release. Before making any edits, run `uv python list X.Y --only-downloads`: if every match carries an `a`, `b` or `rc` suffix (e.g. `cpython-3.15.0rc2`), the version isn't final, so ask the user how to proceed before touching anything.
 
-Required status checks are named per matrix entry (`test (3.12)`), and no file records which ones branch protection requires. Ask the user whether any name a version you are dropping or adding: a required check for a dropped version never reports and blocks every PR.
+Branch rulesets require only the `gate` job in `.github/workflows/build.yml`, which needs the whole `test` matrix, so a rotation needs no ruleset change. If a PR still shows a `test (X.Y)` check as expected once `gate` has finished, a ruleset or branch protection rule still names that check: tell the user, since no file records either.
 
 Dependencies can lack wheels for a new version even after its final release. If `uv run tox run-parallel` fails while installing dependencies (a source build error) rather than in the tests themselves, stop and ask the user; don't install system packages to make the build pass.
 

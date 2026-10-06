@@ -50,6 +50,22 @@ jobs:
           uv build
           uvx twine@7.0.0 check --strict dist/*
 
+  # The single required status check. Matrix jobs report one check per Python
+  # version ("test (3.13)"), so requiring them directly breaks branch protection
+  # whenever the matrix rotates; this collapses every job into one stable name.
+  # No job here is conditional, so anything short of success fails the gate.
+  gate:
+    needs: [adrs, docs, lint, test, typecheck]
+    if: always()
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Fail if any check did not pass
+        if: contains(needs.*.result, 'cancelled') || contains(needs.*.result, 'failure') || contains(needs.*.result, 'skipped')
+        run: |
+          echo "❌ Required checks did not all pass: ${{ join(needs.*.result, ', ') }}"
+          exit 1
+
   # The jobs below repeat the pre-commit hook's lint, test and type checks, so a
   # commit made with --no-verify can't slip past review.
   lint:
