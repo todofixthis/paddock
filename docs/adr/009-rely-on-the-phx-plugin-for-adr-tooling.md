@@ -52,7 +52,8 @@ from the plugin at a pinned release's commit.
 
 **Cons:** No local check blocks a commit; a fault from outside Claude Code is caught
 only once pushed. Outside Claude Code nothing allocates a number or regenerates the
-index, so the author runs `phx-adr` by hand. The pinned ref has to be bumped by hand.
+index, so the author runs `phx-adr` by hand. The pin needs bumping with each plugin
+release.
 **Risks:** Sessions load whatever plugin release is installed, not the pinned one. A
 release that changes the index format leaves CI reporting the index stale right after
 a session regenerates it, until the pin catches up.
@@ -89,9 +90,9 @@ here: `scope` names the paths a decision binds, never `tags`.
   rather than leave the directory mixed.
 - `scripts/adr/`, its tests, the `adr_index` hook, and PyYAML and its type stubs (the
   generator was their only user) are removed.
-- The CI `adrs` job and `AGENTS.md`'s `phx-adr` commands pin the 8.0.0 release's
-  commit. Bump both when sessions move to a new plugin release, and fix whatever the
-  new release reports in the same change.
+- The CI `adrs` job and `AGENTS.md`'s `phx-adr` commands pin a release's commit, with
+  its version in a trailing comment. Renovate bumps every pin in one pull request
+  ([ADR 010][]); fix whatever the new release reports in that same pull request.
 - Bringing the corpus up to the skill's conventions also retitled ADRs 003 and 004 to
   the imperative, corrected the scopes of 001, 003, 004 and 005, and replaced inline
   links with reference-style ones, and trimmed rationale each ADR already stated
@@ -101,6 +102,7 @@ here: `scope` names the paths a decision binds, never `tags`.
 
 [`.claude/settings.json`]: ../../.claude/settings.json
 [ADR 002]: 002-scope-adr-frontmatter-by-bound-paths.md
-[`adr.py`]: https://github.com/todofixthis/phx-claude-siat/blob/8.0.0/skills/writing-adrs/adr.py
+[ADR 010]: 010-keep-dependencies-current-with-renovate.md
+[`adr.py`]: https://github.com/todofixthis/phx-claude-siat/blob/main/skills/writing-adrs/adr.py
 [class-registry]: https://github.com/todofixthis/class-registry
-[`phx:writing-adrs`]: https://github.com/todofixthis/phx-claude-siat/blob/8.0.0/skills/writing-adrs/SKILL.md
+[`phx:writing-adrs`]: https://github.com/todofixthis/phx-claude-siat/blob/main/skills/writing-adrs/SKILL.md

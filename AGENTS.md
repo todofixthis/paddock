@@ -39,15 +39,17 @@ uv run make -C docs html SPHINXOPTS="-W --keep-going -E"  # build docs strictly 
 uv run git commit                                      # always use instead of git commit (runs autohooks)
 ```
 
-The phx plugin's ADR tool, for use outside Claude Code (keep the ref in step with the `adrs` CI job):
+The phx plugin's ADR tool, for use outside Claude Code, where the [`writing-adrs` skill](https://github.com/todofixthis/phx-claude-siat/blob/8.0.0/skills/writing-adrs/SKILL.md) states the conventions. Renovate bumps these pins and the `adrs` CI job's together (ADR 010), matching each on its trailing `# X.Y.Z` comment — keep that comment on the same line, despite the Code Comments rule below; moved or dropped, that pin silently stops being bumped.
+
+If CI reports a stale index the session's own tool can't reproduce, the installed plugin and the pinned release differ. Compare the two versions: if the installed one is newer, merge Renovate's pending bump, or bump by hand: each pin to the release's commit, and its comment and the skill link above to the release's version. The commit is the `refs/tags/<version>^{}` line of `git ls-remote --tags https://github.com/todofixthis/phx-claude-siat`, not the tag object above it. Otherwise update the plugin.
 
 ```bash
 # Scaffold the next ADR
-uvx --from 'git+https://github.com/todofixthis/phx-claude-siat@4b7694d4999440380e5d2a0176435c5a92e7ad4a#subdirectory=skills/writing-adrs' phx-adr new "Title" --summary "…" --scope path/
+uvx --from 'git+https://github.com/todofixthis/phx-claude-siat@4b7694d4999440380e5d2a0176435c5a92e7ad4a#subdirectory=skills/writing-adrs' phx-adr new "Title" --summary "…" --scope path/ # 8.0.0
 # Regenerate docs/adr/INDEX.md
-uvx --from 'git+https://github.com/todofixthis/phx-claude-siat@4b7694d4999440380e5d2a0176435c5a92e7ad4a#subdirectory=skills/writing-adrs' phx-adr index
+uvx --from 'git+https://github.com/todofixthis/phx-claude-siat@4b7694d4999440380e5d2a0176435c5a92e7ad4a#subdirectory=skills/writing-adrs' phx-adr index # 8.0.0
 # Validate, as CI does
-uvx --from 'git+https://github.com/todofixthis/phx-claude-siat@4b7694d4999440380e5d2a0176435c5a92e7ad4a#subdirectory=skills/writing-adrs' phx-adr check
+uvx --from 'git+https://github.com/todofixthis/phx-claude-siat@4b7694d4999440380e5d2a0176435c5a92e7ad4a#subdirectory=skills/writing-adrs' phx-adr check # 8.0.0
 ```
 
 > **Run `uv run` from the repo (or worktree) root** — it resolves the project from the working directory, so `cd`-ing to a scratchpad first breaks imports with `ModuleNotFoundError: No module named 'paddock'`. Keep the cwd at the root and reference throwaway files by absolute path.
