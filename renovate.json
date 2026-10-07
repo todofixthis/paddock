@@ -1,0 +1,23 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "customManagers": [
+    {
+      "customType": "regex",
+      "datasourceTemplate": "github-tags",
+      "depNameTemplate": "todofixthis/phx-claude-siat",
+      "description": "Bump the phx-adr pins in the adrs CI job and AGENTS.md together (ADR 009). github-tags, not git-tags, which yields annotated tag object SHAs rather than the commit SHAs the pins need.",
+      "managerFilePatterns": [
+        "/^\\.github/workflows/build\\.yml$/",
+        "/^AGENTS\\.md$/"
+      ],
+      "matchStrings": [
+        "phx-claude-siat@(?<currentDigest>[0-9a-f]{40})#subdirectory=skills/writing-adrs'[^\\n]*# (?<currentValue>\\d+\\.\\d+\\.\\d+)",
+        "phx-claude-siat/blob/(?<currentValue>\\d+\\.\\d+\\.\\d+)/"
+      ]
+    }
+  ],
+  "extends": [
+    "config:recommended",
+    "helpers:pinGitHubActionDigests"
+  ]
+}
