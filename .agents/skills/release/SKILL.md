@@ -11,9 +11,14 @@ Run this from an up-to-date `develop`, since `HEAD` ends the range (for a hotfix
 see _Hotfixes_ below):
 ```bash
 git checkout develop && git pull
-gh release list --limit 1 --json tagName --jq '.[0].tagName'   # find last release tag
-git log <last-tag>..HEAD --oneline                              # all commits since
+# Latest release (prints nothing if there is none)
+gh api 'repos/{owner}/{repo}/releases?per_page=100' --jq '[.[] | select(.draft | not)][0].tag_name // empty'
+# Latest release without GitHub's pre-release flag (prints nothing if there is none)
+gh api 'repos/{owner}/{repo}/releases?per_page=100' --jq '[.[] | select((.draft or .prerelease) | not)][0].tag_name // empty'
+# All commits since <last-tag>
+git log <last-tag>..HEAD --oneline
 ```
+`<last-tag>` is the first tag printed. The exception is a version without a pre-release segment (`4.0.0`, not `4.0.0a2`) following one or more with: where the two tags differ, it takes the second, so its notes cover the whole pre-release cycle for readers who skipped it. Ask the developer which version they're aiming for if they haven't said. Where the tag you need prints nothing, nothing earlier has shipped: drop `<last-tag>..` from every range below and gather the whole history.
 
 ### 2. Look up PR and issue context
 For every merge commit, extract the PR number and fetch its description. Skip the
@@ -37,6 +42,8 @@ Based on the changes, recommend a semver bump:
 - **major** — breaking changes
 - **minor** — new features or behaviour changes, fully backwards-compatible
 - **patch** — bug fixes only
+
+Where the latest release and the next version share a pre-release cycle, bump only the pre-release segment (`4.0.0a2` → `4.0.0a3`) unless the developer says otherwise.
 
 **Stop here. Get explicit confirmation of the release notes and version number before continuing.** Once the version is confirmed, add or drop the `[!CAUTION]` block to match it (see _Writing Release Notes_).
 
@@ -110,6 +117,7 @@ gh release create <version> dist/* \
   --title "Paddock v<version>" \
   --notes-file release-<version>-body.md
 ```
+For a version with a pre-release segment (`4.0.0a2`), add `--prerelease`, so GitHub labels it and leaves `Latest` on the last release without one. A `0.y.z` version without a segment carries the `[!CAUTION]` alert but not this flag.
 `dist/*` picks up the `.whl`, `.tar.gz`, and `.sig` files.
 
 ### 11. Upload to PyPI
@@ -180,9 +188,11 @@ unreleased work ends up in the hotfix:
    git checkout -b hotfix/<topic>
    ```
    Push the branch.
-2. Instead of step 1, find the last tag with
-   `gh release list --limit 1 --json tagName --jq '.[0].tagName'` and gather
-   commits with `git log <last-tag>..hotfix/<topic> --oneline`. Then run Phase 1
+2. Instead of step 1, run only its two `gh api` commands to find `<last-tag>`, and gather
+   commits with `git log <last-tag>..hotfix/<topic> --oneline`. Where step 1's
+   two tags differ, `main` already holds a pre-release, so a hotfix off it ships
+   that pre-release's work too: it is the next pre-release, not a patch to the last
+   final release. Stop and ask the developer how to proceed. Then run Phase 1
    steps 2–4, and get the notes and version (normally the next patch) confirmed.
 3. Bump `__version__` on `hotfix/<topic>` as in step 5, commit with
    `uv run git commit` and push.
