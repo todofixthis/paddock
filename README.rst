@@ -35,12 +35,8 @@ sources overwrite earlier ones:
 4. ``PADDOCK_*`` environment variables
 5. CLI flags
 
-``volumes`` entries are additive per host path — the same host path set by a
-higher-priority source replaces the earlier mapping.
-
-The project-level file is off by default (blocked) — enable it in the user
-file's ``[config.allowlist]``; see
-`project-level configuration and the allowlist <https://phx-paddock.readthedocs.io/en/latest/usage/project-config.html>`__.
+Higher sources win per key.  The project-level file is ignored until you
+enable it; see `Configuration`_.
 
 Requirements
 ------------
@@ -85,135 +81,48 @@ Print the assembled ``docker run`` command without executing it:
 Configuration
 -------------
 
-TOML files
-~~~~~~~~~~
-
-Place a ``config.toml`` at ``$XDG_CONFIG_HOME/paddock/`` (user-level) or
-``<project>/.paddock/`` (project-level).  paddock uses ``~/.config`` in place
-of ``XDG_CONFIG_HOME`` when it is unset, empty or not an absolute path.  If
-``XDG_CONFIG_HOME`` points somewhere other than ``~/.config`` but holds no
-``paddock/config.toml``, paddock falls back to ``~/.config/paddock/config.toml``
-if one exists, with a warning; that fallback is deprecated and will be removed
-in paddock 2.0.  If both exist, paddock reads the XDG one and warns that the
-other is ignored, so move an existing file rather than starting a new one.
-Both files are optional, and the project-level file is off by default until you
-opt in from your user config:
+paddock reads ``config.toml`` from ``$XDG_CONFIG_HOME/paddock/`` (by default
+``~/.config/paddock/``).  Any setting can also come from a ``PADDOCK_*``
+environment variable or a command-line flag:
 
 .. code-block:: toml
 
-   [config.allowlist]
-   project_toml = true
-
-``true`` is the blanket grant; a list such as ``project_toml = ["volumes"]``
-permits only the keys it names.  See
-`project-level configuration and the allowlist <https://phx-paddock.readthedocs.io/en/latest/usage/project-config.html>`__
-for what each grant hands a committed file.
-
-A config file looks like this:
-
-.. code-block:: toml
-
-   agent  = "claude"
-   image  = "my-claude-image:latest"
+   image   = "my-claude-image:latest"
    network = "my-docker-network"
 
    [volumes]
-   "/host/path" = "/container/path:ro"
+   "~/datasets" = "/data:ro"
 
-   [build]
-   dockerfile = "images/Dockerfile"
-   context    = "."
-   policy     = "daily"
+   [projects."/home/alice/code/widgets"]
+   image = "widgets-dev:latest"
 
-   [build.args]
-   AGENT          = "claude"
-   PYTHON_VERSION = "3.13"
+   [projects."/home/alice/code/widgets".build]
+   dockerfile = "~/code/widgets/Dockerfile"
+   policy     = "weekly"
 
-Config fields
-~~~~~~~~~~~~~
+The `configuration reference <https://phx-paddock.readthedocs.io/en/latest/usage/configuration.html>`__
+covers every setting: its TOML key, environment variable and flag, its default,
+and when to use it.
 
-+--------------------+----------------------------+--------------------------------------------------+
-| Field              | Type                       | Description                                      |
-+====================+============================+==================================================+
-| ``agent``          | ``string`` or ``false``    | Agent key (``"claude"``) or ``false`` for shell  |
-+--------------------+----------------------------+--------------------------------------------------+
-| ``image``          | ``string``                 | Docker image to run (required)                   |
-+--------------------+----------------------------+--------------------------------------------------+
-| ``network``        | ``string`` (optional)      | Docker network to attach the container to        |
-+--------------------+----------------------------+--------------------------------------------------+
-| ``volumes``        | ``{host: container}`` map  | Extra bind-mounts; container path may end        |
-|                    |                            | in ``:ro`` or ``:rw`` (bare path defaults to     |
-|                    |                            | ``:ro``)                                         |
-+--------------------+----------------------------+--------------------------------------------------+
-| ``build``          | sub-table (optional)       | Image auto-build settings (see below)            |
-+--------------------+----------------------------+--------------------------------------------------+
+A project can commit its own ``.paddock/config.toml``, which paddock ignores
+until you grant it keys from your user config:
 
-Build sub-table
-~~~~~~~~~~~~~~~
+.. code-block:: toml
 
-+----------------+---------------------------------------------+-------------------------------------------+
-| Field          | Type                                        | Description                               |
-+================+=============================================+===========================================+
-| ``dockerfile`` | ``string``                                  | Path to the Dockerfile (required if build |
-|                |                                             | table is present)                         |
-+----------------+---------------------------------------------+-------------------------------------------+
-| ``context``    | ``string`` (optional)                       | Docker build context path                 |
-+----------------+---------------------------------------------+-------------------------------------------+
-| ``policy``     | ``"always"`` / ``"daily"`` /                | When to rebuild the image                 |
-|                | ``"if-missing"`` / ``"weekly"``             |                                           |
-+----------------+---------------------------------------------+-------------------------------------------+
-| ``args``       | ``{name: value}`` map (optional)            | Build-time ``--build-arg`` values         |
-+----------------+---------------------------------------------+-------------------------------------------+
+   [projects."/home/alice/code/widgets".config.allowlist]
+   project_toml = ["volumes"]
 
-Environment variables
-~~~~~~~~~~~~~~~~~~~~~
+See
+`project-level configuration and the allowlist <https://phx-paddock.readthedocs.io/en/latest/usage/project-config.html>`__
+for what each grant hands a committed file.
 
-Six config fields can be set via an environment variable, by uppercasing the
-field name and prefixing it with ``PADDOCK_``.  Nested keys are joined with
-``_``:
-
-.. code-block:: bash
-
-   PADDOCK_AGENT=claude
-   PADDOCK_BUILD_CONTEXT=.
-   PADDOCK_BUILD_DOCKERFILE=images/Dockerfile
-   PADDOCK_BUILD_POLICY=daily
-   PADDOCK_IMAGE=my-claude-image
-   PADDOCK_NETWORK=my-docker-network
-
-``volumes`` and ``build.args`` have no environment-variable form — set them in a
-TOML file, or pass ``--volume`` / ``--build-args-KEY=VALUE`` on the command
-line.  ``PADDOCK_BUILD_ARGS`` is ignored rather than rejected.  Any other
-unrecognised ``PADDOCK_*`` name is a fatal config error, so a typo stops the
-run:
-
-.. code-block:: text
-
-   [env:foo] Unexpected key "foo".
-
-CLI flags
-~~~~~~~~~
+Running commands
+----------------
 
 .. code-block:: text
 
    paddock [FLAGS] [COMMAND...]
    paddock [FLAGS] -- [ARGS...]
-
-   --agent AGENT                Agent key (e.g. "claude") or "false" for a shell
-   --build-args-KEY=VALUE        Build-time ARG (repeatable)
-   --build-context PATH         Docker build context
-   --build-dockerfile PATH      Path to Dockerfile
-   --build-policy POLICY        Build policy (always|daily|if-missing|weekly)
-   --dry-run                    Print the docker command and exit without running it
-   --image IMAGE                Docker image
-   --network NETWORK            Docker network
-   --quiet                      Suppress all logging and the docker command printout
-   --version                    Print the paddock version and exit
-   --volume HOST:CONTAINER[:MODE]  Extra bind-mount (repeatable)
-   --workdir PATH               Host path to use as the workspace (default: CWD)
-
-``--workdir`` is resolved to an absolute real path — symlinks followed —
-before it is used for the ``[projects]`` lookup and for the mounts.
 
 paddock exits with the container's exit status; ``--dry-run`` exits 0, a
 config error exits 1 and an unknown flag exits 2.
@@ -241,9 +150,9 @@ first:
 
 A prompt without ``--`` in front is therefore a command: ``paddock
 --agent=claude "fix this bug"`` tries to execute ``fix this bug``.  Anything
-else before ``--`` must be a paddock flag, spelled in full, so ``paddock --agent=claude
---resume`` fails.
-
+else before ``--`` must be a paddock flag, spelt in full, so ``paddock --agent=claude
+--resume`` fails.  For every flag, see the
+`configuration reference <https://phx-paddock.readthedocs.io/en/latest/usage/configuration.html>`__.
 
 Agents
 ------
