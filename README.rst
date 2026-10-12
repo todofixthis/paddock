@@ -35,7 +35,8 @@ sources overwrite earlier ones:
 4. ``PADDOCK_*`` environment variables
 5. CLI flags
 
-Higher sources win per key.  The project-level file is ignored until you
+Higher sources win per key, except that ``volumes`` and ``build.args`` add
+up across sources.  The project-level file is ignored until you
 enable it; see `Configuration`_.
 
 Requirements
