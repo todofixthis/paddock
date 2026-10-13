@@ -202,8 +202,8 @@ class VolumeMap(BaseFilter):
 
     Keys (host paths) are validated through ``f.Unicode | Filepath`` —
     tilde-expanded using ``Path.home()``, anchored to ``host_base_dir`` when
-    relative, resolved, and checked for existence. Values (container path specs) are validated through
-    ``Volume``.
+    relative, resolved, and checked for existence. Values (container path
+    specs) are validated through ``Volume``.
 
     Returns a ``dict[str, VolumeSpec]`` mapping resolved host-path strings
     to container path specs.

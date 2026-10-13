@@ -86,8 +86,9 @@ into an error without delivering the relative paths users wanted.
 The base is a required argument of the schema, with no fallback: env, CLI and the
 merged-config pass name `Path.cwd()` explicitly. A new source that runs paths through
 the schema without a base fails at once, as ADR 004 makes a source that forgets its
-allowlist default fail closed. `Filepath` on its own still defaults to the cwd, so a
-source that pre-validates paths with it, as env does, passes its base there too.
+allowlist default fail closed. `Filepath` and `VolumeMap` on their own still default
+to the cwd, so a source that pre-validates paths with either, as env does, passes its
+base there too.
 
 Concrete semantics:
 

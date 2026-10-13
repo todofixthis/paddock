@@ -957,9 +957,9 @@ project_toml = ["volumes"]
 
 Relative paths in a committed file resolve against the project, so they suit a shared
 file best: `"../widgets-api"` works for every developer who clones the two side by side.
-`~` expands against each developer's own home directory. Every developer who enables the project file needs every host path, even
-one whose grant leaves out `volumes`, or paddock stops before starting (see
-[Validation](#validation)). A mount that varies per developer, such as a sibling
+`~` expands against each developer's own home directory. Every developer who enables
+the project file needs every host path, even one whose grant leaves out `volumes`, or
+paddock stops before starting (see [Validation](#validation)). A mount that varies per developer, such as a sibling
 repository cloned somewhere different on each machine, belongs in each developer's own
 [`projects`](#projects) entry instead.
 
