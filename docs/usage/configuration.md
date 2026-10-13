@@ -81,7 +81,7 @@ follows symlinks.
 
 ## Reference table
 
-`—` marks a source that can't set the directive. Cells in the `[projects."<workdir>"]`
+🚫 marks a source that can't set the directive. Cells in the `[projects."<workdir>"]`
 column go under that table header.
 
 TOML cells use [dotted keys](https://toml.io/en/v1.0.0#keys): `build.policy = "daily"`
@@ -93,16 +93,16 @@ the existing table instead.
 | Directive | `config.toml` (user) | `[projects."<workdir>"]` | `.paddock/config.toml` | Environment | Command line |
 |---|---|---|---|---|---|
 | [`agent`](#agent) | `agent = "claude"` | `agent = "claude"` | `agent = "claude"` | `PADDOCK_AGENT=claude` | `--agent=claude` |
-| [`build.args`](#buildargs) | `build.args.NODE_VERSION = "24"` | `build.args.NODE_VERSION = "24"` | `build.args.NODE_VERSION = "24"` | — | `--build-args-NODE_VERSION=24` |
+| [`build.args`](#buildargs) | `build.args.NODE_VERSION = "24"` | `build.args.NODE_VERSION = "24"` | `build.args.NODE_VERSION = "24"` | 🚫 | `--build-args-NODE_VERSION=24` |
 | [`build.context`](#buildcontext) | `build.context = "~/src/images"` | `build.context = "~/src/images"` | `build.context = "~/src/images"` | `PADDOCK_BUILD_CONTEXT=~/src/images` | `--build-context=~/src/images` |
 | [`build.dockerfile`](#builddockerfile) | `build.dockerfile = "~/src/images/Dockerfile"` | `build.dockerfile = "~/src/images/Dockerfile"` | `build.dockerfile = "~/src/images/Dockerfile"` | `PADDOCK_BUILD_DOCKERFILE=~/src/images/Dockerfile` | `--build-dockerfile=~/src/images/Dockerfile` |
 | [`build.policy`](#buildpolicy) | `build.policy = "daily"` | `build.policy = "daily"` | `build.policy = "daily"` | `PADDOCK_BUILD_POLICY=daily` | `--build-policy=daily` |
-| [`config.allowlist`](#configallowlist) | `config.allowlist.project_toml = ["volumes"]` | `config.allowlist.project_toml = ["volumes"]` | — | — | — |
-| [`config.project_dir_readonly`](#configproject_dir_readonly) | `config.project_dir_readonly = false` | `config.project_dir_readonly = false` | — | — | — |
+| [`config.allowlist`](#configallowlist) | `config.allowlist.project_toml = ["volumes"]` | `config.allowlist.project_toml = ["volumes"]` | 🚫 | 🚫 | 🚫 |
+| [`config.project_dir_readonly`](#configproject_dir_readonly) | `config.project_dir_readonly = false` | `config.project_dir_readonly = false` | 🚫 | 🚫 | 🚫 |
 | [`image`](#image) | `image = "paddock-claude:latest"` | `image = "paddock-claude:latest"` | `image = "paddock-claude:latest"` | `PADDOCK_IMAGE=paddock-claude:latest` | `--image=paddock-claude:latest` |
 | [`network`](#network) | `network = "dev-services"` | `network = "dev-services"` | `network = "dev-services"` | `PADDOCK_NETWORK=dev-services` | `--network=dev-services` |
-| [`projects`](#projects) | `[projects."/home/alice/code/widgets"]` | — | — | — | — |
-| [`volumes`](#volumes) | `volumes."~/datasets" = "/data:ro"` | `volumes."~/datasets" = "/data:ro"` | `volumes."~/datasets" = "/data:ro"` | — | `--volume=~/datasets:/data:ro` |
+| [`projects`](#projects) | `[projects."/home/alice/code/widgets"]` | 🚫 | 🚫 | 🚫 | 🚫 |
+| [`volumes`](#volumes) | `volumes."~/datasets" = "/data:ro"` | `volumes."~/datasets" = "/data:ro"` | `volumes."~/datasets" = "/data:ro"` | 🚫 | `--volume=~/datasets:/data:ro` |
 
 ### Run options
 
