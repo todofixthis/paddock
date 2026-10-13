@@ -576,7 +576,6 @@ source, takes no part in merging, and ignores the allowlist.
 | Dry run | `--dry-run` | Prints the `docker run` command and exits 0 without building or running anything. |
 | Help | `--help` | Prints usage and exits. |
 | Quiet | `--quiet` | Suppresses logging, warnings and the printed `docker run` command. Errors still print. |
-| User config location | `XDG_CONFIG_HOME=/path` (environment) | Moves the user file; see [Where configuration comes from](#where-configuration-comes-from). |
 | Version | `--version` | Prints the paddock version and exits. |
 | Workdir | `--workdir=PATH` | Mounts `PATH` as the workspace instead of the current directory. paddock resolves it to an absolute real path first, and that path is the key [`projects`](#projects) matches. |
 
