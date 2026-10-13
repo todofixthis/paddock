@@ -36,7 +36,7 @@ class DropEmpty(BaseFilter):
         return out
 
 
-def _build_schema(merged: bool, base_dir: Path | None):
+def _build_schema(merged: bool, base_dir: Path):
     """Build-section schema. ``dockerfile`` is the only required field."""
     return f.FilterMapper(
         {
@@ -54,7 +54,7 @@ def _build_schema(merged: bool, base_dir: Path | None):
     )
 
 
-def _standard_fields(merged: bool, base_dir: Path | None) -> dict[str, object]:
+def _standard_fields(merged: bool, base_dir: Path) -> dict[str, object]:
     """Top-level standard config fields. Mode-aware.
 
     In merged mode required fields disallow ``None``; in per-source mode they
@@ -75,17 +75,19 @@ def _standard_fields(merged: bool, base_dir: Path | None) -> dict[str, object]:
 
 @filter_macro
 def standard_config_schema(
+    *,
+    base_dir: Path,
     extra_keys: dict | None = None,
     merged: bool = False,
-    base_dir: Path | None = None,
 ):
     """Macro returning the standard-config filter chain.
 
     Args:
         base_dir: Directory relative host paths (``build.context``,
             ``build.dockerfile``, ``volumes`` keys) resolve against: the
-            directory the source belongs to (ADR 011). ``None`` (default)
-            resolves them against the process cwd, as env and CLI need.
+            directory the source belongs to (ADR 011). Required, so a new
+            source can't fall back to the cwd by omission; env and CLI pass
+            ``Path.cwd()`` explicitly.
         extra_keys: Optional mapping of additional top-level keys to allow
             (e.g. ``{"config": config_meta_schema}``).
         merged: ``False`` (default) is the per-source pass: every required
@@ -193,6 +195,8 @@ class ConfigSchema:
 
     Thin wrapper around ``standard_config_schema(merged=True)`` for
     backwards-compatible call sites. The loader uses the same schema directly.
+    Relative paths resolve against the cwd: merged config holds paths each
+    source has already made absolute.
     """
 
     def validate(self, config: dict) -> dict:
@@ -204,7 +208,9 @@ class ConfigSchema:
         Returns:
             The cleaned and normalised config dict.
         """
-        runner = f.FilterRunner(standard_config_schema(merged=True), config)
+        runner = f.FilterRunner(
+            standard_config_schema(base_dir=Path.cwd(), merged=True), config
+        )
         if not runner.is_valid():
             for key, messages in runner.errors.items():
                 for msg in messages:

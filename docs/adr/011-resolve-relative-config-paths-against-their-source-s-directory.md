@@ -1,9 +1,9 @@
 ---
 status: Accepted
 date: 2026-10-13
-scope: [src/paddock/config/filters.py, src/paddock/config/schema.py, src/paddock/config/sources/, docs/usage/]
-summary: Resolve a relative host path in config against the directory its source belongs to (the workdir for .paddock/config.toml and [projects] entries, the user config file's directory for the rest of that file, the cwd for env and CLI), not against the process cwd for every source.
-revisit-when: Users need a path in the user file's global section to resolve per project, such as one cache mount declared once for every workdir.
+scope: [src/paddock/__main__.py, src/paddock/config/filters.py, src/paddock/config/loader.py, src/paddock/config/schema.py, src/paddock/config/sources/, docs/usage/]
+summary: Resolve a relative host path in config against the directory its source belongs to (the workdir for .paddock/config.toml, each [projects] entry's own key, the user config file's unresolved parent for the rest of that file, the cwd for env and CLI), passed explicitly by every source, not against the process cwd by default.
+revisit-when: Users need a path in the user file's global section to resolve per project, such as one cache mount declared once for every workdir; a config source is added whose paths belong to no single directory; project config discovery lets the project file's directory diverge from the workdir.
 ---
 
 # 011: Resolve Relative Config Paths Against Their Source's Directory
@@ -24,9 +24,6 @@ absolute or `~`-relative paths, which leaves a committed project file no way to 
 path inside or beside the project — `../sibling` for a sibling repository, say — that
 holds on every developer's machine.
 
-Environment variables and flags have no file; the user typed them in a shell, whose cwd
-is the only directory they could mean.
-
 ## Options
 
 ### Option 1: Do nothing
@@ -40,19 +37,21 @@ wrong directory silently.
 
 ### Option 2: Resolve against the directory the source belongs to (Accepted)
 
-Project-scoped sources — `.paddock/config.toml` and a `[projects."<workdir>"]` entry —
-resolve against the workdir. The rest of the user file resolves against that file's
-directory. Env and CLI keep the cwd. `~` still expands first, and absolute paths are
-unaffected. Each source passes its base directory into the schema; `Filepath` joins a
-relative path onto it before resolving.
+`.paddock/config.toml` resolves against the workdir. Each `[projects."<path>"]` entry
+resolves against its own `<path>`. The rest of the user file resolves against the
+directory paddock read it from. Env and CLI keep the cwd. `~` still expands first, and
+absolute paths are unaffected. Every source passes its base into the schema, which
+requires one; `Filepath` joins a relative path onto it, then resolves the result.
 
 **Pros:** A path means the same thing from any cwd; `"data"` and `"../sibling"` work in
 a committed project file and in a per-project entry.
-**Cons:** Four sources, three bases: a path copied from the CLI into a file can change
-meaning. A `[projects]` entry, though written in the user file, resolves against the
-project, not the file.
-**Risks:** A new source that forgets to pass a base gets the cwd, the old behaviour,
-rather than an error.
+**Cons:** Five sources, three bases: a path copied from the CLI into a file can change
+meaning. A `[projects]` entry, though written in the user file, resolves against its
+project, not the file. Env vars loaded from a file (direnv's `.envrc`, a CI config)
+still resolve against the cwd, so they break from a subdirectory.
+**Risks:** A relative path in the user file's global section that worked because
+paddock was always run from the project root now resolves under the config directory;
+if a same-named path exists there, it mounts silently.
 
 ### Option 3: Resolve against each file's own directory
 
@@ -62,9 +61,8 @@ included.
 
 **Pros:** One rule for every file, the one most config formats use.
 **Cons:** The project file lives one level below the project, so the project root is
-`..` and a sibling is `../../sibling`. A `[projects]` entry resolving against
-`~/.config/paddock/` can't name anything in its own project without an absolute path —
-the case the entry exists for.
+`..` and a sibling is `../../sibling`. A line moved between `.paddock/config.toml` and
+the matching `[projects]` entry changes meaning.
 **Risks:** None beyond the cons.
 
 ### Option 4: Reject relative paths in files
@@ -80,31 +78,47 @@ Fail validation on any relative host path from a TOML source.
 Option 2. The base a path needs is the directory the source is *about*: a project file
 or project entry describes the project, so its paths are project paths; the user file's
 global section describes the user's setup and lives beside it; env and CLI describe the
-shell they were typed in. Option 3 gets the user file's global section right but puts a
-project's paths one level off and strands `[projects]` entries. Option 4 makes the
-gotcha an error without delivering what users wanted from relative paths.
+shell they were typed in, whose cwd is the only directory they can name. Anchoring a
+`[projects]` entry to its project means a line moves between `.paddock/config.toml` and
+the entry without changing meaning, which Option 3 breaks. Option 4 turns the gotcha
+into an error without delivering the relative paths users wanted.
 
-The user file's base is the parent of the path paddock read it from, not following
-symlinks, so a user file symlinked from a dotfiles repository resolves against
-`~/.config/paddock/`, where its users look for it.
+The base is a required argument, with no fallback: env, CLI and the merged-config pass
+name `Path.cwd()` explicitly. A new source that forgets its base fails at once, as ADR
+004 makes a source that forgets its allowlist default fail closed.
 
-`[projects]` entries for other projects are also validated whenever the user file
-loads; each resolves against its own key, so a relative path in one is checked against
-the project it names, not the one being run.
+Concrete semantics:
+
+- **The workdir** is the resolved workdir, so `../sibling` from a symlinked checkout is
+  a sibling of the real directory, matching the `[projects]` key lookup.
+- **The user file's base** is the parent of the path paddock read it from, without
+  following a symlink to the file itself. The joined path is then resolved, so symlinked
+  directories along it are followed: with `~/.config/paddock` itself a symlink, paths
+  land beside its target. A dotfiles user who links only the file and keeps an
+  `images/` beside it in the repository has to link that too; we take that over a base
+  that moves when the file is relinked.
+- **Every `[projects]` entry** is validated whenever the user file loads, each against
+  its own key. A key that isn't absolute (`~` in a key isn't expanded) never matches a
+  workdir, and its relative paths resolve against the cwd.
 
 ## Consequences
 
 - `.paddock/config.toml` can mount `../sibling` and build from `images/Dockerfile`
-  inside the project, and so can a `[projects]` entry. A path in the project file can
-  now reach outside the project relative to it; it could already do so absolutely, and
-  the `project_toml` allowlist still gates it.
-- A user file relying on the old behaviour — a relative path that only worked from one
-  cwd — now resolves elsewhere. Such a file was broken from any other cwd, so this is
-  a fix, but it is a behaviour change worth a release note.
+  inside the project, and so can a `[projects]` entry. Relative paths are not confined
+  to the project: a `volumes` grant to `project_toml` still reaches the whole host
+  filesystem, as absolute paths always could.
+- A user file with a relative path in its global section changes meaning: it worked
+  whenever paddock ran from the one directory holding that path, and now resolves under
+  the config directory. The release notes must call this out.
+- A `[projects]` entry with relative paths fails validation — and stops paddock in
+  every project — once its project is moved, deleted or unmounted. Absolute paths in
+  other projects' entries already did this; relative ones make it likelier, since they
+  almost always point inside their own project.
 - Resolved paths are absolute, so the merged-config pass that re-runs the schema is
-  unaffected by which base it uses.
-- A new config source must pass the base its paths belong to; leaving it out silently
-  falls back to the cwd.
+  unaffected by its base.
+- A change to how the workdir is resolved in [`__main__.py`][] changes what every
+  project-relative path means.
 
+[`__main__.py`]: ../../src/paddock/__main__.py
 [`docs/usage/configuration.md`]: ../usage/configuration.md
 [`Filepath`]: ../../src/paddock/config/filters.py

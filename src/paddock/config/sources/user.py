@@ -28,8 +28,10 @@ class UserConfigSource(ConfigSource):
             and ``meta == {}``. If the TOML is invalid, ``instance`` is not
             valid and ``meta == {}``.
         """
-        schema = standard_config_schema(merged=False)
         path = context.user_config_path
+        # The unresolved parent: a symlinked file resolves against
+        # ~/.config/paddock/, not its target's directory (ADR 011).
+        schema = standard_config_schema(base_dir=path.parent, merged=False)
         if not path.exists():
             return LoadResult(f.FilterRunner(schema, {}), {})
 

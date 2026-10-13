@@ -1,3 +1,4 @@
+from pathlib import Path
 from typing import Any, ClassVar
 
 import filters as f
@@ -74,7 +75,10 @@ class EnvConfigSource(ConfigSource):
             self._deep_set(shaped, parts, value)
 
         return LoadResult(
-            f.FilterRunner(standard_config_schema(merged=False), shaped), {}
+            f.FilterRunner(
+                standard_config_schema(base_dir=Path.cwd(), merged=False), shaped
+            ),
+            {},
         )
 
     def _deep_set(self, node: dict, parts: list[str], value: Any) -> None:

@@ -69,7 +69,10 @@ class ConfigLoader:
         self._validate(results, allowlist)
         merged = self._merge(self._sanitise(results, allowlist))
 
-        final = f.FilterRunner(standard_config_schema(merged=True), merged)
+        # Every source has already made its paths absolute, so the base is moot.
+        final = f.FilterRunner(
+            standard_config_schema(base_dir=Path.cwd(), merged=True), merged
+        )
         if not final.is_valid():
             raise self._error_group([("final", final)])
 

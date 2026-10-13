@@ -82,6 +82,10 @@ so it means the same thing wherever you run paddock from:
 So `"data"` in `.paddock/config.toml` names `<workdir>/data`, and `"../widgets-api"` a
 sibling of the project.
 
+paddock validates every `[projects]` entry on each run, not just the current one, so an
+entry whose paths no longer exist — a project you moved or deleted — stops every run.
+Remove or update the stale entry.
+
 ## Reference table
 
 🚫 marks a source that can't set the directive. A key shown without a table header goes

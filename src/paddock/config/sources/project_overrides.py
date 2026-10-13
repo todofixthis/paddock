@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import filters as f
 
 from paddock.config.context import ConfigContext
@@ -23,12 +25,12 @@ class ProjectOverridesSource(ConfigSource):
             valid instance and empty meta when the file is missing or the
             project key is not present.
         """
-        schema = standard_config_schema(merged=False)
+        project = context.project_key
+        schema = standard_config_schema(base_dir=Path(project), merged=False)
         path = context.user_config_path
         if not path.exists():
             return LoadResult(f.FilterRunner(schema, {}), {})
 
-        project = context.project_key
         chain = (
             f.TomlDecode
             | ExtractProject(project=project)
