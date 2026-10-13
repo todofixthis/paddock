@@ -88,7 +88,7 @@ header, add the key there rather than repeating the header, which TOML rejects.
 `<workdir>` is the workdir's absolute path, with symlinks resolved and no `~`; see
 [`projects`](#projects).
 
-<table class="docutils align-default">
+<table class="docutils align-default paddock-reference">
 <thead>
 <tr>
 <th>Directive</th>

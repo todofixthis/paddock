@@ -1,0 +1,37 @@
+/*
+ * The reference table is wider than the theme's 800px content column and taller
+ * than the viewport, so the scrollbar the theme gives it sits off-screen. Cap its
+ * height so the horizontal scrollbar stays visible, and pin the header row and
+ * directive column while scrolling.
+ */
+.rst-content .wy-table-responsive:has(> table.paddock-reference) {
+  max-height: 75vh;
+}
+
+.rst-content table.paddock-reference thead th {
+  background-color: #fcfcfc;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.rst-content table.paddock-reference tbody td:first-child {
+  background-color: #fcfcfc;
+  left: 0;
+  position: sticky;
+  z-index: 1;
+}
+
+.rst-content table.paddock-reference tbody tr:nth-child(2n-1) td:first-child {
+  background-color: #f3f6f6;
+}
+
+.rst-content table.paddock-reference thead th:first-child {
+  left: 0;
+  z-index: 3;
+}
+
+/* Keep directive names such as build.args on one line */
+.rst-content table.paddock-reference code.literal {
+  white-space: nowrap;
+}

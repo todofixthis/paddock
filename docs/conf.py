@@ -46,6 +46,11 @@ source_suffix = {
 
 html_theme = "sphinx_rtd_theme"
 
+# Styles the reference table in usage/configuration.md, which outgrows the
+# theme's content column
+html_css_files = ["paddock.css"]
+html_static_path = ["_static"]
+
 # -- Options for autosectionlabel extension ----------------------------------
 # https://www.sphinx-doc.org/en/master/usage/extensions/autosectionlabel.html#configuration
 # Prefixing with the document name keeps same-titled sections on different
