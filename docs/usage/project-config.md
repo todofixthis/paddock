@@ -17,7 +17,10 @@ The threat model is an **untrusted change landing in a repository** — a `.padd
 
 Environment variables (`PADDOCK_*`) and CLI flags are therefore **permitted by default** — reaching for either already requires control of the invoking shell. `env` and `cli` can still be restricted or disabled through the allowlist when you want them to be — see [The allowlist](#the-allowlist).
 
-> **CI environments:** continuous-integration runners are the one place where these two worlds overlap — the checked-in files and the process environment are often shaped by the same, potentially untrusted, pull request. If you run paddock in CI against untrusted branches, gate `env` (and `cli`) explicitly rather than relying on their permissive defaults.
+> [!WARNING]
+> **Running paddock in CI**
+>
+> Continuous-integration runners are the one place where these two worlds overlap — the checked-in files and the process environment are often shaped by the same, potentially untrusted, pull request. If you run paddock in CI against untrusted branches, gate `env` (and `cli`) explicitly rather than relying on their permissive defaults.
 
 ## Enabling project-level config
 

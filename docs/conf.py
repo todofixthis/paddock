@@ -68,6 +68,10 @@ autodoc_default_options = {
 # `[precedence](#precedence)` resolve as they do on GitHub.
 myst_heading_anchors = 3
 
+# Renders GitHub alerts (`> [!NOTE]`) as admonitions, so an aside reads the same
+# on GitHub and on ReadTheDocs
+myst_enable_extensions = ["alert"]
+
 # -- Options for napoleon extension ------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/extensions/napoleon.html#configuration
 napoleon_attr_annotations = True

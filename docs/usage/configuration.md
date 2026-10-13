@@ -23,11 +23,14 @@ describes.
 [`--workdir`](#run-options). Every file is optional, but some source must supply
 [`image`](#image).
 
-If `XDG_CONFIG_HOME` points somewhere other than `~/.config` and has no
-`paddock/config.toml`, paddock reads `~/.config/paddock/config.toml` instead, with a
-warning to move it; that fallback goes in paddock 2.0. When both files exist, paddock
-reads the XDG one and warns that the other is ignored. So move an existing file rather
-than starting a new one.
+> [!NOTE]
+> **Setting `XDG_CONFIG_HOME` with a config already in `~/.config`**
+>
+> If `XDG_CONFIG_HOME` points somewhere other than `~/.config` and has no
+> `paddock/config.toml`, paddock reads `~/.config/paddock/config.toml` instead, with a
+> warning to move it; that fallback goes in paddock 2.0. When both files exist, paddock
+> reads the XDG one and warns that the other is ignored. So move an existing file rather
+> than starting a new one.
 
 ### Precedence
 
@@ -66,10 +69,14 @@ allowlist would drop still stops the run.
 
 Path values (`build.context`, `build.dockerfile` and the host side of `volumes`) must
 exist when paddock starts. paddock expands a leading `~` to your home directory and
-follows symlinks. **It resolves a relative path against the directory you run paddock
-from, not the workdir or the config file's directory**, so `"data"` in
-`.paddock/config.toml` breaks when you pass `--workdir`. Use absolute or `~`-relative
-paths.
+follows symlinks.
+
+> [!WARNING]
+> **Relative paths resolve against your shell's directory**
+>
+> paddock resolves a relative path against the directory you run paddock from, not the
+> workdir or the config file's directory, so `"data"` in `.paddock/config.toml` breaks
+> when you pass `--workdir`. Use absolute or `~`-relative paths.
 
 ## Reference table
 
@@ -217,14 +224,17 @@ docker build -t <image> -f <build.dockerfile> [--build-arg …] <build.context>
 
 `--dry-run` never builds.
 
-**The build applies to whichever `image` the run ends up with.** With `build.dockerfile`
-in your user file, a per-project `image` or an `--image=ubuntu:24.04` gets built from
-your Dockerfile too, replacing the image of that name. No source can switch building
-off once a lower one turns it on, so set `[build]` beside the one `image` it builds: in
-a [`projects`](#projects) entry, or in your user file only if you never run another
-image. To run a prebuilt image in one project under a user-level build, give that
-project's entry `build.policy = "if-missing"` and `docker pull` the image before its
-first run: paddock never rebuilds an image that exists locally under that policy.
+> [!WARNING]
+> **The build applies to whichever `image` the run ends up with**
+>
+> With `build.dockerfile` in your user file, a per-project `image` or an
+> `--image=ubuntu:24.04` gets built from your Dockerfile too, replacing the image of
+> that name. No source can switch building off once a lower one turns it on, so set
+> `[build]` beside the one `image` it builds: in a [`projects`](#projects) entry, or in
+> your user file only if you never run another image. To run a prebuilt image in one
+> project under a user-level build, give that project's entry
+> `build.policy = "if-missing"` and `docker pull` the image before its first run:
+> paddock never rebuilds an image that exists locally under that policy.
 
 Every other `build` directive needs this one: setting `build.policy` alone stops the run
 with `[final:build.dockerfile] Non-empty value expected.`
@@ -266,11 +276,13 @@ When paddock rebuilds the image.
 After editing the Dockerfile, run `--build-policy=always` once from a project that
 builds it, rather than changing the policy in a file. Has no effect without [`build.dockerfile`](#builddockerfile).
 
-paddock builds with Docker's layer cache, so `daily` and `weekly` don't pick up a new
-agent release: the layer that installs the agent is cached. A fully cached build also
-keeps the image's old creation time, so once the image passes the age limit, every run
-rebuilds from cache, quickly, until a layer changes. To refresh the agent, rebuild by
-hand with `docker build --no-cache`.
+> [!NOTE]
+> **`daily` and `weekly` don't update the agent**
+>
+> paddock builds with Docker's layer cache, and the layer that installs the agent is
+> cached. A fully cached build also keeps the image's old creation time, so once the
+> image passes the age limit, every run rebuilds from cache, quickly, until a layer
+> changes. To refresh the agent, rebuild by hand with `docker build --no-cache`.
 
 ### `config.allowlist`
 
@@ -440,8 +452,13 @@ containing `:` needs a TOML file. Sources merge volumes per host path; see
 ```
 
 A project can declare its own mounts in `.paddock/config.toml`, once each developer
-grants it the `volumes` key. Grant it for that project only: a global grant lets any
-repository you run paddock in mount any path in your home, `~/.ssh` included, read-write.
+grants it the `volumes` key.
+
+> [!CAUTION]
+> **Grant `volumes` for that project only**
+>
+> A global grant lets any repository you run paddock in mount any path in your home,
+> `~/.ssh` included, read-write.
 
 ```toml
 # <workdir>/.paddock/config.toml, committed with the project
