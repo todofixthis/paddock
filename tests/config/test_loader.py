@@ -92,7 +92,7 @@ def test_env_schema_expands_tilde_in_dockerfile(
     dockerfile = tmp_path / "Dockerfile"
     dockerfile.write_text("")
     runner = assert_filter_passes(
-        _env_schema,
+        _env_schema(Path.cwd()),
         {"PADDOCK_BUILD_DOCKERFILE": "~/Dockerfile"},
         skip_value_check,
     )
@@ -102,7 +102,7 @@ def test_env_schema_expands_tilde_in_dockerfile(
 def test_env_schema_rejects_empty_dockerfile(assert_filter_errors):
     """PADDOCK_BUILD_DOCKERFILE="" is rejected — empty string would silently resolve to CWD."""
     assert_filter_errors(
-        _env_schema,
+        _env_schema(Path.cwd()),
         {"PADDOCK_BUILD_DOCKERFILE": ""},
         {"PADDOCK_BUILD_DOCKERFILE": [f.NotEmpty.CODE_EMPTY]},
         skip_value_check,
@@ -112,7 +112,7 @@ def test_env_schema_rejects_empty_dockerfile(assert_filter_errors):
 def test_env_schema_rejects_empty_context(assert_filter_errors):
     """PADDOCK_BUILD_CONTEXT="" is rejected — empty string would silently resolve to CWD."""
     assert_filter_errors(
-        _env_schema,
+        _env_schema(Path.cwd()),
         {"PADDOCK_BUILD_CONTEXT": ""},
         {"PADDOCK_BUILD_CONTEXT": [f.NotEmpty.CODE_EMPTY]},
         skip_value_check,
@@ -122,7 +122,7 @@ def test_env_schema_rejects_empty_context(assert_filter_errors):
 def test_env_schema_rejects_invalid_policy(assert_filter_errors):
     """PADDOCK_BUILD_POLICY with an unrecognised value is invalid."""
     assert_filter_errors(
-        _env_schema,
+        _env_schema(Path.cwd()),
         {"PADDOCK_BUILD_POLICY": "never"},
         {"PADDOCK_BUILD_POLICY": [f.Choice.CODE_INVALID]},
         skip_value_check,

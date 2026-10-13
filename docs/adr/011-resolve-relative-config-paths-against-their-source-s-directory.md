@@ -45,7 +45,7 @@ requires one; `Filepath` joins a relative path onto it, then resolves the result
 
 **Pros:** A path means the same thing from any cwd; `"data"` and `"../sibling"` work in
 a committed project file and in a per-project entry.
-**Cons:** Five sources, three bases: a path copied from the CLI into a file can change
+**Cons:** Five sources, four bases: a path copied from the CLI into a file can change
 meaning. A `[projects]` entry, though written in the user file, resolves against its
 project, not the file. Env vars loaded from a file (direnv's `.envrc`, a CI config)
 still resolve against the cwd, so they break from a subdirectory.
@@ -83,9 +83,11 @@ shell they were typed in, whose cwd is the only directory they can name. Anchori
 the entry without changing meaning, which Option 3 breaks. Option 4 turns the gotcha
 into an error without delivering the relative paths users wanted.
 
-The base is a required argument, with no fallback: env, CLI and the merged-config pass
-name `Path.cwd()` explicitly. A new source that forgets its base fails at once, as ADR
-004 makes a source that forgets its allowlist default fail closed.
+The base is a required argument of the schema, with no fallback: env, CLI and the
+merged-config pass name `Path.cwd()` explicitly. A new source that runs paths through
+the schema without a base fails at once, as ADR 004 makes a source that forgets its
+allowlist default fail closed. `Filepath` on its own still defaults to the cwd, so a
+source that pre-validates paths with it, as env does, passes its base there too.
 
 Concrete semantics:
 
@@ -99,7 +101,8 @@ Concrete semantics:
   that moves when the file is relinked.
 - **Every `[projects]` entry** is validated whenever the user file loads, each against
   its own key. A key that isn't absolute (`~` in a key isn't expanded) never matches a
-  workdir, and its relative paths resolve against the cwd.
+  workdir, and its relative paths resolve against the key taken relative to the cwd
+  (a `~` key as a directory literally named `~`), so they usually fail validation.
 
 ## Consequences
 

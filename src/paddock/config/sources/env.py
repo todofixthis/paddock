@@ -2,11 +2,13 @@ from pathlib import Path
 from typing import Any, ClassVar
 
 import filters as f
+from filters.macros import filter_macro
 
 from paddock.config.context import ConfigContext
 from paddock.config.filters import Agent, Filepath
 from paddock.config.schema import BUILD_POLICIES, standard_config_schema
 from paddock.config.sources.base import ConfigSource, LoadResult
+
 
 # Validates the raw PADDOCK_* shape, and is the complete list of PADDOCK_*
 # names; any other name is an error. ``load`` maps a name to its config path by
@@ -14,18 +16,30 @@ from paddock.config.sources.base import ConfigSource, LoadResult
 # ``config.project_dir_readonly``) needs more than an entry here. The free-form
 # maps (``build.args``, ``volumes``) have no env form: their keys are user data
 # that the split would break up, and a name's case is lost.
-_env_schema = f.FilterMapper(
-    {
-        "PADDOCK_AGENT": Agent,
-        "PADDOCK_BUILD_CONTEXT": f.Unicode | f.NotEmpty | Filepath(is_dir=True),
-        "PADDOCK_BUILD_DOCKERFILE": f.Unicode | f.NotEmpty | Filepath(is_dir=False),
-        "PADDOCK_BUILD_POLICY": f.Choice(BUILD_POLICIES),
-        "PADDOCK_IMAGE": f.Unicode | f.NotEmpty,
-        "PADDOCK_NETWORK": f.Unicode,
-    },
-    allow_extra_keys=False,
-    allow_missing_keys=True,
-)
+@filter_macro
+def _env_schema(base_dir: Path):
+    """Macro validating the raw ``PADDOCK_*`` shape.
+
+    Args:
+        base_dir: Directory relative paths resolve against: the cwd, since
+            env vars were set in a shell (ADR 011).
+    """
+    return f.FilterMapper(
+        {
+            "PADDOCK_AGENT": Agent,
+            "PADDOCK_BUILD_CONTEXT": (
+                f.Unicode | f.NotEmpty | Filepath(base_dir=base_dir, is_dir=True)
+            ),
+            "PADDOCK_BUILD_DOCKERFILE": (
+                f.Unicode | f.NotEmpty | Filepath(base_dir=base_dir, is_dir=False)
+            ),
+            "PADDOCK_BUILD_POLICY": f.Choice(BUILD_POLICIES),
+            "PADDOCK_IMAGE": f.Unicode | f.NotEmpty,
+            "PADDOCK_NETWORK": f.Unicode,
+        },
+        allow_extra_keys=False,
+        allow_missing_keys=True,
+    )
 
 
 class EnvConfigSource(ConfigSource):
@@ -34,7 +48,8 @@ class EnvConfigSource(ConfigSource):
     Owns the entire env-vars pipeline:
 
     1. Filter ``context.environ`` down to the ``PADDOCK_*`` subset.
-    2. Validate names and values via the private ``_env_schema``.
+    2. Validate names and values via the private ``_env_schema``, resolving
+       relative paths against the cwd.
     3. Transform the validated PADDOCK_*-keyed dict into the standard config
        shape (``PADDOCK_BUILD_DOCKERFILE`` → ``build.dockerfile``).
     4. Run the result through ``standard_config_schema(merged=False)`` so the
@@ -59,7 +74,8 @@ class EnvConfigSource(ConfigSource):
             k: v for k, v in context.environ.items() if k.startswith(self.PREFIX)
         }
 
-        env_runner = f.FilterRunner(_env_schema, raw_env)
+        cwd = Path.cwd()
+        env_runner = f.FilterRunner(_env_schema(cwd), raw_env)
         if not env_runner.is_valid():
             return LoadResult(env_runner, {})
 
@@ -75,9 +91,7 @@ class EnvConfigSource(ConfigSource):
             self._deep_set(shaped, parts, value)
 
         return LoadResult(
-            f.FilterRunner(
-                standard_config_schema(base_dir=Path.cwd(), merged=False), shaped
-            ),
+            f.FilterRunner(standard_config_schema(base_dir=cwd, merged=False), shaped),
             {},
         )
 

@@ -76,15 +76,25 @@ so it means the same thing wherever you run paddock from:
 |---|---|
 | `.paddock/config.toml` | The workdir, not `.paddock/` |
 | `[projects."<path>"]` | That entry's `<path>` |
-| Rest of the user file | The directory holding the user file |
+| Rest of the user file | The directory holding the user file; for a symlinked file, the link's directory, not its target's |
 | Environment and command line | The directory you run paddock from |
 
 So `"data"` in `.paddock/config.toml` names `<workdir>/data`, and `"../widgets-api"` a
 sibling of the project.
 
-paddock validates every `[projects]` entry on each run, not just the current one, so an
-entry whose paths no longer exist — a project you moved or deleted — stops every run.
-Remove or update the stale entry.
+> [!WARNING]
+> **A stale `[projects]` entry stops every run**
+>
+> paddock validates every `[projects]` entry on each run, not just the current one. An
+> entry whose paths no longer exist stops every run, whichever project you are in: a
+> project you moved or deleted, or a key that names no real directory, such as a typo
+> or a `~` key. The error names that entry:
+>
+> ```
+> [user:projects./home/alice/code/gone.volumes.data] Path 'data' does not exist or cannot be resolved.
+> ```
+>
+> Remove or fix the stale entry.
 
 ## Reference table
 
@@ -977,6 +987,11 @@ the directive in a TOML file, or for [`build.args`](#buildargs) and
 
 A volume's host path doesn't exist. A relative one is checked against the directory its
 source belongs to, not where you ran paddock; see [Validation](#validation).
+
+**`[user:projects.<path>.…] Path '…' does not exist or cannot be resolved.`**
+
+A `[projects]` entry, possibly for a project other than this one, names a path that
+doesn't exist. paddock validates every entry on each run; see [Validation](#validation).
 
 **`[agent] Unknown agent "…"; installed agents: …`**
 
