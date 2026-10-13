@@ -46,6 +46,11 @@ source_suffix = {
 
 html_theme = "sphinx_rtd_theme"
 
+# Styles the reference table in usage/configuration.md, which outgrows the
+# theme's content column
+html_css_files = ["paddock.css"]
+html_static_path = ["_static"]
+
 # -- Options for autosectionlabel extension ----------------------------------
 # https://www.sphinx-doc.org/en/master/usage/extensions/autosectionlabel.html#configuration
 # Prefixing with the document name keeps same-titled sections on different
@@ -67,6 +72,10 @@ autodoc_default_options = {
 # Generates anchors for headings down to h3, so Markdown links such as
 # `[precedence](#precedence)` resolve as they do on GitHub.
 myst_heading_anchors = 3
+
+# Renders GitHub alerts (`> [!NOTE]`) as admonitions, so an aside reads the same
+# on GitHub and on ReadTheDocs
+myst_enable_extensions = ["alert"]
 
 # -- Options for napoleon extension ------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/extensions/napoleon.html#configuration

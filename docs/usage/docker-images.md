@@ -35,8 +35,9 @@ The workdir mounts at the same absolute path as on the host, so paths in agent s
 ## Starting points
 
 paddock ships a Dockerfile in `images/` that installs Python, Node.js and the selected
-agent; see [Docker Image][docker-image]. Point `[build]` at your own Dockerfile to have
-paddock build it for you, or set `image` to a prebuilt one.
+agent; see [Docker Image][docker-image]. Point [`build.dockerfile`](configuration.md#builddockerfile) at your
+own Dockerfile to have paddock build it for you, or set
+[`image`](configuration.md#image) to a prebuilt one.
 
 ## Running commands through a login shell
 
