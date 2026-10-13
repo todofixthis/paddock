@@ -915,10 +915,13 @@ A project can declare its own mounts in `.paddock/config.toml`, once each develo
 grants it the `volumes` key.
 
 > [!CAUTION]
-> **Grant `volumes` for that project only**
+> **Granting `volumes` lets a project mount any file or directory**
 >
-> A global grant lets any repository you run paddock in mount any path, in any mode —
-> including your home directory, `~/.ssh`, etc.
+> A project file allowed `volumes` can mount any path on your machine, in either mode —
+> including your home directory, `~/.ssh`, etc. Grant it only to projects you trust, and
+> only under that project's `[projects."<workdir>".config.allowlist]`. Better still, put
+> the mounts in your own `[projects."<workdir>".volumes]` and grant the project file
+> nothing.
 
 ```toml
 # <workdir>/.paddock/config.toml, committed with the project
