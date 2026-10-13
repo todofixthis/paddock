@@ -40,7 +40,7 @@ grep -c "^RO_OK" "$S/out"; ls -d "$S/c1-project/.paddock" 2>/dev/null || echo "r
 
 The workdir mounts `rw` and `.paddock` mounts `ro`. Setting `config.project_dir_readonly = false` in the user config is the only way `.paddock` mounts `rw`.
 
-A build runs only on a real run, never under `--dry-run`, and logs `Image build: triggered` or `Image build: skipped (up to date)`. Give `build.dockerfile` and `build.context` absolute paths in a scenario config; relative ones resolve against the cwd. Build output repeats each `RUN` line, so match the container's own output at line start (`grep "^extra="`) rather than counting a substring.
+A build runs only on a real run, never under `--dry-run`, and logs `Image build: triggered` or `Image build: skipped`; a failed periodic refresh logs `Image refresh failed` before the skip. Give `build.dockerfile` and `build.context` absolute paths in a scenario config; relative ones resolve against the cwd. Build output repeats each `RUN` line, so match the container's own output at line start (`grep "^extra="`) rather than counting a substring.
 
 - Host state before and after: `.paddock` creation and removal, and files written through the workdir mount, which arrive root-owned.
 - Exit status: paddock exits with docker's return code; a config error exits 1; `--dry-run` exits 0.
