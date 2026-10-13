@@ -81,28 +81,26 @@ follows symlinks.
 
 ## Reference table
 
-🚫 marks a source that can't set the directive. Cells in the `[projects."<workdir>"]`
-column go under that table header.
+🚫 marks a source that can't set the directive. A key shown without a table header goes
+above the file's first `[table]` header: placed below one, it becomes part of that
+table. A key shown under a header goes in that table; if your file already has the
+header, add the key there rather than repeating the header, which TOML rejects.
+`<workdir>` is the workdir's absolute path, with symlinks resolved and no `~`; see
+[`projects`](#projects).
 
-TOML cells use [dotted keys](https://toml.io/en/v1.0.0#keys): `build.policy = "daily"`
-is `policy = "daily"` under `[build]`. A dotted key after a `[table]` header belongs to
-that table, so put dotted keys above the first header. A file can't use both forms for
-one table: `volumes."~/x" = "/x"` beside a `[volumes]` header fails to parse, so add to
-the existing table instead.
-
-| Directive | `config.toml` (user) | `[projects."<workdir>"]` | `.paddock/config.toml` | Environment | Command line |
+| Directive | `config.toml` (user) | Per-project override (user `config.toml`) | `.paddock/config.toml` | Environment | Command line |
 |---|---|---|---|---|---|
-| [`agent`](#agent) | `agent = "claude"` | `agent = "claude"` | `agent = "claude"` | `PADDOCK_AGENT=claude` | `--agent=claude` |
-| [`build.args`](#buildargs) | `build.args.NODE_VERSION = "24"` | `build.args.NODE_VERSION = "24"` | `build.args.NODE_VERSION = "24"` | 🚫 | `--build-args-NODE_VERSION=24` |
-| [`build.context`](#buildcontext) | `build.context = "~/src/images"` | `build.context = "~/src/images"` | `build.context = "~/src/images"` | `PADDOCK_BUILD_CONTEXT=~/src/images` | `--build-context=~/src/images` |
-| [`build.dockerfile`](#builddockerfile) | `build.dockerfile = "~/src/images/Dockerfile"` | `build.dockerfile = "~/src/images/Dockerfile"` | `build.dockerfile = "~/src/images/Dockerfile"` | `PADDOCK_BUILD_DOCKERFILE=~/src/images/Dockerfile` | `--build-dockerfile=~/src/images/Dockerfile` |
-| [`build.policy`](#buildpolicy) | `build.policy = "daily"` | `build.policy = "daily"` | `build.policy = "daily"` | `PADDOCK_BUILD_POLICY=daily` | `--build-policy=daily` |
-| [`config.allowlist`](#configallowlist) | `config.allowlist.project_toml = ["volumes"]` | `config.allowlist.project_toml = ["volumes"]` | 🚫 | 🚫 | 🚫 |
-| [`config.project_dir_readonly`](#configproject_dir_readonly) | `config.project_dir_readonly = false` | `config.project_dir_readonly = false` | 🚫 | 🚫 | 🚫 |
-| [`image`](#image) | `image = "paddock-claude:latest"` | `image = "paddock-claude:latest"` | `image = "paddock-claude:latest"` | `PADDOCK_IMAGE=paddock-claude:latest` | `--image=paddock-claude:latest` |
-| [`network`](#network) | `network = "dev-services"` | `network = "dev-services"` | `network = "dev-services"` | `PADDOCK_NETWORK=dev-services` | `--network=dev-services` |
-| [`projects`](#projects) | `[projects."/home/alice/code/widgets"]` | 🚫 | 🚫 | 🚫 | 🚫 |
-| [`volumes`](#volumes) | `volumes."~/datasets" = "/data:ro"` | `volumes."~/datasets" = "/data:ro"` | `volumes."~/datasets" = "/data:ro"` | 🚫 | `--volume=~/datasets:/data:ro` |
+| [`agent`](#agent) | `agent = "claude"` | `[projects."<workdir>"]`<br>`agent = "claude"` | `agent = "claude"` | `PADDOCK_AGENT=claude` | `--agent=claude` |
+| [`build.args`](#buildargs) | `[build.args]`<br>`NODE_VERSION = "24"` | `[projects."<workdir>".build.args]`<br>`NODE_VERSION = "24"` | `[build.args]`<br>`NODE_VERSION = "24"` | 🚫 | `--build-args-NODE_VERSION=24` |
+| [`build.context`](#buildcontext) | `[build]`<br>`context = "~/src/images"` | `[projects."<workdir>".build]`<br>`context = "~/src/images"` | `[build]`<br>`context = "~/src/images"` | `PADDOCK_BUILD_CONTEXT=~/src/images` | `--build-context=~/src/images` |
+| [`build.dockerfile`](#builddockerfile) | `[build]`<br>`dockerfile = "~/src/images/Dockerfile"` | `[projects."<workdir>".build]`<br>`dockerfile = "~/src/images/Dockerfile"` | `[build]`<br>`dockerfile = "~/src/images/Dockerfile"` | `PADDOCK_BUILD_DOCKERFILE=~/src/images/Dockerfile` | `--build-dockerfile=~/src/images/Dockerfile` |
+| [`build.policy`](#buildpolicy) | `[build]`<br>`policy = "daily"` | `[projects."<workdir>".build]`<br>`policy = "daily"` | `[build]`<br>`policy = "daily"` | `PADDOCK_BUILD_POLICY=daily` | `--build-policy=daily` |
+| [`config.allowlist`](#configallowlist) | `[config.allowlist]`<br>`project_toml = ["volumes"]` | `[projects."<workdir>".config.allowlist]`<br>`project_toml = ["volumes"]` | 🚫 | 🚫 | 🚫 |
+| [`config.project_dir_readonly`](#configproject_dir_readonly) | `[config]`<br>`project_dir_readonly = false` | `[projects."<workdir>".config]`<br>`project_dir_readonly = false` | 🚫 | 🚫 | 🚫 |
+| [`image`](#image) | `image = "paddock-claude:latest"` | `[projects."<workdir>"]`<br>`image = "paddock-claude:latest"` | `image = "paddock-claude:latest"` | `PADDOCK_IMAGE=paddock-claude:latest` | `--image=paddock-claude:latest` |
+| [`network`](#network) | `network = "dev-services"` | `[projects."<workdir>"]`<br>`network = "dev-services"` | `network = "dev-services"` | `PADDOCK_NETWORK=dev-services` | `--network=dev-services` |
+| [`projects`](#projects) | `[projects."/home/alice/code/widgets"]`<br>`image = "widgets-dev:latest"` | 🚫 | 🚫 | 🚫 | 🚫 |
+| [`volumes`](#volumes) | `[volumes]`<br>`"~/datasets" = "/data:ro"` | `[projects."<workdir>".volumes]`<br>`"~/datasets" = "/data:ro"` | `[volumes]`<br>`"~/datasets" = "/data:ro"` | 🚫 | `--volume=~/datasets:/data:ro` |
 
 ### Run options
 
@@ -167,7 +165,7 @@ Build arguments (`docker build --build-arg`) for when paddock builds the image.
 
 - **Type:** table of strings, argument name to value
 - **Default:** none
-- **TOML:** `build.args.NODE_VERSION = "24"`, or a `[build.args]` table
+- **TOML:** `NODE_VERSION = "24"` under `[build.args]`
 - **Environment:** none. `PADDOCK_BUILD_ARGS` is ignored, and a name such as
   `PADDOCK_BUILD_ARGS_NODE_VERSION` produces a garbled build argument rather than an
   error, so don't use either.
@@ -194,7 +192,7 @@ The directory sent to Docker as the build context, when paddock builds the image
 
 - **Type:** path to an existing directory
 - **Default:** the directory containing [`build.dockerfile`](#builddockerfile)
-- **TOML:** `build.context = "~/src/images"`
+- **TOML:** `context = "~/src/images"` under `[build]`
 - **Environment:** `PADDOCK_BUILD_CONTEXT=~/src/images`
 - **Command line:** `--build-context=~/src/images`
 - **Allowlist path:** `build.context` (or `build`)
@@ -211,7 +209,7 @@ on building.
 
 - **Type:** path to an existing file
 - **Default:** none — paddock runs `image` as is, and Docker pulls it if missing
-- **TOML:** `build.dockerfile = "~/src/images/Dockerfile"`
+- **TOML:** `dockerfile = "~/src/images/Dockerfile"` under `[build]`
 - **Environment:** `PADDOCK_BUILD_DOCKERFILE=~/src/images/Dockerfile`
 - **Command line:** `--build-dockerfile=~/src/images/Dockerfile`
 - **Allowlist path:** `build.dockerfile` (or `build`)
@@ -233,8 +231,8 @@ docker build -t <image> -f <build.dockerfile> [--build-arg …] <build.context>
 > that name. No source can switch building off once a lower one turns it on, so set
 > `[build]` beside the one `image` it builds: in a [`projects`](#projects) entry, or in
 > your user file only if you never run another image. To run a prebuilt image in one
-> project under a user-level build, give that project's entry
-> `build.policy = "if-missing"` and `docker pull` the image before its first run:
+> project under a user-level build, set `policy = "if-missing"` under that project's
+> `[projects."<workdir>".build]` and `docker pull` the image before its first run:
 > paddock never rebuilds an image that exists locally under that policy.
 
 Every other `build` directive needs this one: setting `build.policy` alone stops the run
@@ -262,7 +260,7 @@ When paddock rebuilds the image.
 
 - **Type:** `"always"`, `"daily"`, `"if-missing"` or `"weekly"`
 - **Default:** `"if-missing"`
-- **TOML:** `build.policy = "daily"`
+- **TOML:** `policy = "daily"` under `[build]`
 - **Environment:** `PADDOCK_BUILD_POLICY=daily`
 - **Command line:** `--build-policy=daily`
 - **Allowlist path:** `build.policy` (or `build`)
@@ -293,8 +291,8 @@ Which keys each gated source may set. This is how you enable
 - **Type:** table with keys `cli`, `env` and `project_toml`; each is `true`, `false`, or
   a list of allowlist paths
 - **Default:** `cli = true`, `env = true`, `project_toml = false`
-- **TOML:** user file or `[projects."<workdir>"]` only:
-  `config.allowlist.project_toml = ["volumes"]`
+- **TOML:** `project_toml = ["volumes"]` under `[config.allowlist]` in the user file, or
+  under `[projects."<workdir>".config.allowlist]` for one project
 - **Environment:** none
 - **Command line:** none
 - **Allowlist path:** none — it can't be gated
@@ -335,8 +333,8 @@ Whether the container may write to the project's `.paddock/` directory.
 
 - **Type:** boolean
 - **Default:** `true` (read-only)
-- **TOML:** user file or `[projects."<workdir>"]` only:
-  `config.project_dir_readonly = false`
+- **TOML:** `project_dir_readonly = false` under `[config]` in the user file, or under
+  `[projects."<workdir>".config]` for one project
 - **Environment:** none
 - **Command line:** none
 - **Allowlist path:** none — it can't be gated
@@ -426,7 +424,7 @@ Extra host directories or files to mount into the container.
 - **Type:** table, host path to container path with an optional `:ro` or `:rw` mode
 - **Default:** none. paddock always mounts the workdir read-write at the same path,
   plus the agent's mounts.
-- **TOML:** `volumes."~/datasets" = "/data:ro"`, or a `[volumes]` table
+- **TOML:** `"~/datasets" = "/data:ro"` under `[volumes]`
 - **Environment:** none — set it in a TOML file or on the command line
 - **Command line:** `--volume=~/datasets:/data:ro`, repeatable
 - **Allowlist path:** `volumes`
