@@ -136,14 +136,26 @@ def test_env_schema_ignores_non_paddock_vars(assert_filter_passes):
     )
 
 
-def test_env_build_args_not_mapped(tmp_path, monkeypatch):
-    """PADDOCK_BUILD_ARGS is silently ignored — it cannot express a key=value dict as a single env var."""
+def test_env_build_args_suffixed_name_is_fatal(tmp_path, monkeypatch):
+    """PADDOCK_BUILD_ARGS_<NAME> aborts the run, naming the alternatives."""
     _setup_home(tmp_path, monkeypatch, 'image = "ubuntu:22.04"\nagent = "claude"\n')
-    result = ConfigLoader().resolve(
-        _empty_parsed(), workdir=tmp_path, environ={"PADDOCK_BUILD_ARGS": "FOO=bar"}
-    )
-    assert isinstance(result, ResolvedConfig)
-    assert result.config.get("build") is None
+    dockerfile = tmp_path / "Dockerfile"
+    dockerfile.write_text("FROM x")
+    with pytest.raises(ExceptionGroup) as exc:
+        ConfigLoader().resolve(
+            _empty_parsed(),
+            workdir=tmp_path,
+            environ={
+                "PADDOCK_BUILD_ARGS_NODE_VERSION": "24",
+                "PADDOCK_BUILD_DOCKERFILE": str(dockerfile),
+            },
+        )
+    messages = [str(e) for e in exc.value.exceptions]
+    assert messages == [
+        "[env:PADDOCK_BUILD_ARGS_NODE_VERSION] build.args has no "
+        "environment-variable form; pass --build-args-KEY=VALUE or set "
+        "build.args in a TOML file."
+    ]
 
 
 def test_loader_resolve_env_dockerfile_tilde_expanded(monkeypatch, tmp_path):
@@ -391,7 +403,7 @@ def test_project_toml_allowlist_restricts_keys(tmp_path: Path, monkeypatch, capl
     _setup_home(
         tmp_path,
         monkeypatch,
-        'agent = "claude"\n' '[config.allowlist]\nproject_toml = ["image"]\n',
+        'agent = "claude"\n[config.allowlist]\nproject_toml = ["image"]\n',
     )
     pd = tmp_path / ".paddock"
     pd.mkdir()
@@ -497,7 +509,7 @@ def test_root_error_omits_the_empty_key(tmp_path: Path, monkeypatch):
     _setup_home(
         tmp_path,
         monkeypatch,
-        'image = "u"\nagent = "claude"\n' "[config.allowlist]\nproject_toml = true\n",
+        'image = "u"\nagent = "claude"\n[config.allowlist]\nproject_toml = true\n',
     )
     pd = tmp_path / ".paddock"
     pd.mkdir()

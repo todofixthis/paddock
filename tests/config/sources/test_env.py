@@ -1,7 +1,10 @@
 from pathlib import Path
 
+import filters as f
+
 from paddock.cli import ParsedArgs
 from paddock.config.context import ConfigContext
+from paddock.config.filters import NoEnvForm
 from paddock.config.sources.env import EnvConfigSource
 
 
@@ -81,7 +84,53 @@ def test_non_paddock_vars_ignored(tmp_path):
     assert result.instance.cleaned_data == {}
 
 
-def test_loader_keys_are_skipped(tmp_path):
-    """PADDOCK_BUILD_ARGS is handled by another source."""
+def test_build_args_bare_name_rejected(tmp_path):
+    """PADDOCK_BUILD_ARGS is an error, not silently ignored."""
     result = EnvConfigSource().load(_ctx(tmp_path, {"PADDOCK_BUILD_ARGS": "foo"}))
-    assert result.instance.cleaned_data == {}
+    assert result.instance.error_codes == {
+        "PADDOCK_BUILD_ARGS": [NoEnvForm.CODE_NO_ENV_FORM]
+    }
+
+
+def test_build_args_suffixed_name_rejected(tmp_path):
+    """PADDOCK_BUILD_ARGS_<NAME> is an error, not split into nested build.args."""
+    df = tmp_path / "Dockerfile"
+    df.write_text("FROM x")
+    result = EnvConfigSource().load(
+        _ctx(
+            tmp_path,
+            {
+                "PADDOCK_BUILD_ARGS_NODE_VERSION": "24",
+                "PADDOCK_BUILD_DOCKERFILE": str(df),
+            },
+        )
+    )
+    assert result.instance.error_codes == {
+        "PADDOCK_BUILD_ARGS_NODE_VERSION": [NoEnvForm.CODE_NO_ENV_FORM]
+    }
+
+
+def test_volumes_bare_name_rejected(tmp_path):
+    """PADDOCK_VOLUMES names the CLI/TOML alternatives instead of a type error."""
+    result = EnvConfigSource().load(_ctx(tmp_path, {"PADDOCK_VOLUMES": "/x"}))
+    assert result.instance.error_codes == {
+        "PADDOCK_VOLUMES": [NoEnvForm.CODE_NO_ENV_FORM]
+    }
+
+
+def test_volumes_suffixed_name_rejected(tmp_path, monkeypatch):
+    """PADDOCK_VOLUMES_<NAME> is an error, not a mount of the relative path <name>."""
+    (tmp_path / "tmp").mkdir()
+    monkeypatch.chdir(tmp_path)
+    result = EnvConfigSource().load(_ctx(tmp_path, {"PADDOCK_VOLUMES_TMP": "/x"}))
+    assert result.instance.error_codes == {
+        "PADDOCK_VOLUMES_TMP": [NoEnvForm.CODE_NO_ENV_FORM]
+    }
+
+
+def test_no_env_form_needs_separator(tmp_path):
+    """A name merely starting with PADDOCK_BUILD_ARGS is an ordinary unknown key."""
+    result = EnvConfigSource().load(_ctx(tmp_path, {"PADDOCK_BUILD_ARGSX": "1"}))
+    assert result.instance.error_codes == {
+        "build.argsx": [f.FilterMapper.CODE_EXTRA_KEY]
+    }
