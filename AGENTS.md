@@ -1,12 +1,15 @@
 > **Symlinks for Claude Code compatibility:**
 > - `CLAUDE.md` → `AGENTS.md` — edit `AGENTS.md` only
 > - `.claude/skills/` → `.agents/skills/` — edit skills under `.agents/skills/` only
+> - `.claude/rules/` → `.agents/rules/` — edit path-scoped rules under `.agents/rules/` only
 >
-> `.claude/` is a real directory (`settings.json` plus the `skills` symlink); only
-> `.claude/skills` symlinks into `.agents/skills`. Keep `.claude/` a real directory —
-> the native worktree tool refuses to run against a committed `.claude` symlink. Git
-> refuses to stage files through a symlink directory, so stage skills and `AGENTS.md`
-> via their real paths (`.agents/skills/`, `AGENTS.md`), never the symlink paths.
+> `.claude/` is a real directory (`settings.json` plus the `skills` and `rules`
+> symlinks). Keep it a real directory — the native worktree tool refuses to run against
+> a committed `.claude` symlink. Git refuses to stage files through a symlink directory,
+> so stage skills, rules and `AGENTS.md` via their real paths (`.agents/skills/`,
+> `.agents/rules/`, `AGENTS.md`), never the symlink paths. Claude Code loads a rule when
+> you read a file its `paths` frontmatter matches; in another harness, read the rules
+> covering the files you edit yourself.
 
 ## Getting Started
 

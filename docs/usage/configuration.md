@@ -276,7 +276,7 @@ When paddock rebuilds the image.
 After editing the Dockerfile, run `--build-policy=always` once from a project that
 builds it, rather than changing the policy in a file. Has no effect without [`build.dockerfile`](#builddockerfile).
 
-> [!NOTE]
+> [!WARNING]
 > **`daily` and `weekly` don't update the agent**
 >
 > paddock builds with Docker's layer cache, and the layer that installs the agent is
