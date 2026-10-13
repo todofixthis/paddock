@@ -30,10 +30,13 @@ class ProjectTomlSource(ConfigSource):
             with empty meta (project TOML carries no ``[config]`` section).
             Returns an empty valid instance when the file is absent.
         """
-        schema = standard_config_schema(merged=False)
         path = context.workdir / _CONFIG_NAME
         if not path.exists():
-            return LoadResult(f.FilterRunner(schema, {}), {})
+            return LoadResult(
+                f.FilterRunner(standard_config_schema(merged=False), {}), {}
+            )
 
+        # Relative paths belong to the project, not .paddock/ (ADR 011).
+        schema = standard_config_schema(merged=False, base_dir=context.workdir)
         chain = f.TomlDecode | schema
         return LoadResult(f.FilterRunner(chain, path.read_text(encoding="utf-8")), {})

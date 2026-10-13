@@ -69,15 +69,18 @@ allowlist would drop still stops the run.
 
 Path values (`build.context`, `build.dockerfile` and the host side of `volumes`) must
 exist when paddock starts. paddock expands a leading `~` to your home directory and
-follows symlinks.
+follows symlinks. A relative path resolves against the directory its source belongs to,
+so it means the same thing wherever you run paddock from:
 
-> [!WARNING]
-> **Relative paths resolve against your shell's directory**
->
-> paddock resolves a relative path against the directory you run paddock from, not the
-> workdir or the config file's directory. The same config then points somewhere
-> different, or nowhere, depending on where you run it from, such as when you pass
-> `--workdir`. Use absolute or `~`-relative paths.
+| Source | Relative paths resolve against |
+|---|---|
+| `.paddock/config.toml` | The workdir, not `.paddock/` |
+| `[projects."<path>"]` | That entry's `<path>` |
+| Rest of the user file | The directory holding the user file |
+| Environment and command line | The directory you run paddock from |
+
+So `"data"` in `.paddock/config.toml` names `<workdir>/data`, and `"../widgets-api"` a
+sibling of the project.
 
 ## Reference table
 
@@ -660,7 +663,7 @@ The directory sent to Docker as the build context, when paddock builds the image
 
 Has no effect without `build.dockerfile`. Set it when the Dockerfile `COPY`s files from
 outside its own directory; the bundled Dockerfile `COPY`s nothing, so it needs none.
-Relative paths resolve against the directory you run paddock from; see
+Relative paths resolve against the directory the source belongs to; see
 [Validation](#validation).
 
 ### `build.dockerfile`
@@ -712,7 +715,7 @@ dockerfile = "~/src/paddock/images/Dockerfile"
 policy = "weekly"
 ```
 
-Relative paths resolve against the directory you run paddock from; see
+Relative paths resolve against the directory the source belongs to; see
 [Validation](#validation).
 
 ### `build.policy`
@@ -897,8 +900,8 @@ Use it to give the agent things outside the workdir: reference data, a sibling
 repository, a credentials file.
 
 - **Host path** (the key): must exist when paddock starts. Expands a leading `~` to
-  your home directory; relative paths resolve against the directory you run paddock
-  from (see [Validation](#validation)).
+  your home directory; relative paths resolve against the directory the source belongs
+  to, such as the workdir for `.paddock/config.toml` (see [Validation](#validation)).
 - **Container path:** must be absolute. A leading `~` expands to `/root`.
 - **Mode:** `ro` (read-only, the default) or `rw`, in either case. Mount read-write only
   what the agent should be able to change on your machine.
@@ -938,9 +941,9 @@ grants it the `volumes` key.
 project_toml = ["volumes"]
 ```
 
-`~` in a committed file expands against each developer's own home directory, so
-`~`-relative paths suit a shared file best; there is no way to name a path relative to
-the project. Every developer who enables the project file needs every host path, even
+Relative paths in a committed file resolve against the project, so they suit a shared
+file best: `"../widgets-api"` works for every developer who clones the two side by side.
+`~` expands against each developer's own home directory. Every developer who enables the project file needs every host path, even
 one whose grant leaves out `volumes`, or paddock stops before starting (see
 [Validation](#validation)). A mount that varies per developer, such as a sibling
 repository cloned somewhere different on each machine, belongs in each developer's own
@@ -968,8 +971,8 @@ the directive in a TOML file, or for [`build.args`](#buildargs) and
 
 **`[<source>:volumes.<host path>] Path '…' does not exist or cannot be resolved.`**
 
-A volume's host path doesn't exist, or is relative and doesn't exist from where you ran
-paddock. See [Validation](#validation).
+A volume's host path doesn't exist. A relative one is checked against the directory its
+source belongs to, not where you ran paddock; see [Validation](#validation).
 
 **`[agent] Unknown agent "…"; installed agents: …`**
 

@@ -395,7 +395,7 @@ def test_project_toml_allowlist_restricts_keys(tmp_path: Path, monkeypatch, capl
     _setup_home(
         tmp_path,
         monkeypatch,
-        'agent = "claude"\n' '[config.allowlist]\nproject_toml = ["image"]\n',
+        'agent = "claude"\n[config.allowlist]\nproject_toml = ["image"]\n',
     )
     pd = tmp_path / ".paddock"
     pd.mkdir()
@@ -501,7 +501,7 @@ def test_root_error_omits_the_empty_key(tmp_path: Path, monkeypatch):
     _setup_home(
         tmp_path,
         monkeypatch,
-        'image = "u"\nagent = "claude"\n' "[config.allowlist]\nproject_toml = true\n",
+        'image = "u"\nagent = "claude"\n[config.allowlist]\nproject_toml = true\n',
     )
     pd = tmp_path / ".paddock"
     pd.mkdir()
@@ -523,3 +523,112 @@ def test_keyed_error_keeps_source_and_key(tmp_path: Path, monkeypatch):
         )
     messages = [str(e) for e in exc.value.exceptions]
     assert messages[0].startswith("[env:PADDOCK_BUILD_POLICY] ")
+
+
+def test_project_toml_relative_paths_resolve_against_workdir(
+    tmp_path: Path, monkeypatch
+):
+    """Relative paths in .paddock/config.toml resolve against the workdir, not
+    the cwd, so --workdir from elsewhere still finds them."""
+    _setup_home(
+        tmp_path,
+        monkeypatch,
+        'image = "i"\n[config.allowlist]\nproject_toml = true\n',
+    )
+    workdir = tmp_path / "project"
+    (workdir / "data").mkdir(parents=True)
+    (workdir / "images").mkdir()
+    (workdir / "images" / "Dockerfile").write_text("FROM scratch\n")
+    sibling = tmp_path / "sibling"
+    sibling.mkdir()
+    (workdir / ".paddock").mkdir()
+    (workdir / ".paddock" / "config.toml").write_text(
+        'build.dockerfile = "images/Dockerfile"\n'
+        'build.context = "images"\n'
+        '[volumes]\n"data" = "/data"\n"../sibling" = "/sibling"\n'
+    )
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    monkeypatch.chdir(elsewhere)
+    r = ConfigLoader().resolve(_empty_parsed(), workdir=workdir.resolve(), environ={})
+    assert r.config["build"]["dockerfile"] == (workdir / "images/Dockerfile").resolve()
+    assert r.config["build"]["context"] == (workdir / "images").resolve()
+    assert set(r.config["volumes"]) == {
+        str((workdir / "data").resolve()),
+        str(sibling.resolve()),
+    }
+
+
+def test_user_relative_paths_resolve_against_user_config_dir(
+    tmp_path: Path, monkeypatch
+):
+    """Relative paths in the user file's global section resolve against the
+    file's directory."""
+    cfg = _setup_home(
+        tmp_path,
+        monkeypatch,
+        'image = "i"\nbuild.dockerfile = "images/Dockerfile"\n',
+    )
+    (cfg.parent / "images").mkdir()
+    (cfg.parent / "images" / "Dockerfile").write_text("FROM scratch\n")
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    monkeypatch.chdir(elsewhere)
+    r = ConfigLoader().resolve(_empty_parsed(), workdir=elsewhere, environ={})
+    assert (
+        r.config["build"]["dockerfile"]
+        == (cfg.parent / "images" / "Dockerfile").resolve()
+    )
+
+
+def test_project_overrides_relative_paths_resolve_against_workdir(
+    tmp_path: Path, monkeypatch
+):
+    """Relative paths in a [projects] entry resolve against that project."""
+    workdir = (tmp_path / "project").resolve()
+    (workdir / "data").mkdir(parents=True)
+    _setup_home(
+        tmp_path,
+        monkeypatch,
+        f'image = "i"\n[projects."{workdir}".volumes]\n"data" = "/data"\n',
+    )
+    monkeypatch.chdir(tmp_path)
+    r = ConfigLoader().resolve(_empty_parsed(), workdir=workdir, environ={})
+    assert set(r.config["volumes"]) == {str(workdir / "data")}
+
+
+def test_other_project_entry_validates_against_its_own_key(tmp_path: Path, monkeypatch):
+    """A [projects] entry for another project resolves against its own key, so
+    it neither fails nor borrows the current workdir's paths."""
+    other = (tmp_path / "other").resolve()
+    (other / "data").mkdir(parents=True)
+    workdir = (tmp_path / "project").resolve()
+    workdir.mkdir()
+    _setup_home(
+        tmp_path,
+        monkeypatch,
+        f'image = "i"\n[projects."{other}".volumes]\n"data" = "/data"\n',
+    )
+    monkeypatch.chdir(tmp_path)
+    r = ConfigLoader().resolve(_empty_parsed(), workdir=workdir, environ={})
+    assert "volumes" not in r.config
+
+
+def test_cli_and_env_relative_paths_resolve_against_cwd(tmp_path: Path, monkeypatch):
+    """Env and CLI paths have no file, so they resolve against the cwd."""
+    _setup_home(tmp_path, monkeypatch, 'image = "i"\n')
+    cwd = tmp_path / "cwd"
+    (cwd / "data").mkdir(parents=True)
+    (cwd / "Dockerfile").write_text("FROM scratch\n")
+    workdir = tmp_path / "project"
+    workdir.mkdir()
+    monkeypatch.chdir(cwd)
+    parsed = _empty_parsed()
+    parsed.volumes = {"data": "/data"}
+    r = ConfigLoader().resolve(
+        parsed,
+        workdir=workdir,
+        environ={"PADDOCK_BUILD_DOCKERFILE": "Dockerfile"},
+    )
+    assert r.config["build"]["dockerfile"] == (cwd / "Dockerfile").resolve()
+    assert set(r.config["volumes"]) == {str((cwd / "data").resolve())}

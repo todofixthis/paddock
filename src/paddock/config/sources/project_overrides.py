@@ -2,7 +2,7 @@ import filters as f
 
 from paddock.config.context import ConfigContext
 from paddock.config.extract import ExtractProject
-from paddock.config.schema import config_meta_schema, standard_config_schema
+from paddock.config.schema import project_entry_schema, standard_config_schema
 from paddock.config.sources.base import ConfigSource, LoadResult
 
 
@@ -28,10 +28,12 @@ class ProjectOverridesSource(ConfigSource):
         if not path.exists():
             return LoadResult(f.FilterRunner(schema, {}), {})
 
-        full_schema = standard_config_schema(
-            extra_keys={"config": config_meta_schema}, merged=False
+        project = context.project_key
+        chain = (
+            f.TomlDecode
+            | ExtractProject(project=project)
+            | project_entry_schema(project)
         )
-        chain = f.TomlDecode | ExtractProject(project=context.project_key) | full_schema
         full = f.FilterRunner(chain, path.read_text(encoding="utf-8"))
         if not full.is_valid():
             return LoadResult(full, {})

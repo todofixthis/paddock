@@ -185,7 +185,7 @@ The project file sets `[config]` (or `projects`), which only your user config ma
 
 **`[project_toml:volumes.<path>] Path '<path>' does not exist or cannot be resolved.`**
 
-A host path in the project file doesn't exist on this machine. A relative path resolves against the directory you ran paddock from, not the workdir; see [Validation](configuration.md#validation).
+A host path in the project file doesn't exist on this machine. A relative path resolves against the workdir, not `.paddock/`; see [Validation](configuration.md#validation).
 
 **`<path> exists but is not a directory; paddock cannot mount it as the project config directory`**
 

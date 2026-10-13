@@ -33,7 +33,10 @@ class UserConfigSource(ConfigSource):
         if not path.exists():
             return LoadResult(f.FilterRunner(schema, {}), {})
 
-        full = f.FilterRunner(user_config_schema, path.read_text(encoding="utf-8"))
+        full = f.FilterRunner(
+            user_config_schema(base_dir=path.parent),
+            path.read_text(encoding="utf-8"),
+        )
         if not full.is_valid():
             return LoadResult(full, {})
 

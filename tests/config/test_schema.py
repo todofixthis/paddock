@@ -226,10 +226,10 @@ def test_standard_schema_with_extra_keys_macro(assert_filter_passes):
     )
 
 
-def test_user_config_schema_accepts_projects_and_config(assert_filter_passes):
+def test_user_config_schema_accepts_projects_and_config(assert_filter_passes, tmp_path):
     """user_config_schema accepts projects and config sections."""
     assert_filter_passes(
-        user_config_schema,
+        user_config_schema(base_dir=tmp_path),
         'image = "base:1.0"\nagent = "claude"\n'
         '[projects."/abs/path"]\nimage = "p:2"\n'
         "[config.allowlist]\nproject_toml = true\n",
@@ -237,10 +237,12 @@ def test_user_config_schema_accepts_projects_and_config(assert_filter_passes):
     )
 
 
-def test_user_config_schema_rejects_unknown_allowlist_source(assert_filter_errors):
+def test_user_config_schema_rejects_unknown_allowlist_source(
+    assert_filter_errors, tmp_path
+):
     """Unknown allowlist source keys are rejected."""
     assert_filter_errors(
-        user_config_schema,
+        user_config_schema(base_dir=tmp_path),
         'agent = "claude"\nimage = "x"\n[config.allowlist]\nfoo = true\n',
         {"config.allowlist.foo": [f.FilterMapper.CODE_EXTRA_KEY]},
         skip_value_check,

@@ -1,4 +1,6 @@
 import sys
+from pathlib import Path
+from typing import cast
 
 import filters as f
 from filters.base import BaseFilter
@@ -34,14 +36,16 @@ class DropEmpty(BaseFilter):
         return out
 
 
-def _build_schema(merged: bool):
+def _build_schema(merged: bool, base_dir: Path | None):
     """Build-section schema. ``dockerfile`` is the only required field."""
     return f.FilterMapper(
         {
             "args": f.FilterRepeater(f.Unicode),
-            "context": f.Unicode | Filepath(is_dir=True),
+            "context": f.Unicode | Filepath(base_dir=base_dir, is_dir=True),
             "dockerfile": (
-                f.NotEmpty(allow_none=not merged) | f.Unicode | Filepath(is_dir=False)
+                f.NotEmpty(allow_none=not merged)
+                | f.Unicode
+                | Filepath(base_dir=base_dir, is_dir=False)
             ),
             "policy": f.Choice(BUILD_POLICIES),
         },
@@ -50,29 +54,38 @@ def _build_schema(merged: bool):
     )
 
 
-def _standard_fields(merged: bool) -> dict[str, object]:
+def _standard_fields(merged: bool, base_dir: Path | None) -> dict[str, object]:
     """Top-level standard config fields. Mode-aware.
 
     In merged mode required fields disallow ``None``; in per-source mode they
     allow ``None`` so sources can be incomplete without false errors.
+    ``base_dir`` anchors relative host paths (see ``standard_config_schema``).
     """
     return {
         "agent": f.NotEmpty(allow_none=not merged) | Agent,
-        "build": _build_schema(merged),
+        "build": _build_schema(merged, base_dir),
         "image": f.NotEmpty(allow_none=not merged) | f.Unicode,
         "network": f.Unicode,
         "volumes": (
             f.Optional({} if merged else None)
-            | VolumeMap(container_home_dir=CONTAINER_HOME)
+            | VolumeMap(container_home_dir=CONTAINER_HOME, host_base_dir=base_dir)
         ),
     }
 
 
 @filter_macro
-def standard_config_schema(extra_keys: dict | None = None, merged: bool = False):
+def standard_config_schema(
+    extra_keys: dict | None = None,
+    merged: bool = False,
+    base_dir: Path | None = None,
+):
     """Macro returning the standard-config filter chain.
 
     Args:
+        base_dir: Directory relative host paths (``build.context``,
+            ``build.dockerfile``, ``volumes`` keys) resolve against: the
+            directory the source belongs to (ADR 011). ``None`` (default)
+            resolves them against the process cwd, as env and CLI need.
         extra_keys: Optional mapping of additional top-level keys to allow
             (e.g. ``{"config": config_meta_schema}``).
         merged: ``False`` (default) is the per-source pass: every required
@@ -84,7 +97,7 @@ def standard_config_schema(extra_keys: dict | None = None, merged: bool = False)
         A filter chain ``FilterMapper(...) | DropEmpty``. ``DropEmpty`` strips
         ``None``/empty-dict leaves so per-source results merge cleanly.
     """
-    fields = _standard_fields(merged)
+    fields = _standard_fields(merged, base_dir)
     if extra_keys:
         fields.update(extra_keys)
     return (
@@ -119,22 +132,60 @@ config_meta_schema = f.FilterMapper(
 )
 
 
-# Per-project overrides allow [projects."<path>".config.allowlist] as well as
-# the standard config fields. Per-source (merged=False).
-_project_entry_schema = standard_config_schema(
-    extra_keys={"config": config_meta_schema}, merged=False
-)
+@filter_macro
+def project_entry_schema(project: str | Path):
+    """Macro validating one ``[projects."<path>"]`` entry (per-source).
+
+    Allows ``[config]`` as well as the standard config fields. Relative host
+    paths resolve against ``project``, the directory the entry configures
+    (ADR 011).
+
+    Args:
+        project: The entry's project path, i.e. its key under ``[projects]``.
+    """
+    return standard_config_schema(
+        extra_keys={"config": config_meta_schema},
+        merged=False,
+        base_dir=Path(project),
+    )
 
 
-user_config_schema = f.TomlDecode | f.FilterMapper(
-    {
-        **_standard_fields(merged=False),
-        "config": config_meta_schema,
-        "projects": (f.Optional(dict) | f.FilterRepeater(_project_entry_schema)),
-    },
-    allow_extra_keys=False,
-    allow_missing_keys=True,
-)
+class ProjectMap(BaseFilter):
+    """Validates ``[projects]``, each entry against its own project path.
+
+    Unlike ``f.FilterRepeater``, the schema varies per key: an entry's relative
+    paths resolve against that entry's key, not the project being run.
+    """
+
+    def _apply(self, value):
+        value = cast(dict, self._filter(value, f.Type(dict)))
+        if self._has_errors:
+            return None
+
+        result = {
+            key: self._filter(entry, project_entry_schema(key), sub_key=str(key))
+            for key, entry in value.items()
+        }
+        return result if not self._has_errors else None
+
+
+@filter_macro
+def user_config_schema(base_dir: Path):
+    """Macro validating a whole user config file, from its TOML text.
+
+    Args:
+        base_dir: Directory relative host paths in the file's global section
+            resolve against: the file's own directory (ADR 011).
+    """
+    return f.TomlDecode | f.FilterMapper(
+        {
+            **_standard_fields(merged=False, base_dir=base_dir),
+            "config": config_meta_schema,
+            "projects": f.Optional(dict) | ProjectMap,
+        },
+        allow_extra_keys=False,
+        allow_missing_keys=True,
+    )
 
 
 class ConfigSchema:
