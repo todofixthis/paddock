@@ -75,8 +75,9 @@ follows symlinks.
 > **Relative paths resolve against your shell's directory**
 >
 > paddock resolves a relative path against the directory you run paddock from, not the
-> workdir or the config file's directory, so `"data"` in `.paddock/config.toml` breaks
-> when you pass `--workdir`. Use absolute or `~`-relative paths.
+> workdir or the config file's directory. The same config then points somewhere
+> different, or nowhere, depending on where you run it from, such as when you pass
+> `--workdir`. Use absolute or `~`-relative paths.
 
 ## Reference table
 
