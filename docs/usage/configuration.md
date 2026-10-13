@@ -88,19 +88,481 @@ header, add the key there rather than repeating the header, which TOML rejects.
 `<workdir>` is the workdir's absolute path, with symlinks resolved and no `~`; see
 [`projects`](#projects).
 
-| Directive | `config.toml` (user) | Per-project override (user `config.toml`) | `.paddock/config.toml` | Environment | Command line |
-|---|---|---|---|---|---|
-| [`agent`](#agent) | `agent = "claude"` | `[projects."<workdir>"]`<br>`agent = "claude"` | `agent = "claude"` | `PADDOCK_AGENT=claude` | `--agent=claude` |
-| [`build.args`](#buildargs) | `[build.args]`<br>`NODE_VERSION = "24"` | `[projects."<workdir>".build.args]`<br>`NODE_VERSION = "24"` | `[build.args]`<br>`NODE_VERSION = "24"` | 🚫 | `--build-args-NODE_VERSION=24` |
-| [`build.context`](#buildcontext) | `[build]`<br>`context = "~/src/images"` | `[projects."<workdir>".build]`<br>`context = "~/src/images"` | `[build]`<br>`context = "~/src/images"` | `PADDOCK_BUILD_CONTEXT=~/src/images` | `--build-context=~/src/images` |
-| [`build.dockerfile`](#builddockerfile) | `[build]`<br>`dockerfile = "~/src/images/Dockerfile"` | `[projects."<workdir>".build]`<br>`dockerfile = "~/src/images/Dockerfile"` | `[build]`<br>`dockerfile = "~/src/images/Dockerfile"` | `PADDOCK_BUILD_DOCKERFILE=~/src/images/Dockerfile` | `--build-dockerfile=~/src/images/Dockerfile` |
-| [`build.policy`](#buildpolicy) | `[build]`<br>`policy = "daily"` | `[projects."<workdir>".build]`<br>`policy = "daily"` | `[build]`<br>`policy = "daily"` | `PADDOCK_BUILD_POLICY=daily` | `--build-policy=daily` |
-| [`config.allowlist`](#configallowlist) | `[config.allowlist]`<br>`project_toml = ["volumes"]` | `[projects."<workdir>".config.allowlist]`<br>`project_toml = ["volumes"]` | 🚫 | 🚫 | 🚫 |
-| [`config.project_dir_readonly`](#configproject_dir_readonly) | `[config]`<br>`project_dir_readonly = false` | `[projects."<workdir>".config]`<br>`project_dir_readonly = false` | 🚫 | 🚫 | 🚫 |
-| [`image`](#image) | `image = "paddock-claude:latest"` | `[projects."<workdir>"]`<br>`image = "paddock-claude:latest"` | `image = "paddock-claude:latest"` | `PADDOCK_IMAGE=paddock-claude:latest` | `--image=paddock-claude:latest` |
-| [`network`](#network) | `network = "dev-services"` | `[projects."<workdir>"]`<br>`network = "dev-services"` | `network = "dev-services"` | `PADDOCK_NETWORK=dev-services` | `--network=dev-services` |
-| [`projects`](#projects) | `[projects."/home/alice/code/widgets"]`<br>`image = "widgets-dev:latest"` | 🚫 | 🚫 | 🚫 | 🚫 |
-| [`volumes`](#volumes) | `[volumes]`<br>`"~/datasets" = "/data:ro"` | `[projects."<workdir>".volumes]`<br>`"~/datasets" = "/data:ro"` | `[volumes]`<br>`"~/datasets" = "/data:ro"` | 🚫 | `--volume=~/datasets:/data:ro` |
+<table class="docutils align-default">
+<thead>
+<tr>
+<th>Directive</th>
+<th><code>config.toml</code> (user)</th>
+<th>Per-project override (user <code>config.toml</code>)</th>
+<th><code>.paddock/config.toml</code></th>
+<th>Environment</th>
+<th>Command line</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+
+[`agent`](#agent)
+
+</td>
+<td>
+
+```toml
+agent = "claude"
+```
+
+</td>
+<td>
+
+```toml
+[projects."<workdir>"]
+agent = "claude"
+```
+
+</td>
+<td>
+
+```toml
+agent = "claude"
+```
+
+</td>
+<td>
+
+```shell
+PADDOCK_AGENT=claude
+```
+
+</td>
+<td>
+
+```shell
+--agent=claude
+```
+
+</td>
+</tr>
+<tr>
+<td>
+
+[`build.args`](#buildargs)
+
+</td>
+<td>
+
+```toml
+[build.args]
+NODE_VERSION = "24"
+```
+
+</td>
+<td>
+
+```toml
+[projects."<workdir>".build.args]
+NODE_VERSION = "24"
+```
+
+</td>
+<td>
+
+```toml
+[build.args]
+NODE_VERSION = "24"
+```
+
+</td>
+<td>
+
+🚫
+
+</td>
+<td>
+
+```shell
+--build-args-NODE_VERSION=24
+```
+
+</td>
+</tr>
+<tr>
+<td>
+
+[`build.context`](#buildcontext)
+
+</td>
+<td>
+
+```toml
+[build]
+context = "~/src/images"
+```
+
+</td>
+<td>
+
+```toml
+[projects."<workdir>".build]
+context = "~/src/images"
+```
+
+</td>
+<td>
+
+```toml
+[build]
+context = "~/src/images"
+```
+
+</td>
+<td>
+
+```shell
+PADDOCK_BUILD_CONTEXT=~/src/images
+```
+
+</td>
+<td>
+
+```shell
+--build-context=~/src/images
+```
+
+</td>
+</tr>
+<tr>
+<td>
+
+[`build.dockerfile`](#builddockerfile)
+
+</td>
+<td>
+
+```toml
+[build]
+dockerfile = "~/src/images/Dockerfile"
+```
+
+</td>
+<td>
+
+```toml
+[projects."<workdir>".build]
+dockerfile = "~/src/images/Dockerfile"
+```
+
+</td>
+<td>
+
+```toml
+[build]
+dockerfile = "~/src/images/Dockerfile"
+```
+
+</td>
+<td>
+
+```shell
+PADDOCK_BUILD_DOCKERFILE=~/src/images/Dockerfile
+```
+
+</td>
+<td>
+
+```shell
+--build-dockerfile=~/src/images/Dockerfile
+```
+
+</td>
+</tr>
+<tr>
+<td>
+
+[`build.policy`](#buildpolicy)
+
+</td>
+<td>
+
+```toml
+[build]
+policy = "daily"
+```
+
+</td>
+<td>
+
+```toml
+[projects."<workdir>".build]
+policy = "daily"
+```
+
+</td>
+<td>
+
+```toml
+[build]
+policy = "daily"
+```
+
+</td>
+<td>
+
+```shell
+PADDOCK_BUILD_POLICY=daily
+```
+
+</td>
+<td>
+
+```shell
+--build-policy=daily
+```
+
+</td>
+</tr>
+<tr>
+<td>
+
+[`config.allowlist`](#configallowlist)
+
+</td>
+<td>
+
+```toml
+[config.allowlist]
+project_toml = ["volumes"]
+```
+
+</td>
+<td>
+
+```toml
+[projects."<workdir>".config.allowlist]
+project_toml = ["volumes"]
+```
+
+</td>
+<td>
+
+🚫
+
+</td>
+<td>
+
+🚫
+
+</td>
+<td>
+
+🚫
+
+</td>
+</tr>
+<tr>
+<td>
+
+[`config.project_dir_readonly`](#configproject_dir_readonly)
+
+</td>
+<td>
+
+```toml
+[config]
+project_dir_readonly = false
+```
+
+</td>
+<td>
+
+```toml
+[projects."<workdir>".config]
+project_dir_readonly = false
+```
+
+</td>
+<td>
+
+🚫
+
+</td>
+<td>
+
+🚫
+
+</td>
+<td>
+
+🚫
+
+</td>
+</tr>
+<tr>
+<td>
+
+[`image`](#image)
+
+</td>
+<td>
+
+```toml
+image = "paddock-claude:latest"
+```
+
+</td>
+<td>
+
+```toml
+[projects."<workdir>"]
+image = "paddock-claude:latest"
+```
+
+</td>
+<td>
+
+```toml
+image = "paddock-claude:latest"
+```
+
+</td>
+<td>
+
+```shell
+PADDOCK_IMAGE=paddock-claude:latest
+```
+
+</td>
+<td>
+
+```shell
+--image=paddock-claude:latest
+```
+
+</td>
+</tr>
+<tr>
+<td>
+
+[`network`](#network)
+
+</td>
+<td>
+
+```toml
+network = "dev-services"
+```
+
+</td>
+<td>
+
+```toml
+[projects."<workdir>"]
+network = "dev-services"
+```
+
+</td>
+<td>
+
+```toml
+network = "dev-services"
+```
+
+</td>
+<td>
+
+```shell
+PADDOCK_NETWORK=dev-services
+```
+
+</td>
+<td>
+
+```shell
+--network=dev-services
+```
+
+</td>
+</tr>
+<tr>
+<td>
+
+[`projects`](#projects)
+
+</td>
+<td>
+
+```toml
+[projects."/home/alice/code/widgets"]
+image = "widgets-dev:latest"
+```
+
+</td>
+<td>
+
+🚫
+
+</td>
+<td>
+
+🚫
+
+</td>
+<td>
+
+🚫
+
+</td>
+<td>
+
+🚫
+
+</td>
+</tr>
+<tr>
+<td>
+
+[`volumes`](#volumes)
+
+</td>
+<td>
+
+```toml
+[volumes]
+"~/datasets" = "/data:ro"
+```
+
+</td>
+<td>
+
+```toml
+[projects."<workdir>".volumes]
+"~/datasets" = "/data:ro"
+```
+
+</td>
+<td>
+
+```toml
+[volumes]
+"~/datasets" = "/data:ro"
+```
+
+</td>
+<td>
+
+🚫
+
+</td>
+<td>
+
+```shell
+--volume=~/datasets:/data:ro
+```
+
+</td>
+</tr>
+</tbody>
+</table>
 
 ### Run options
 
