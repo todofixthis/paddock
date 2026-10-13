@@ -917,8 +917,8 @@ grants it the `volumes` key.
 > [!CAUTION]
 > **Grant `volumes` for that project only**
 >
-> A global grant lets any repository you run paddock in mount any path in your home,
-> `~/.ssh` included, read-write.
+> A global grant lets any repository you run paddock in mount any path, in any mode —
+> including your home directory, `~/.ssh`, etc.
 
 ```toml
 # <workdir>/.paddock/config.toml, committed with the project
