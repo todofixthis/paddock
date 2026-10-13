@@ -18,6 +18,7 @@ Before writing code, check:
 - `docs/adr/INDEX.md` — prior decisions (don't re-litigate)
 - `docs/future/` — deferred features (don't re-discuss)
 - `docs/superpowers/plans/` — the implementation plan in progress, if any (removed once its mahi lands)
+- `.agents/rules/` — path-scoped conventions; follow those whose `paths` match the files you edit
 
 ## Architecture Decision Records
 
