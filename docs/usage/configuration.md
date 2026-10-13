@@ -7,15 +7,17 @@ model behind the project-level file, see
 ## Where configuration comes from
 
 paddock merges five sources. Each sets the same [directives](#directives), except
-where the [reference table](#reference-table) says otherwise.
+where the [reference table](#reference-table) says otherwise. Sources merge in
+ascending weight; on conflict, the higher weight wins, per key as [Precedence](#precedence)
+describes.
 
-| Source | Where | Notes |
-|---|---|---|
-| `project_toml` | `<workdir>/.paddock/config.toml` | Committed with a project. Ignored until you [enable it](project-config.md#enabling-project-level-config). |
-| `user` | `$XDG_CONFIG_HOME/paddock/config.toml` | Your defaults for every project. `~/.config` stands in for `XDG_CONFIG_HOME` when unset, empty or relative. |
-| `project_overrides` | `[projects."<workdir>"]` in the user file | Your settings for one project; see [`projects`](#projects). |
-| `env` | `PADDOCK_*` environment variables | |
-| `cli` | Command-line flags | |
+| Weight | Source | Where | Notes |
+|---|---|---|---|
+| 10 | `project_toml` | `<workdir>/.paddock/config.toml` | Committed with a project. Ignored until you [enable it](project-config.md#enabling-project-level-config). |
+| 20 | `user` | `$XDG_CONFIG_HOME/paddock/config.toml` | Your defaults for every project. `~/.config` stands in for `XDG_CONFIG_HOME` when unset, empty or relative. |
+| 30 | `project_overrides` | `[projects."<workdir>"]` in the user file | Your settings for one project; see [`projects`](#projects). |
+| 50 | `env` | `PADDOCK_*` environment variables | |
+| 60 | `cli` | Command-line flags | |
 
 `<workdir>` is the directory paddock mounts as the workspace: the current directory, or
 [`--workdir`](#run-options). Every file is optional, but some source must supply
@@ -28,16 +30,6 @@ reads the XDG one and warns that the other is ignored. So move an existing file 
 than starting a new one.
 
 ### Precedence
-
-Sources merge in ascending weight; on conflict, the higher weight wins.
-
-| Weight | Source |
-|---|---|
-| 10 | `project_toml` |
-| 20 | `user` |
-| 30 | `project_overrides` |
-| 50 | `env` |
-| 60 | `cli` |
 
 The project file has the lowest weight, so it can't override a value you set, but its
 [`volumes`](#volumes) and [`build.args`](#buildargs) still add to yours (see below).
