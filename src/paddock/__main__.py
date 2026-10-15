@@ -133,7 +133,9 @@ def run(argv: list[str] | None = None) -> None:
                     image=config["image"],
                     build_args=build_args,
                 )
-                logger.info("Image build: %s", "triggered" if built else "skipped")
+                logger.info(
+                    "Image build: %s", "triggered" if built else "skipped (up to date)"
+                )
 
             docker_argv = command_builder.build(
                 command=parsed.command, agent_args=parsed.agent_args

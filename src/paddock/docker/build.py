@@ -1,5 +1,4 @@
 import json
-import logging
 import subprocess
 from datetime import datetime, timedelta, timezone
 from enum import StrEnum
@@ -7,9 +6,7 @@ from pathlib import Path
 
 import filters as f
 
-logger = logging.getLogger(__name__)
-
-REFRESHED_AT_LABEL = "paddock.refreshed-at"
+BUILT_AT_LABEL = "paddock.built-at"
 
 
 class BuildPolicy(StrEnum):
@@ -17,16 +14,6 @@ class BuildPolicy(StrEnum):
     DAILY = "daily"
     IF_MISSING = "if-missing"
     WEEKLY = "weekly"
-
-    @property
-    def refreshes(self) -> bool:
-        """
-        Whether builds under this policy bypass the layer cache (ADR 011).
-
-        Periodic policies exist to pick up upstream changes — a new agent
-        release, base image updates — which a cached build replays instead.
-        """
-        return self in (BuildPolicy.DAILY, BuildPolicy.WEEKLY)
 
 
 class ImageBuilder:
@@ -51,12 +38,12 @@ class ImageBuilder:
 
     def get_image_built_at(self, image: str) -> datetime | None:
         """
-        Return when a local Docker image was last built, or None if absent.
+        Return when paddock last built a local Docker image, or None if absent.
 
-        Reads the ``REFRESHED_AT_LABEL`` a refresh build stamps, falling back
-        to ``.Created`` for an image paddock never refreshed. ``.Created``
-        alone can't be trusted (ADR 011): a cached build keeps the old value,
-        a Dockerfile adding no layer inherits its base's, and
+        Reads the ``BUILT_AT_LABEL`` that ``run_build`` stamps, falling back
+        to ``.Created`` for an image paddock didn't build. ``.Created`` alone
+        can't be trusted (ADR 011): a cached build keeps the old value, a
+        Dockerfile adding no layer inherits its base's, and
         ``SOURCE_DATE_EPOCH`` pins it.
         """
         result = subprocess.run(
@@ -68,7 +55,7 @@ class ImageBuilder:
             return None
         inspected = json.loads(result.stdout)
         labels = (inspected.get("Config") or {}).get("Labels") or {}
-        for candidate in (labels.get(REFRESHED_AT_LABEL), inspected.get("Created")):
+        for candidate in (labels.get(BUILT_AT_LABEL), inspected.get("Created")):
             runner = f.FilterRunner(f.Required | f.Datetime(), candidate)
             if runner.is_valid():
                 return runner.cleaned_data
@@ -81,29 +68,16 @@ class ImageBuilder:
         dockerfile: Path,
         context: Path,
         build_args: dict[str, str],
-        refresh: bool = False,
     ) -> None:
         """
         Run docker build, streaming output to stdout.
 
-        Args:
-            image: Tag to build.
-            dockerfile: Path to the Dockerfile.
-            context: Build context directory.
-            build_args: ``--build-arg`` values.
-            refresh: Skip the layer cache and pull the base image, so every
-                layer reruns against current upstreams, and stamp the
-                ``REFRESHED_AT_LABEL`` that ``get_image_built_at`` reads.
+        Stamps ``BUILT_AT_LABEL`` with the build time, so the image's age
+        reads correctly even when every layer comes from the cache.
         """
+        built_at = datetime.now(timezone.utc).isoformat()
         argv: list[str | Path] = ["docker", "build", "-t", image, "-f", dockerfile]
-        if refresh:
-            refreshed_at = datetime.now(timezone.utc).isoformat()
-            argv += [
-                "--no-cache",
-                "--pull",
-                "--label",
-                f"{REFRESHED_AT_LABEL}={refreshed_at}",
-            ]
+        argv += ["--label", f"{BUILT_AT_LABEL}={built_at}"]
         for key, value in build_args.items():
             argv += ["--build-arg", f"{key}={value}"]
         argv.append(context)
@@ -119,29 +93,18 @@ class ImageBuilder:
         """
         Build the image if the build policy requires it.
 
-        Returns True if a build ran, False if skipped. A failed refresh of an
-        existing image logs a warning and returns False, leaving that image to
-        run (ADR 011); any other failed build raises.
+        Returns True if a build was triggered, False if skipped.
         """
         policy = BuildPolicy(build_config.get("policy", "if-missing"))
         dockerfile = build_config["dockerfile"]
         context = build_config.get("context") or dockerfile.parent
         image_built_at = self.get_image_built_at(image)
-        if not self.should_build(policy, image_built_at):
-            return False
-        try:
+        if self.should_build(policy, image_built_at):
             self.run_build(
                 image=image,
                 dockerfile=dockerfile,
                 context=context,
                 build_args=build_args,
-                refresh=policy.refreshes,
             )
-        except subprocess.CalledProcessError:
-            if not policy.refreshes or image_built_at is None:
-                raise
-            logger.warning(
-                "Image refresh failed; running the existing %s instead", image
-            )
-            return False
-        return True
+            return True
+        return False
