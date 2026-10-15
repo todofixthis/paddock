@@ -66,8 +66,21 @@ if a same-named path exists there, it mounts silently.
 Fail validation on any relative host path from a TOML source.
 
 **Pros:** No ambiguity, and an error rather than a wrong mount.
-**Cons:** Removes the project-relative mounts this change is for.
-**Risks:** None beyond the cons.
+**Cons:** Removes the project-relative mounts this change is for, and with them any
+portable way for a committed file to name a path:
+
+- **Portability:** an absolute path names one machine's layout (`/home/alice/code/…`),
+  so a project file holding one breaks for every other developer, in CI, and on a
+  different OS. A `~`-relative path only moves the problem: every developer must clone
+  the project to the same place under their home.
+- **Coupling to the checkout's location:** a project that builds its own image must
+  point `build.dockerfile` and `build.context` at files inside its own repository by
+  absolute or `~` path. The paddock config then breaks whenever the checkout is moved
+  or renamed, though the Docker build itself hasn't changed, and a second clone
+  silently builds from the first clone's files.
+
+**Risks:** Developers work around it with per-machine copies of the project file or
+`[projects]` entries, so the committed file stops describing the project.
 
 ## Decision
 
