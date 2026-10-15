@@ -53,20 +53,17 @@ Three fixes, best first.
 ### Pin versions and let Renovate bump them
 
 Pin each install to a version in an `ARG`. Bumping the `ARG` changes the step, so the
-next build reruns it:
+next build reruns it. In a copy of the bundled Dockerfile, the agent step becomes:
 
 ```dockerfile
-FROM ubuntu:26.04
-
 # renovate: datasource=npm depName=@anthropic-ai/claude-code
 ARG CLAUDE_CODE_VERSION=2.1.292
 
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates curl \
-    && rm -rf /var/lib/apt/lists/*
-
-RUN curl -fsSL https://claude.ai/install.sh | bash -s "${CLAUDE_CODE_VERSION}"
-ENV PATH="/root/.local/bin:${PATH}"
+RUN case "$AGENT" in \
+    claude) npm install -g "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}" ;; \
+    none) echo "No agent selected" ;; \
+    *) echo "Unknown agent: $AGENT" && exit 1 ;; \
+    esac
 ```
 
 [Renovate][renovate] then opens a pull request for each new release. It bumps the `FROM`
