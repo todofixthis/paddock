@@ -3,12 +3,16 @@ from typing import Any, ClassVar
 import filters as f
 
 from paddock.config.context import ConfigContext
-from paddock.config.filters import Agent, Filepath, NoEnvForm
+from paddock.config.filters import Agent, Filepath
 from paddock.config.schema import BUILD_POLICIES, standard_config_schema
 from paddock.config.sources.base import ConfigSource, LoadResult
 
-# Validates the raw PADDOCK_* shape. Lifted from the old top-level
-# ``_env_schema`` in the loader so that env validation is fully owned here.
+# Validates the raw PADDOCK_* shape, and is the complete list of PADDOCK_*
+# names; any other name is an error. ``load`` maps a name to its config path by
+# splitting on ``_``, so a directive with ``_`` in its own name (e.g.
+# ``config.project_dir_readonly``) needs more than an entry here. The free-form
+# maps (``build.args``, ``volumes``) have no env form: their keys are user data
+# that the split would break up, and a name's case is lost.
 _env_schema = f.FilterMapper(
     {
         "PADDOCK_AGENT": Agent,
@@ -18,7 +22,7 @@ _env_schema = f.FilterMapper(
         "PADDOCK_IMAGE": f.Unicode | f.NotEmpty,
         "PADDOCK_NETWORK": f.Unicode,
     },
-    allow_extra_keys=True,
+    allow_extra_keys=False,
     allow_missing_keys=True,
 )
 
@@ -29,8 +33,7 @@ class EnvConfigSource(ConfigSource):
     Owns the entire env-vars pipeline:
 
     1. Filter ``context.environ`` down to the ``PADDOCK_*`` subset.
-    2. Reject names that target a field with no env form (``_NO_ENV_FORM``),
-       then validate values via the private ``_env_schema``.
+    2. Validate names and values via the private ``_env_schema``.
     3. Transform the validated PADDOCK_*-keyed dict into the standard config
        shape (``PADDOCK_BUILD_DOCKERFILE`` → ``build.dockerfile``).
     4. Run the result through ``standard_config_schema(merged=False)`` so the
@@ -41,16 +44,6 @@ class EnvConfigSource(ConfigSource):
     WEIGHT = 50
     ALLOWLIST_DEFAULT = True
     PREFIX: ClassVar[str] = "PADDOCK_"
-
-    # Free-form maps keyed by user data (Dockerfile ARG names, host paths).
-    # An env var name can't carry such a key faithfully — ``_`` splits it into
-    # nested keys and its case is lost — so these names, bare or with a
-    # ``_<NAME>`` suffix, are rejected rather than mapped. Values are
-    # ``(field, flag)`` for the error message.
-    _NO_ENV_FORM: ClassVar[dict[str, tuple[str, str]]] = {
-        "PADDOCK_BUILD_ARGS": ("build.args", "--build-args-KEY=VALUE"),
-        "PADDOCK_VOLUMES": ("volumes", "--volume"),
-    }
 
     def load(self, context: ConfigContext) -> LoadResult:
         """Load config from PADDOCK_* environment variables.
@@ -64,10 +57,6 @@ class EnvConfigSource(ConfigSource):
         raw_env = {
             k: v for k, v in context.environ.items() if k.startswith(self.PREFIX)
         }
-
-        no_env_form_runner = f.FilterRunner(self._no_env_form_schema(raw_env), raw_env)
-        if not no_env_form_runner.is_valid():
-            return LoadResult(no_env_form_runner, {})
 
         env_runner = f.FilterRunner(_env_schema, raw_env)
         if not env_runner.is_valid():
@@ -87,24 +76,6 @@ class EnvConfigSource(ConfigSource):
         return LoadResult(
             f.FilterRunner(standard_config_schema(merged=False), shaped), {}
         )
-
-    def _no_env_form_schema(self, raw_env: dict[str, str]) -> f.FilterMapper:
-        """Builds a schema rejecting the names in ``raw_env`` that target a
-        field with no env form.
-
-        Built per call because the ``_<NAME>``-suffixed forms can only be
-        keyed once the actual names are known; ``FilterMapper`` matches keys
-        exactly.
-        """
-        rejected = {}
-        for key, value in raw_env.items():
-            # Empty means unset, as for every other PADDOCK_* name.
-            if value == "":
-                continue
-            for name, (field, flag) in self._NO_ENV_FORM.items():
-                if key == name or key.startswith(f"{name}_"):
-                    rejected[key] = NoEnvForm(field, flag)
-        return f.FilterMapper(rejected, allow_extra_keys=True, allow_missing_keys=True)
 
     def _deep_set(self, node: dict, parts: list[str], value: Any) -> None:
         """Deep-set ``value`` in ``node`` at the path described by ``parts``.

@@ -3,14 +3,7 @@ from pathlib import Path
 import filters as f
 import pytest
 
-from paddock.config.filters import (
-    Agent,
-    Filepath,
-    NoEnvForm,
-    Volume,
-    VolumeMap,
-    VolumeSpec,
-)
+from paddock.config.filters import Agent, Filepath, Volume, VolumeMap, VolumeSpec
 
 
 def test_volume_pass_none(assert_filter_passes):
@@ -516,18 +509,4 @@ def test_volume_map_container_home_dir(assert_filter_passes, tmp_path):
         VolumeMap(container_home_dir="/root"),
         {str(host): "~/.config:ro"},
         {str(host): VolumeSpec("/root/.config", "ro")},
-    )
-
-
-def test_no_env_form_pass_none(assert_filter_passes):
-    """None passes through NoEnvForm."""
-    assert_filter_passes(NoEnvForm("build.args", "--build-args-KEY=VALUE"), None)
-
-
-def test_no_env_form_fail_any_value(assert_filter_errors):
-    """Any set value is rejected, even an empty string."""
-    assert_filter_errors(
-        NoEnvForm("build.args", "--build-args-KEY=VALUE"),
-        "",
-        [NoEnvForm.CODE_NO_ENV_FORM],
     )

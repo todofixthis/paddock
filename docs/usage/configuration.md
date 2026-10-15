@@ -629,7 +629,7 @@ Build arguments (`docker build --build-arg`) for when paddock builds the image.
 - **TOML:** `NODE_VERSION = "24"` under `[build.args]`
 - **Environment:** none. `PADDOCK_BUILD_ARGS`, or a name such as
   `PADDOCK_BUILD_ARGS_NODE_VERSION`, stops paddock with an
-  [error](#troubleshooting).
+  [`Unexpected key` error](#troubleshooting).
 - **Command line:** `--build-args-NODE_VERSION=24`, repeatable. The `=` is required,
   and `-` in the name becomes `_`.
 - **Allowlist path:** `build.args` (or `build`)
@@ -887,7 +887,7 @@ Extra host directories or files to mount into the container.
   plus the agent's mounts.
 - **TOML:** `"~/datasets" = "/data:ro"` under `[volumes]`
 - **Environment:** none. `PADDOCK_VOLUMES`, or a name such as `PADDOCK_VOLUMES_DATA`,
-  stops paddock with an [error](#troubleshooting).
+  stops paddock with an [`Unexpected key` error](#troubleshooting).
 - **Command line:** `--volume=~/datasets:/data:ro`, repeatable
 - **Allowlist path:** `volumes`
 
@@ -956,24 +956,13 @@ a misspelt key (`imgae`), an allowlist source other than `cli`, `env` and
 `project_toml`, or an allowlist value that isn't `true`, `false` or a list of
 [allowlist paths](#configallowlist).
 
-**`[env:<path>] Unexpected key "…".`**
+**`[env:PADDOCK_…] Unexpected key "PADDOCK_…".`**
 
-A `PADDOCK_*` variable that matches no directive. Usually it's a typo: unset or correct
-it. If the directive has no environment variable (🚫 in the
-[reference table](#reference-table)), such as `config.*` or `projects`, no spelling
-works; set it in your user file instead.
-
-The label isn't the variable name. paddock strips `PADDOCK_`, lowercases the rest,
-reads `_` as nesting, and reports the path up to the first unrecognised part: so
-`PADDOCK_IMGAE` reports as `[env:imgae]`, `PADDOCK_BUILD_FOO` as `[env:build.foo]`, and
-`PADDOCK_CONFIG_PROJECT_DIR_READONLY` as `[env:config]`.
-
-**`[env:PADDOCK_…] … has no environment-variable form; …`**
-
-[`build.args`](#buildargs) and [`volumes`](#volumes) have no environment variable, so
-`PADDOCK_BUILD_ARGS`, `PADDOCK_VOLUMES`, or either with a `_<NAME>` suffix
-(`PADDOCK_BUILD_ARGS_NODE_VERSION`) stops paddock. Unset the variable, then use a TOML
-file, or `--build-args-KEY=VALUE` or `--volume`.
+A `PADDOCK_*` variable that matches no directive, even with an empty value. Usually
+it's a typo: unset or correct it. If the directive has no environment variable (🚫 in
+the [reference table](#reference-table)), no spelling works: unset the variable and set
+the directive in a TOML file, or for [`build.args`](#buildargs) and
+[`volumes`](#volumes) with `--build-args-KEY=VALUE` or `--volume`.
 
 **`[<source>:volumes.<host path>] Path '…' does not exist or cannot be resolved.`**
 

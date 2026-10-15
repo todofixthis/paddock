@@ -261,37 +261,3 @@ class AllowlistEntry(BaseFilter):
             cleaned = self._filter(value, f.FilterRepeater(f.Choice(self._directives)))
             return cleaned if not self._has_errors else None
         return self._invalid_value(value, self.CODE_INVALID)
-
-
-class NoEnvForm(BaseFilter):
-    """Rejects any value: the config field has no environment-variable form.
-
-    Keyed on an env var name that would otherwise map to a free-form config
-    map, so the error names the CLI flag and TOML alternatives instead of
-    letting the name split on ``_`` into nested keys.
-
-    Args:
-        field: Dotted config path the env var name targets.
-        flag: The CLI flag that sets the field.
-    """
-
-    CODE_NO_ENV_FORM = "no_env_form"
-
-    templates = {
-        CODE_NO_ENV_FORM: (
-            "{field} has no environment-variable form; pass {flag} or set "
-            "{field} in a TOML file."
-        ),
-    }
-
-    def __init__(self, field: str, flag: str) -> None:
-        super().__init__()
-        self.field = field
-        self.flag = flag
-
-    def _apply(self, value):
-        return self._invalid_value(
-            value,
-            self.CODE_NO_ENV_FORM,
-            template_vars={"field": self.field, "flag": self.flag},
-        )

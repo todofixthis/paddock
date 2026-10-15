@@ -1,10 +1,10 @@
 from pathlib import Path
 
 import filters as f
+import pytest
 
 from paddock.cli import ParsedArgs
 from paddock.config.context import ConfigContext
-from paddock.config.filters import NoEnvForm
 from paddock.config.sources.env import EnvConfigSource
 
 
@@ -84,62 +84,30 @@ def test_non_paddock_vars_ignored(tmp_path):
     assert result.instance.cleaned_data == {}
 
 
-def test_build_args_bare_name_rejected(tmp_path):
-    """PADDOCK_BUILD_ARGS is an error, not silently ignored."""
-    result = EnvConfigSource().load(_ctx(tmp_path, {"PADDOCK_BUILD_ARGS": "foo"}))
+@pytest.mark.parametrize(
+    "name",
+    [
+        "PADDOCK_BUILD_ARGS",
+        "PADDOCK_BUILD_ARGS_NODE_VERSION",
+        "PADDOCK_BUILD_ARGSX",
+        "PADDOCK_IMGAE",
+        "PADDOCK_VOLUMES",
+        "PADDOCK_VOLUMES_TMP",
+    ],
+)
+def test_unknown_name_rejected(tmp_path, name):
+    """A PADDOCK_* name with no directive is an error, keyed on the name itself.
+
+    Covers the free-form maps (``build.args``, ``volumes``), whose suffixed
+    names would otherwise split on ``_`` into nested keys.
+    """
+    result = EnvConfigSource().load(_ctx(tmp_path, {name: "1"}))
+    assert result.instance.error_codes == {name: [f.FilterMapper.CODE_EXTRA_KEY]}
+
+
+def test_unknown_name_rejected_when_empty(tmp_path):
+    """An unknown name is rejected even with an empty value."""
+    result = EnvConfigSource().load(_ctx(tmp_path, {"PADDOCK_BUILD_ARGS": ""}))
     assert result.instance.error_codes == {
-        "PADDOCK_BUILD_ARGS": [NoEnvForm.CODE_NO_ENV_FORM]
+        "PADDOCK_BUILD_ARGS": [f.FilterMapper.CODE_EXTRA_KEY]
     }
-
-
-def test_build_args_suffixed_name_rejected(tmp_path):
-    """PADDOCK_BUILD_ARGS_<NAME> is an error, not split into nested build.args."""
-    df = tmp_path / "Dockerfile"
-    df.write_text("FROM x")
-    result = EnvConfigSource().load(
-        _ctx(
-            tmp_path,
-            {
-                "PADDOCK_BUILD_ARGS_NODE_VERSION": "24",
-                "PADDOCK_BUILD_DOCKERFILE": str(df),
-            },
-        )
-    )
-    assert result.instance.error_codes == {
-        "PADDOCK_BUILD_ARGS_NODE_VERSION": [NoEnvForm.CODE_NO_ENV_FORM]
-    }
-
-
-def test_volumes_bare_name_rejected(tmp_path):
-    """PADDOCK_VOLUMES names the CLI/TOML alternatives instead of a type error."""
-    result = EnvConfigSource().load(_ctx(tmp_path, {"PADDOCK_VOLUMES": "/x"}))
-    assert result.instance.error_codes == {
-        "PADDOCK_VOLUMES": [NoEnvForm.CODE_NO_ENV_FORM]
-    }
-
-
-def test_volumes_suffixed_name_rejected(tmp_path, monkeypatch):
-    """PADDOCK_VOLUMES_<NAME> is an error, not a mount of the relative path <name>."""
-    (tmp_path / "tmp").mkdir()
-    monkeypatch.chdir(tmp_path)
-    result = EnvConfigSource().load(_ctx(tmp_path, {"PADDOCK_VOLUMES_TMP": "/x"}))
-    assert result.instance.error_codes == {
-        "PADDOCK_VOLUMES_TMP": [NoEnvForm.CODE_NO_ENV_FORM]
-    }
-
-
-def test_no_env_form_needs_separator(tmp_path):
-    """A name merely starting with PADDOCK_BUILD_ARGS is an ordinary unknown key."""
-    result = EnvConfigSource().load(_ctx(tmp_path, {"PADDOCK_BUILD_ARGSX": "1"}))
-    assert result.instance.error_codes == {
-        "build.argsx": [f.FilterMapper.CODE_EXTRA_KEY]
-    }
-
-
-def test_no_env_form_empty_value_ignored(tmp_path):
-    """An empty PADDOCK_BUILD_ARGS counts as unset, like any empty PADDOCK_*."""
-    result = EnvConfigSource().load(
-        _ctx(tmp_path, {"PADDOCK_BUILD_ARGS": "", "PADDOCK_VOLUMES_TMP": ""})
-    )
-    assert result.instance.is_valid()
-    assert result.instance.cleaned_data == {}

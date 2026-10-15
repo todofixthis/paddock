@@ -129,15 +129,8 @@ def test_env_schema_rejects_invalid_policy(assert_filter_errors):
     )
 
 
-def test_env_schema_ignores_non_paddock_vars(assert_filter_passes):
-    """Non-PADDOCK_* vars in the env are silently ignored."""
-    assert_filter_passes(
-        _env_schema, {"PATH": "/usr/bin", "HOME": "/home/user"}, skip_value_check
-    )
-
-
 def test_env_build_args_suffixed_name_is_fatal(tmp_path, monkeypatch):
-    """PADDOCK_BUILD_ARGS_<NAME> aborts the run, naming the alternatives."""
+    """PADDOCK_BUILD_ARGS_<NAME> aborts the run, naming the variable."""
     _setup_home(tmp_path, monkeypatch, 'image = "ubuntu:22.04"\nagent = "claude"\n')
     dockerfile = tmp_path / "Dockerfile"
     dockerfile.write_text("FROM x")
@@ -152,9 +145,8 @@ def test_env_build_args_suffixed_name_is_fatal(tmp_path, monkeypatch):
         )
     messages = [str(e) for e in exc.value.exceptions]
     assert messages == [
-        "[env:PADDOCK_BUILD_ARGS_NODE_VERSION] build.args has no "
-        "environment-variable form; pass --build-args-KEY=VALUE or set "
-        "build.args in a TOML file."
+        "[env:PADDOCK_BUILD_ARGS_NODE_VERSION] Unexpected key "
+        '"PADDOCK_BUILD_ARGS_NODE_VERSION".'
     ]
 
 
@@ -403,7 +395,7 @@ def test_project_toml_allowlist_restricts_keys(tmp_path: Path, monkeypatch, capl
     _setup_home(
         tmp_path,
         monkeypatch,
-        'agent = "claude"\n[config.allowlist]\nproject_toml = ["image"]\n',
+        'agent = "claude"\n' '[config.allowlist]\nproject_toml = ["image"]\n',
     )
     pd = tmp_path / ".paddock"
     pd.mkdir()
@@ -484,7 +476,7 @@ def test_dropped_nested_key_warns_with_its_dotted_path(
     _setup_home(
         tmp_path,
         monkeypatch,
-        'agent = "claude"\n[config.allowlist]\nproject_toml = ["image"]\n',
+        'agent = "claude"\n' '[config.allowlist]\nproject_toml = ["image"]\n',
     )
     dockerfile = tmp_path / "Dockerfile"
     dockerfile.write_text("FROM ubuntu:22.04\n")
@@ -509,7 +501,7 @@ def test_root_error_omits_the_empty_key(tmp_path: Path, monkeypatch):
     _setup_home(
         tmp_path,
         monkeypatch,
-        'image = "u"\nagent = "claude"\n[config.allowlist]\nproject_toml = true\n',
+        'image = "u"\nagent = "claude"\n' "[config.allowlist]\nproject_toml = true\n",
     )
     pd = tmp_path / ".paddock"
     pd.mkdir()
