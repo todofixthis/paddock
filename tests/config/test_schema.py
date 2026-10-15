@@ -15,9 +15,15 @@ from paddock.config.schema import (
 )
 
 
+def _validate(config: dict) -> dict:
+    """Run ConfigSchema with the cwd as base; these configs hold no relative
+    paths, so the base only satisfies the required argument."""
+    return ConfigSchema().validate(config, base_dir=Path.cwd())
+
+
 def test_valid_minimal():
     """Minimal valid config passes; absent optional fields are stripped by DropEmpty."""
-    result = ConfigSchema().validate({"image": "ubuntu:22.04", "agent": "claude"})
+    result = _validate({"image": "ubuntu:22.04", "agent": "claude"})
     assert result["image"] == "ubuntu:22.04"
     assert result["agent"] == "claude"
 
@@ -25,27 +31,25 @@ def test_valid_minimal():
 def test_invalid_empty_image():
     """An empty string is not a valid image name."""
     with pytest.raises(SystemExit):
-        ConfigSchema().validate({"image": "", "agent": "claude"})
+        _validate({"image": "", "agent": "claude"})
 
 
 def test_invalid_missing_image():
     """image is required — omitting it should fail."""
     with pytest.raises(SystemExit):
-        ConfigSchema().validate({"agent": "claude"})
+        _validate({"agent": "claude"})
 
 
 def test_agent_false():
     """agent = False (bool) enables shell mode."""
-    result = ConfigSchema().validate({"image": "ubuntu:22.04", "agent": False})
+    result = _validate({"image": "ubuntu:22.04", "agent": False})
     assert result["agent"] is False
 
 
 def test_unknown_key_rejected():
     """Unknown config keys indicate a typo and should be rejected."""
     with pytest.raises(SystemExit):
-        ConfigSchema().validate(
-            {"image": "ubuntu:22.04", "agent": "claude", "typo": "oops"}
-        )
+        _validate({"image": "ubuntu:22.04", "agent": "claude", "typo": "oops"})
 
 
 def test_valid_build_config(tmp_path):
@@ -61,7 +65,7 @@ def test_valid_build_config(tmp_path):
             "policy": "if-missing",
         },
     }
-    result = ConfigSchema().validate(config)
+    result = _validate(config)
     assert result["build"]["policy"] == "if-missing"
 
 
@@ -77,7 +81,7 @@ def test_valid_build_args(tmp_path):
             "args": {"FOO": "bar", "PYTHON_VERSION": "3.13"},
         },
     }
-    result = ConfigSchema().validate(config)
+    result = _validate(config)
     assert result["build"]["args"] == {"FOO": "bar", "PYTHON_VERSION": "3.13"}
 
 
@@ -102,7 +106,7 @@ def test_valid_volumes(tmp_path):
             str(explicit_rw): "/container/rw:rw",
         },
     }
-    result = ConfigSchema().validate(config)
+    result = _validate(config)
     assert result["volumes"][str(implicit.resolve())] == VolumeSpec(
         "/container/implicit", "ro"
     )
@@ -117,7 +121,7 @@ def test_valid_volumes(tmp_path):
 def test_invalid_volume_value():
     """A volume destination with more than one colon segment is invalid."""
     with pytest.raises(SystemExit):
-        ConfigSchema().validate(
+        _validate(
             {
                 "image": "ubuntu:22.04",
                 "agent": "claude",

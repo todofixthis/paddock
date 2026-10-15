@@ -195,21 +195,21 @@ class ConfigSchema:
 
     Thin wrapper around ``standard_config_schema(merged=True)`` for
     backwards-compatible call sites. The loader uses the same schema directly.
-    Relative paths resolve against the cwd: merged config holds paths each
-    source has already made absolute.
     """
 
-    def validate(self, config: dict) -> dict:
+    def validate(self, config: dict, *, base_dir: Path) -> dict:
         """Validates the config dict and returns the cleaned result.
 
         Args:
             config: The raw config mapping to validate.
+            base_dir: The workdir relative host paths resolve against
+                (ADR 011). Required, as for ``standard_config_schema``.
 
         Returns:
             The cleaned and normalised config dict.
         """
         runner = f.FilterRunner(
-            standard_config_schema(base_dir=Path.cwd(), merged=True), config
+            standard_config_schema(base_dir=base_dir, merged=True), config
         )
         if not runner.is_valid():
             for key, messages in runner.errors.items():

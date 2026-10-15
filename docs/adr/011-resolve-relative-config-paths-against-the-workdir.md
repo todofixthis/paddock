@@ -3,7 +3,7 @@ status: Accepted
 date: 2026-10-13
 scope: [src/paddock/__main__.py, src/paddock/config/filters.py, src/paddock/config/loader.py, src/paddock/config/schema.py, src/paddock/config/sources/, docs/usage/]
 summary: Resolve a relative host path in config against the workdir, whichever source sets it (each [projects] entry against its own key, the workdir it applies to), passed explicitly by every source; not against the process cwd, and not against a different base per source.
-revisit-when: Users need a path in the user file's global section to resolve against the user config directory rather than per project; users need env or CLI paths to follow the shell's cwd when it differs from the workdir; project config discovery lets the project file's directory diverge from the workdir.
+revisit-when: Global relative paths prove unworkable because they are missing in some projects, such as users asking for mounts skipped when absent; a stale [projects] entry for another project stops runs in practice; users need env or CLI paths to follow the shell's cwd when it differs from the workdir; project config discovery lets the project file's directory diverge from the workdir.
 ---
 
 # 011: Resolve Relative Config Paths Against the Workdir
@@ -50,13 +50,14 @@ are unaffected. Every source passes its base into the schema, which requires one
 **Pros:** A value means the same thing in every source, so moving it between sources,
 or overriding it in a higher one, never changes what it names. `"data"` and
 `"../sibling"` work in a committed project file and anywhere else.
-**Cons:** The user file's global section can no longer name a path beside the user file
+**Cons:** The user file's global section can't name a path beside the user file
 relatively; it needs `~`. A global relative path names a different directory in each
 project, so one that doesn't exist in some project stops every run there. Under
 `--workdir`, a relative `--volume` or `PADDOCK_BUILD_DOCKERFILE` no longer means what the
 shell's tab completion suggested.
-**Risks:** A relative path that worked because it existed under the cwd now resolves
-under the workdir; if a same-named path exists there, it mounts silently.
+**Risks:** Under `--workdir`, a relative path that worked because it existed under the
+cwd now resolves under the workdir; if a same-named path exists there, it mounts
+silently.
 
 ### Option 3: Resolve against the directory each source belongs to
 
@@ -65,7 +66,7 @@ the user file against its own directory, and env and CLI against the cwd.
 
 **Pros:** Each base is the one its source is arguably about, and shell-typed paths keep
 the shell's meaning.
-**Cons:** Five sources, four bases: the same value names different paths depending on
+**Cons:** Five sources, three bases: the same value names different paths depending on
 which source sets it, so copying a line between sources, or overriding one, can change
 what it names. That undoes what keeps precedence tractable.
 **Risks:** Users reason about a merged config by value and get the wrong path.
@@ -123,15 +124,19 @@ Concrete semantics:
   inside the project, and so can every other source. Relative paths are not confined
   to the project: a `volumes` grant to `project_toml` still reaches the whole host
   filesystem, as absolute paths always could.
-- A relative path in the user file's global section now names a path in each project.
-  It suits a mount every project has, and stops any run in a project that lacks it.
-  Anything beside the user file needs a `~` path. The release notes must call this out.
-- Under `--workdir` from another directory, relative env and CLI paths resolve against
-  the workdir, not the shell. Without `--workdir` nothing changes for them.
-- A `[projects]` entry with relative paths fails validation — and stops paddock in
-  every project — once its project is moved, deleted or unmounted. Absolute paths in
-  other projects' entries already did this; relative ones make it likelier, since they
-  almost always point inside their own project.
+- Without `--workdir` the workdir is the cwd, so relative paths in the project file,
+  the user file, env and CLI resolve as they did before. Under `--workdir` from another
+  directory they all now resolve against the workdir, not the shell. The release notes
+  must call this out.
+- Relative paths in other projects' `[projects]` entries resolve against their own key
+  rather than the cwd, so they stop failing in projects that happen not to hold them.
+  Such an entry still fails validation — and stops paddock in every project — once its
+  own project is moved, deleted or unmounted, as absolute paths in other projects'
+  entries always did. Checking paths only in the entry that matches the workdir would
+  remove that coupling; it predates this decision and is left to the revisit trigger.
+- A path that fails validation is reported by its raw value (`Path 'data' does not
+  exist`), not the path paddock checked, so a user must know the workdir rule to see
+  where it looked.
 - Resolved paths are absolute, so the merged-config pass that re-runs the schema is
   unaffected by its base.
 - A change to how the workdir is resolved in [`__main__.py`][] changes what every
