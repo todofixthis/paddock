@@ -37,11 +37,16 @@ wrong directory silently.
 
 ### Option 2: Resolve against the directory the source belongs to (Accepted)
 
-`.paddock/config.toml` resolves against the workdir. Each `[projects."<path>"]` entry
-resolves against its own `<path>`. The rest of the user file resolves against the
-directory paddock read it from. Env and CLI keep the cwd. `~` still expands first, and
-absolute paths are unaffected. Every source passes its base into the schema, which
-requires one; `Filepath` joins a relative path onto it, then resolves the result.
+Each source resolves relative paths against its own base:
+
+- **`.paddock/config.toml`:** the workdir.
+- **`[projects."<path>"]` entries:** that entry's own `<path>`.
+- **Rest of the user file:** the directory paddock read it from.
+- **Env and CLI:** the cwd, as before.
+
+`~` still expands first, and absolute paths are unaffected. Every source passes its base
+into the schema, which requires one; `Filepath` joins a relative path onto it, then
+resolves the result.
 
 **Pros:** A path means the same thing from any cwd; `"data"` and `"../sibling"` work in
 a committed project file and in a per-project entry.
