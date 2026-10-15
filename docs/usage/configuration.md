@@ -71,22 +71,27 @@ Path values (`build.context`, `build.dockerfile` and the host side of `volumes`)
 exist when paddock starts. paddock expands a leading `~` to your home directory and
 follows symlinks. A relative path resolves against the workdir, whichever source sets
 it, so a value means the same thing in every source and wherever you run paddock from:
-`"data"` names `<workdir>/data`, and `"../widgets-api"` a sibling of the project. That
-holds for `.paddock/config.toml` (not `.paddock/` itself), the user file, the
+`"data"` names `<workdir>/data`, and `"../widgets-api"` a sibling of the project. The
+workdir here is its real path, with symlinks resolved, so `..` climbs from a symlinked
+checkout's target, not the link. That holds for `.paddock/config.toml` (not `.paddock/` itself), the user file, the
 environment and the command line. A `[projects."<path>"]` entry resolves against its
 `<path>`, the workdir it applies to.
 
-A relative path in the global section of your user file therefore names a different
-directory in each project, and stops any run in a project that lacks it. Use `~` for
-anything that lives in one place, such as a Dockerfile beside your user file.
+A relative path you set once for every project, in the global section of your user
+file, an exported `PADDOCK_*` variable or a shell alias, therefore names a different
+directory in each project, and stops any run in a project that lacks it. Use an
+absolute or `~` path for anything that lives in one place, such as a Dockerfile beside
+your user file, and put a mount only some projects have in their
+[`projects`](#projects) entries.
 
 > [!WARNING]
 > **A stale `[projects]` entry stops every run**
 >
 > paddock validates every `[projects]` entry on each run, not just the current one. An
-> entry whose paths no longer exist stops every run, whichever project you are in: a
-> project you moved or deleted, or a key that names no real directory, such as a typo
-> or a `~` key. The error names that entry:
+> entry with a path that no longer exists stops every run, whichever project you are
+> in. That is usually a relative path whose base has gone: the entry's project was
+> moved or deleted, or its key isn't a real directory, such as a typo or a `~` key. The
+> error names that entry:
 >
 > ```
 > [user:projects./home/alice/code/gone.volumes.data] Path 'data' does not exist or cannot be resolved.

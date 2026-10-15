@@ -28,9 +28,9 @@ whether the alert applies to them:
 
 ```markdown
 > [!WARNING]
-> **Relative paths resolve against your shell's directory**
+> **A stale `[projects]` entry stops every run**
 >
-> paddock resolves a relative path against the directory you run paddock from, …
+> paddock validates every `[projects]` entry on each run, not just the current one, …
 ```
 
 Write alerts in this GitHub syntax, not MyST `{note}` directives, so they render on
