@@ -1,4 +1,3 @@
-from pathlib import Path
 from typing import Any
 
 import filters as f
@@ -46,6 +45,5 @@ class CliConfigSource(ConfigSource):
         if parsed.volumes:
             raw["volumes"] = dict(parsed.volumes)
 
-        # Flags were typed in a shell, so its cwd is the base (ADR 011).
-        schema = standard_config_schema(base_dir=Path.cwd(), merged=False)
+        schema = standard_config_schema(base_dir=context.workdir, merged=False)
         return LoadResult(f.FilterRunner(schema, raw), {})

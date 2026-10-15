@@ -559,25 +559,26 @@ def test_project_toml_relative_paths_resolve_against_workdir(
     }
 
 
-def test_user_relative_paths_resolve_against_user_config_dir(
-    tmp_path: Path, monkeypatch
-):
+def test_user_relative_paths_resolve_against_workdir(tmp_path: Path, monkeypatch):
     """Relative paths in the user file's global section resolve against the
-    file's directory."""
+    workdir, not the user config directory or the cwd."""
     cfg = _setup_home(
         tmp_path,
         monkeypatch,
         'image = "i"\nbuild.dockerfile = "images/Dockerfile"\n',
     )
+    # Decoy: the same path beside the user file must not be picked up.
     (cfg.parent / "images").mkdir()
     (cfg.parent / "images" / "Dockerfile").write_text("FROM scratch\n")
+    workdir = tmp_path / "project"
+    (workdir / "images").mkdir(parents=True)
+    (workdir / "images" / "Dockerfile").write_text("FROM scratch\n")
     elsewhere = tmp_path / "elsewhere"
     elsewhere.mkdir()
     monkeypatch.chdir(elsewhere)
-    r = ConfigLoader().resolve(_empty_parsed(), workdir=elsewhere, environ={})
+    r = ConfigLoader().resolve(_empty_parsed(), workdir=workdir, environ={})
     assert (
-        r.config["build"]["dockerfile"]
-        == (cfg.parent / "images" / "Dockerfile").resolve()
+        r.config["build"]["dockerfile"] == (workdir / "images" / "Dockerfile").resolve()
     )
 
 
@@ -614,14 +615,19 @@ def test_other_project_entry_validates_against_its_own_key(tmp_path: Path, monke
     assert "volumes" not in r.config
 
 
-def test_cli_and_env_relative_paths_resolve_against_cwd(tmp_path: Path, monkeypatch):
-    """Env and CLI paths have no file, so they resolve against the cwd."""
+def test_cli_and_env_relative_paths_resolve_against_workdir(
+    tmp_path: Path, monkeypatch
+):
+    """Env and CLI paths resolve against the workdir, not the cwd, so a value
+    means the same thing whichever source sets it."""
     _setup_home(tmp_path, monkeypatch, 'image = "i"\n')
+    workdir = tmp_path / "project"
+    (workdir / "data").mkdir(parents=True)
+    (workdir / "Dockerfile").write_text("FROM scratch\n")
+    # Decoys under the cwd must not be picked up.
     cwd = tmp_path / "cwd"
     (cwd / "data").mkdir(parents=True)
     (cwd / "Dockerfile").write_text("FROM scratch\n")
-    workdir = tmp_path / "project"
-    workdir.mkdir()
     monkeypatch.chdir(cwd)
     parsed = _empty_parsed()
     parsed.volumes = {"data": "/data"}
@@ -630,5 +636,5 @@ def test_cli_and_env_relative_paths_resolve_against_cwd(tmp_path: Path, monkeypa
         workdir=workdir,
         environ={"PADDOCK_BUILD_DOCKERFILE": "Dockerfile"},
     )
-    assert r.config["build"]["dockerfile"] == (cwd / "Dockerfile").resolve()
-    assert set(r.config["volumes"]) == {str((cwd / "data").resolve())}
+    assert r.config["build"]["dockerfile"] == (workdir / "Dockerfile").resolve()
+    assert set(r.config["volumes"]) == {str((workdir / "data").resolve())}

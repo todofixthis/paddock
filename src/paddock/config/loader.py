@@ -71,7 +71,7 @@ class ConfigLoader:
 
         # Every source has already made its paths absolute, so the base is moot.
         final = f.FilterRunner(
-            standard_config_schema(base_dir=Path.cwd(), merged=True), merged
+            standard_config_schema(base_dir=workdir, merged=True), merged
         )
         if not final.is_valid():
             raise self._error_group([("final", final)])

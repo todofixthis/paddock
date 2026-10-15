@@ -29,14 +29,12 @@ class UserConfigSource(ConfigSource):
             valid and ``meta == {}``.
         """
         path = context.user_config_path
-        # The unresolved parent: a symlinked file resolves against
-        # ~/.config/paddock/, not its target's directory (ADR 011).
-        schema = standard_config_schema(base_dir=path.parent, merged=False)
+        schema = standard_config_schema(base_dir=context.workdir, merged=False)
         if not path.exists():
             return LoadResult(f.FilterRunner(schema, {}), {})
 
         full = f.FilterRunner(
-            user_config_schema(base_dir=path.parent),
+            user_config_schema(base_dir=context.workdir),
             path.read_text(encoding="utf-8"),
         )
         if not full.is_valid():

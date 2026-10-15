@@ -21,8 +21,8 @@ def _env_schema(base_dir: Path):
     """Macro validating the raw ``PADDOCK_*`` shape.
 
     Args:
-        base_dir: Directory relative paths resolve against: the cwd, since
-            env vars were set in a shell (ADR 011).
+        base_dir: Directory relative paths resolve against: the workdir, as
+            for every source (ADR 011).
     """
     return f.FilterMapper(
         {
@@ -49,7 +49,7 @@ class EnvConfigSource(ConfigSource):
 
     1. Filter ``context.environ`` down to the ``PADDOCK_*`` subset.
     2. Validate names and values via the private ``_env_schema``, resolving
-       relative paths against the cwd.
+       relative paths against the workdir.
     3. Transform the validated PADDOCK_*-keyed dict into the standard config
        shape (``PADDOCK_BUILD_DOCKERFILE`` → ``build.dockerfile``).
     4. Run the result through ``standard_config_schema(merged=False)`` so the
@@ -74,8 +74,7 @@ class EnvConfigSource(ConfigSource):
             k: v for k, v in context.environ.items() if k.startswith(self.PREFIX)
         }
 
-        cwd = Path.cwd()
-        env_runner = f.FilterRunner(_env_schema(cwd), raw_env)
+        env_runner = f.FilterRunner(_env_schema(context.workdir), raw_env)
         if not env_runner.is_valid():
             return LoadResult(env_runner, {})
 
@@ -91,7 +90,10 @@ class EnvConfigSource(ConfigSource):
             self._deep_set(shaped, parts, value)
 
         return LoadResult(
-            f.FilterRunner(standard_config_schema(base_dir=cwd, merged=False), shaped),
+            f.FilterRunner(
+                standard_config_schema(base_dir=context.workdir, merged=False),
+                shaped,
+            ),
             {},
         )
 
