@@ -39,6 +39,131 @@ agent; see [Docker Image][docker-image]. Point [`build.dockerfile`](configuratio
 own Dockerfile to have paddock build it for you, or set
 [`image`](configuration.md#image) to a prebuilt one.
 
+## Stale installs
+
+Docker caches each build step and replays it while the step, and every step before it,
+is unchanged. A step that installs whatever is current, such as
+`npm install -g @anthropic-ai/claude-code` or `apt-get upgrade`, runs once; every later
+build reuses what it installed then. [`build.policy`](configuration.md#buildpolicy)'s
+`daily` and `weekly` rebuild on schedule, but from that cache, so they never update such
+an install. The bundled Dockerfile's agent step is one.
+
+Three fixes, best first.
+
+### Pin versions and let Renovate bump them
+
+Pin each install to a version in an `ARG`. Bumping the `ARG` changes the step, so the
+next build reruns it:
+
+```dockerfile
+FROM ubuntu:26.04
+
+# renovate: datasource=npm depName=@anthropic-ai/claude-code
+ARG CLAUDE_CODE_VERSION=2.1.292
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates curl \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN curl -fsSL https://claude.ai/install.sh | bash -s "${CLAUDE_CODE_VERSION}"
+ENV PATH="/root/.local/bin:${PATH}"
+```
+
+[Renovate][renovate] then opens a pull request for each new release. It bumps the `FROM`
+tag on its own; a regex manager reads the `# renovate:` comment above each `ARG`:
+
+```json
+{
+  "customManagers": [
+    {
+      "customType": "regex",
+      "managerFilePatterns": ["/Dockerfile$/"],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)\\nARG [A-Z0-9_]+=(?<currentValue>\\S+)"
+      ]
+    }
+  ],
+  "extends": ["config:recommended"],
+  "packageRules": [
+    {
+      "description": "Track Claude Code's stable channel rather than latest, which moves almost daily",
+      "followTag": "stable",
+      "matchPackageNames": ["@anthropic-ai/claude-code"]
+    }
+  ]
+}
+```
+
+Merging a bump changes your Dockerfile, not your image: pull the change, then run
+`--build-policy=always` once, as after any Dockerfile edit. apt packages are impractical
+to pin this way; the next fix covers them.
+
+### Build on a schedule in CI
+
+Build the image in GitHub Actions on a schedule, push it to a registry, and point
+[`image`](configuration.md#image) at it with no `[build]` table. A hosted runner starts
+with no layer cache, so every run reinstalls everything; if you add a cache, skip it on
+scheduled runs:
+
+```yaml
+name: Publish image
+
+on:
+  push:
+    branches:
+      - main
+  schedule:
+    # Sundays at 14:00 UTC
+    - cron: '0 14 * * 0'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: images/Dockerfile
+          pull: true
+          push: true
+          # Image names must be lowercase
+          tags: ghcr.io/your-name/your-image:latest
+```
+
+Docker pulls the image only when no local copy exists, so run
+`docker pull ghcr.io/your-name/your-image:latest` to pick up a new build. GitHub makes a
+package pushed this way private, so the pull needs `docker login ghcr.io` with a token
+that has `read:packages`, unless you make the package public.
+
+### Bust the cache for an install that must stay unpinned
+
+Declare an `ARG` inside the stage, after `FROM`, just before the step. Docker reruns
+every step after an `ARG` whose value changed, and keeps the cached steps before it. An
+`ARG` above `FROM`, or none at all, busts nothing:
+
+```dockerfile
+ARG CACHE_BUST
+RUN npm install -g @anthropic-ai/claude-code
+```
+
+Pass a value that changes once a day, for example through a shell alias, and keep
+`build.policy` at `daily`:
+
+```bash
+alias paddock='paddock --build-args-CACHE_BUST="$(date +%F)"'
+```
+
 ## Running commands through a login shell
 
 Installers often put tools where only a shell profile adds them to `PATH`, such as
@@ -95,3 +220,4 @@ directory with `ENV PATH`, or use the login-shell entrypoint above.
 
 [docker-image]: https://phx-paddock.readthedocs.io/en/latest/#docker-image
 [leash]: https://github.com/strongdm/leash
+[renovate]: https://docs.renovatebot.com/

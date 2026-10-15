@@ -682,7 +682,6 @@ Before each run, [`build.policy`](#buildpolicy) decides whether paddock runs:
 docker build -t <image> -f <build.dockerfile> [--build-arg …] <build.context>
 ```
 
-A `daily` or `weekly` refresh adds `--no-cache --pull --label paddock.refreshed-at=<time>`.
 `--dry-run` never builds.
 
 > [!WARNING]
@@ -729,40 +728,23 @@ When paddock rebuilds the image.
 
 | Value | paddock builds when |
 |---|---|
-| `always` | Every run, using Docker's layer cache. |
-| `daily` | The image is missing, or was last refreshed more than 24 hours ago. |
+| `always` | Every run. |
+| `daily` | The image is missing, or paddock last built it more than 24 hours ago. |
 | `if-missing` | No image by that name exists locally. |
-| `weekly` | The image is missing, or was last refreshed more than 7 days ago. |
+| `weekly` | The image is missing, or paddock last built it more than 7 days ago. |
 
 After editing the Dockerfile, run `--build-policy=always` once from a project that
 builds it, rather than changing the policy in a file. Has no effect without [`build.dockerfile`](#builddockerfile).
 
-`daily` and `weekly` refresh the image: a full build without the layer cache that also
-pulls the base image, so it picks up a new agent release and base image updates. It takes
-minutes, once per period; to skip a due refresh for one run, pass
-`--build-policy=if-missing`. Interrupting a refresh is safe: the old image stays in place.
-paddock stamps each refresh with a `paddock.refreshed-at` label and measures age from
-it, or from the image's creation time when the label is absent. Any other build drops
-the label, so after a `--build-policy=always` the next refresh can come early or late.
-
-If a refresh fails with an image already present (offline, say), paddock logs
-`Image refresh failed`, runs the old image, and retries on the next run. `--pull` always
-fails for a `FROM` image that exists only locally, so with one, every refresh fails: a run
-with no image stops, and one with an image falls back. Push the base image to a
-registry, or switch to `if-missing` and refresh by hand: run the command in
-[`build.dockerfile`](#builddockerfile) with `--no-cache`, `--build-arg AGENT=claude`
-(`AGENT=none` with `agent = false`) and each [`build.args`](#buildargs) entry.
-
-A refresh replaces the image, broken upstream releases included. paddock itself keeps no
-copy to roll back to, and doesn't fall back, since the build succeeded. To recover, pin
-the version in your Dockerfile (in the bundled one, `@anthropic-ai/claude-code@<version>`
-on its `npm install` line) and run `--build-policy=always`.
+paddock stamps each build with a `paddock.built-at` label and measures age from it, or
+from the image's creation time for an image paddock didn't build.
 
 > [!WARNING]
-> **`always` doesn't update the agent**
+> **`daily` and `weekly` don't update unpinned installs**
 >
-> `always` rebuilds every run, but from Docker's layer cache, which replays the layer
-> that installs the agent. Use `daily` or `weekly` to keep the agent current.
+> paddock builds with Docker's layer cache, which replays an unchanged `RUN` step, so a
+> rebuild reinstalls nothing that step doesn't pin, the bundled Dockerfile's agent
+> included. See [stale installs](docker-images.md#stale-installs) for the fixes.
 
 ### `config.allowlist`
 
