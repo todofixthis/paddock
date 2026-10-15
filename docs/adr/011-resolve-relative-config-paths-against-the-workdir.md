@@ -125,7 +125,8 @@ Concrete semantics:
   to the project: a `volumes` grant to `project_toml` still reaches the whole host
   filesystem, as absolute paths always could.
 - Without `--workdir` the workdir is the cwd, so relative paths in the project file,
-  the user file, env and CLI resolve as they did before. Under `--workdir` from another
+  the user file's global section, the matching `[projects]` entry, env and CLI resolve
+  as they did before. Under `--workdir` from another
   directory they all now resolve against the workdir, not the shell. The release notes
   must call this out.
 - Relative paths in other projects' `[projects]` entries resolve against their own key

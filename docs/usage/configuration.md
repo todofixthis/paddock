@@ -70,12 +70,12 @@ allowlist would drop still stops the run.
 Path values (`build.context`, `build.dockerfile` and the host side of `volumes`) must
 exist when paddock starts. paddock expands a leading `~` to your home directory and
 follows symlinks. A relative path resolves against the workdir, whichever source sets
-it, so a value means the same thing in every source and wherever you run paddock from:
-`"data"` names `<workdir>/data`, and `"../widgets-api"` a sibling of the project. The
-workdir here is its real path, with symlinks resolved, so `..` climbs from a symlinked
-checkout's target, not the link. That holds for `.paddock/config.toml` (not `.paddock/` itself), the user file, the
-environment and the command line. A `[projects."<path>"]` entry resolves against its
-`<path>`, the workdir it applies to.
+it: `.paddock/config.toml` (not `.paddock/` itself), the user file, the environment and
+the command line. A value therefore means the same thing in every source and wherever
+you run paddock from: `"data"` names `<workdir>/data`, and `"../widgets-api"` a sibling
+of the project. A `[projects."<path>"]` entry resolves against its `<path>`, the workdir
+it applies to. The workdir here is its real path, with symlinks resolved, so `..`
+climbs from a symlinked checkout's target, not the link.
 
 A relative path you set once for every project, in the global section of your user
 file, an exported `PADDOCK_*` variable or a shell alias, therefore names a different
