@@ -97,7 +97,10 @@ class EnvConfigSource(ConfigSource):
         exactly.
         """
         rejected = {}
-        for key in raw_env:
+        for key, value in raw_env.items():
+            # Empty means unset, as for every other PADDOCK_* name.
+            if value == "":
+                continue
             for name, (field, flag) in self._NO_ENV_FORM.items():
                 if key == name or key.startswith(f"{name}_"):
                     rejected[key] = NoEnvForm(field, flag)

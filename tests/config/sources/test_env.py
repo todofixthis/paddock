@@ -134,3 +134,12 @@ def test_no_env_form_needs_separator(tmp_path):
     assert result.instance.error_codes == {
         "build.argsx": [f.FilterMapper.CODE_EXTRA_KEY]
     }
+
+
+def test_no_env_form_empty_value_ignored(tmp_path):
+    """An empty PADDOCK_BUILD_ARGS counts as unset, like any empty PADDOCK_*."""
+    result = EnvConfigSource().load(
+        _ctx(tmp_path, {"PADDOCK_BUILD_ARGS": "", "PADDOCK_VOLUMES_TMP": ""})
+    )
+    assert result.instance.is_valid()
+    assert result.instance.cleaned_data == {}
