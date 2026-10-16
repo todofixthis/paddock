@@ -627,9 +627,9 @@ Build arguments (`docker build --build-arg`) for when paddock builds the image.
 - **Type:** table of strings, argument name to value
 - **Default:** none
 - **TOML:** `NODE_VERSION = "24"` under `[build.args]`
-- **Environment:** none. `PADDOCK_BUILD_ARGS` is ignored, and a name such as
-  `PADDOCK_BUILD_ARGS_NODE_VERSION` produces a garbled build argument rather than an
-  error, so don't use either.
+- **Environment:** none. `PADDOCK_BUILD_ARGS`, or a name such as
+  `PADDOCK_BUILD_ARGS_NODE_VERSION`, stops paddock with an
+  [`Unexpected key` error](#troubleshooting).
 - **Command line:** `--build-args-NODE_VERSION=24`, repeatable. The `=` is required,
   and `-` in the name becomes `_`.
 - **Allowlist path:** `build.args` (or `build`)
@@ -888,7 +888,8 @@ Extra host directories or files to mount into the container.
 - **Default:** none. paddock always mounts the workdir read-write at the same path,
   plus the agent's mounts.
 - **TOML:** `"~/datasets" = "/data:ro"` under `[volumes]`
-- **Environment:** none — set it in a TOML file or on the command line
+- **Environment:** none. `PADDOCK_VOLUMES`, or a name such as `PADDOCK_VOLUMES_DATA`,
+  stops paddock with an [`Unexpected key` error](#troubleshooting).
 - **Command line:** `--volume=~/datasets:/data:ro`, repeatable
 - **Allowlist path:** `volumes`
 
@@ -957,13 +958,13 @@ a misspelt key (`imgae`), an allowlist source other than `cli`, `env` and
 `project_toml`, or an allowlist value that isn't `true`, `false` or a list of
 [allowlist paths](#configallowlist).
 
-**`[env:foo] Unexpected key "foo".`**
+**`[env:PADDOCK_…] Unexpected key "PADDOCK_…".`**
 
-A `PADDOCK_*` variable that matches no directive, usually a typo. Unset or correct it.
-
-**`[env:volumes] str is not valid (allowed types: dict).`**
-
-[`volumes`](#volumes) has no environment variable. Use a TOML file or `--volume`.
+A `PADDOCK_*` variable that matches no directive, even with an empty value. Usually
+it's a typo: unset or correct it. If the directive has no environment variable (🚫 in
+the [reference table](#reference-table)), no spelling works: unset the variable and set
+the directive in a TOML file, or for [`build.args`](#buildargs) and
+[`volumes`](#volumes) with `--build-args-KEY=VALUE` or `--volume`.
 
 **`[<source>:volumes.<host path>] Path '…' does not exist or cannot be resolved.`**
 

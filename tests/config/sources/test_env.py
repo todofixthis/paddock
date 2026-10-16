@@ -1,5 +1,8 @@
 from pathlib import Path
 
+import filters as f
+import pytest
+
 from paddock.cli import ParsedArgs
 from paddock.config.context import ConfigContext
 from paddock.config.sources.env import EnvConfigSource
@@ -81,7 +84,30 @@ def test_non_paddock_vars_ignored(tmp_path):
     assert result.instance.cleaned_data == {}
 
 
-def test_loader_keys_are_skipped(tmp_path):
-    """PADDOCK_BUILD_ARGS is handled by another source."""
-    result = EnvConfigSource().load(_ctx(tmp_path, {"PADDOCK_BUILD_ARGS": "foo"}))
-    assert result.instance.cleaned_data == {}
+@pytest.mark.parametrize(
+    "name",
+    [
+        "PADDOCK_BUILD_ARGS",
+        "PADDOCK_BUILD_ARGS_NODE_VERSION",
+        "PADDOCK_BUILD_ARGSX",
+        "PADDOCK_IMGAE",
+        "PADDOCK_VOLUMES",
+        "PADDOCK_VOLUMES_TMP",
+    ],
+)
+def test_unknown_name_rejected(tmp_path, name):
+    """A PADDOCK_* name with no directive is an error, keyed on the name itself.
+
+    Covers the free-form maps (``build.args``, ``volumes``), whose suffixed
+    names would otherwise split on ``_`` into nested keys.
+    """
+    result = EnvConfigSource().load(_ctx(tmp_path, {name: "1"}))
+    assert result.instance.error_codes == {name: [f.FilterMapper.CODE_EXTRA_KEY]}
+
+
+def test_unknown_name_rejected_when_empty(tmp_path):
+    """An unknown name is rejected even with an empty value."""
+    result = EnvConfigSource().load(_ctx(tmp_path, {"PADDOCK_BUILD_ARGS": ""}))
+    assert result.instance.error_codes == {
+        "PADDOCK_BUILD_ARGS": [f.FilterMapper.CODE_EXTRA_KEY]
+    }

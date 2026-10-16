@@ -129,21 +129,25 @@ def test_env_schema_rejects_invalid_policy(assert_filter_errors):
     )
 
 
-def test_env_schema_ignores_non_paddock_vars(assert_filter_passes):
-    """Non-PADDOCK_* vars in the env are silently ignored."""
-    assert_filter_passes(
-        _env_schema, {"PATH": "/usr/bin", "HOME": "/home/user"}, skip_value_check
-    )
-
-
-def test_env_build_args_not_mapped(tmp_path, monkeypatch):
-    """PADDOCK_BUILD_ARGS is silently ignored — it cannot express a key=value dict as a single env var."""
+def test_env_build_args_suffixed_name_is_fatal(tmp_path, monkeypatch):
+    """PADDOCK_BUILD_ARGS_<NAME> aborts the run, naming the variable."""
     _setup_home(tmp_path, monkeypatch, 'image = "ubuntu:22.04"\nagent = "claude"\n')
-    result = ConfigLoader().resolve(
-        _empty_parsed(), workdir=tmp_path, environ={"PADDOCK_BUILD_ARGS": "FOO=bar"}
-    )
-    assert isinstance(result, ResolvedConfig)
-    assert result.config.get("build") is None
+    dockerfile = tmp_path / "Dockerfile"
+    dockerfile.write_text("FROM x")
+    with pytest.raises(ExceptionGroup) as exc:
+        ConfigLoader().resolve(
+            _empty_parsed(),
+            workdir=tmp_path,
+            environ={
+                "PADDOCK_BUILD_ARGS_NODE_VERSION": "24",
+                "PADDOCK_BUILD_DOCKERFILE": str(dockerfile),
+            },
+        )
+    messages = [str(e) for e in exc.value.exceptions]
+    assert messages == [
+        "[env:PADDOCK_BUILD_ARGS_NODE_VERSION] Unexpected key "
+        '"PADDOCK_BUILD_ARGS_NODE_VERSION".'
+    ]
 
 
 def test_loader_resolve_env_dockerfile_tilde_expanded(monkeypatch, tmp_path):
@@ -472,7 +476,7 @@ def test_dropped_nested_key_warns_with_its_dotted_path(
     _setup_home(
         tmp_path,
         monkeypatch,
-        'agent = "claude"\n[config.allowlist]\nproject_toml = ["image"]\n',
+        'agent = "claude"\n' '[config.allowlist]\nproject_toml = ["image"]\n',
     )
     dockerfile = tmp_path / "Dockerfile"
     dockerfile.write_text("FROM ubuntu:22.04\n")
