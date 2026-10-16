@@ -4,7 +4,7 @@ date: 2026-10-13
 scope: [docs/usage/, src/paddock/docker/build.py]
 summary: Measure an image's age for the daily and weekly build policies from a paddock.built-at label that every paddock build stamps, falling back to .Created, rather than from .Created alone or .Metadata.LastTagTime; paddock's builds keep the layer cache (no --no-cache), leaving installed dependencies' freshness to the Dockerfile, as the user docs describe.
 revisit-when: the documented Dockerfile fixes prove insufficient and paddock takes on dependency freshness itself; Docker exposes a reliable last-build time of its own; .Metadata.LastTagTime is adopted for another path, such as pulls, making one mechanism for both worth weighing.
-revisit-discharged-by: [12]
+revisit-discharged-by: [13]
 ---
 
 # 011: Track Build Time in an Image Label
@@ -103,10 +103,10 @@ unpinned.
   untested.
 - ~~A pulled image can't carry a label paddock stamps, so pulling under a build policy
   (the revisit trigger) would need Option 4 or 5 for that path.~~ Spent by
-  [ADR 012], which times pulls with Option 5.
+  [ADR 013], which times pulls with Option 5.
 - Labels are inherited, so an image built `FROM` a paddock-built image carries its base's
   `paddock.built-at` until paddock builds it.
 
-[ADR 012]: 012-pull-registry-images-under-a-build-policy.md
+[ADR 013]: 013-pull-registry-images-under-a-build-policy.md
 [`ImageBuilder`]: ../../src/paddock/docker/build.py
 [`images/Dockerfile`]: ../../images/Dockerfile

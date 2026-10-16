@@ -6,7 +6,7 @@ summary: A build table without build.dockerfile makes paddock pull image on buil
 revisit-when: Docker records a reliable last-pull time on every image store paddock supports; a project needs a build policy without a Dockerfile to mean something other than pulling; redundant pulls prove costly, through registry rate limits or drift across several Docker daemons; due pulls failing offline block work often enough that users need a fallback to the local copy.
 ---
 
-# 012: Pull Registry Images Under a Build Policy
+# 013: Pull Registry Images Under a Build Policy
 
 ## Context
 
@@ -15,6 +15,8 @@ user docs give is building the image on a schedule in CI and pushing it to a reg
 user of such an image sets `image` to its registry tag. Docker pulls that tag only when no
 local copy exists, so the image paddock runs goes stale until the user remembers to run
 `docker pull`. `build.policy` can't help: without `build.dockerfile` it is a config error.
+
+Numbered 012 until a concurrent ADR took that number.
 
 This meets ADR 011's revisit trigger: "paddock gains a way to keep an image current other
 than building it locally, such as pulling a registry-hosted image under a build policy".

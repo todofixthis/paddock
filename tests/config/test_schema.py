@@ -71,7 +71,7 @@ def test_valid_build_config(tmp_path):
 
 def test_build_policy_without_dockerfile_is_valid():
     """A policy alone is valid: it pulls the image rather than building it."""
-    result = ConfigSchema().validate(
+    result = _validate(
         {
             "image": "ghcr.io/example/agent:python",
             "agent": "claude",
@@ -84,7 +84,7 @@ def test_build_policy_without_dockerfile_is_valid():
 def test_empty_build_dockerfile_rejected():
     """An empty dockerfile is a mistake, not a request to pull."""
     with pytest.raises(SystemExit):
-        ConfigSchema().validate(
+        _validate(
             {
                 "image": "myapp:latest",
                 "agent": "claude",

@@ -89,7 +89,7 @@ def _prepare_image(config: dict, agent: BaseAgent) -> None:
     """Build or pull the image as ``build.policy`` requires, or exit.
 
     A ``build.dockerfile`` builds the image; without one, the policy pulls it
-    (ADR 012). A failed build or pull exits with Docker's status, Docker
+    (ADR 013). A failed build or pull exits with Docker's status, Docker
     having already printed why.
 
     Args:

@@ -40,7 +40,7 @@ def _build_schema(base_dir: Path):
     """Build-section schema; every field is optional.
 
     A ``policy`` without a ``dockerfile`` pulls the image instead of building
-    it (ADR 012).
+    it (ADR 013).
     """
     return f.FilterMapper(
         {

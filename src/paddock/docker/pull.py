@@ -23,7 +23,7 @@ class PullLog:
     Records when paddock last pulled each image, keyed by image reference.
 
     Docker keeps no reliable last-pull time of its own: ``.Metadata.LastTagTime``
-    stays at its zero value after a pull on the classic image store (ADR 012).
+    stays at its zero value after a pull on the classic image store (ADR 013).
     """
 
     def __init__(self, path: Path) -> None:
@@ -102,7 +102,7 @@ class PullLog:
 
 
 class ImagePuller:
-    """Keeps a registry-hosted image current under a build policy (ADR 012)."""
+    """Keeps a registry-hosted image current under a build policy (ADR 013)."""
 
     def __init__(self, log: PullLog) -> None:
         self.log = log
