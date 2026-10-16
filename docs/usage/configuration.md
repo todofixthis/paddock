@@ -729,20 +729,22 @@ When paddock rebuilds the image.
 | Value | paddock builds when |
 |---|---|
 | `always` | Every run. |
-| `daily` | The image is missing, or was created more than 24 hours ago. |
+| `daily` | The image is missing, or paddock last built it more than 24 hours ago. |
 | `if-missing` | No image by that name exists locally. |
-| `weekly` | The image is missing, or was created more than 7 days ago. |
+| `weekly` | The image is missing, or paddock last built it more than 7 days ago. |
 
 After editing the Dockerfile, run `--build-policy=always` once from a project that
 builds it, rather than changing the policy in a file. Has no effect without [`build.dockerfile`](#builddockerfile).
 
+paddock stamps each build with a `paddock.built-at` label and measures age from it, or
+from the image's creation time for an image paddock didn't build.
+
 > [!WARNING]
-> **`daily` and `weekly` don't update the agent**
+> **`daily` and `weekly` don't update unpinned installs**
 >
-> paddock builds with Docker's layer cache, and the layer that installs the agent is
-> cached. A fully cached build also keeps the image's old creation time, so once the
-> image passes the age limit, every run rebuilds from cache, quickly, until a layer
-> changes. To refresh the agent, rebuild by hand with `docker build --no-cache`.
+> paddock builds with Docker's layer cache, which replays an unchanged `RUN` step, so a
+> rebuild reinstalls nothing that step doesn't pin, the bundled Dockerfile's agent
+> included. See [stale installs](docker-images.md#stale-installs) for the fixes.
 
 ### `config.allowlist`
 
