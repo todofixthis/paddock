@@ -17,27 +17,30 @@ class BuildPolicy(StrEnum):
     IF_MISSING = "if-missing"
     WEEKLY = "weekly"
 
+    def is_due(self, last_at: datetime | None) -> bool:
+        """
+        Whether the policy calls for a new image, built or pulled.
 
-class ImageBuilder:
-    @staticmethod
-    def should_build(policy: BuildPolicy, image_built_at: datetime | None) -> bool:
-        """Determine whether to build the image given the policy and current image age."""
-        match policy:
+        Args:
+            last_at: When paddock last built or pulled the image, or ``None``
+                if no image by that name exists locally.
+
+        Returns:
+            True when paddock should build or pull the image before running it.
+        """
+        match self:
             case BuildPolicy.ALWAYS:
                 return True
             case BuildPolicy.IF_MISSING:
-                return image_built_at is None
+                return last_at is None
             case BuildPolicy.DAILY:
-                if image_built_at is None:
-                    return True
-                return (datetime.now(timezone.utc) - image_built_at) > timedelta(
-                    hours=24
-                )
+                max_age = timedelta(hours=24)
             case BuildPolicy.WEEKLY:
-                if image_built_at is None:
-                    return True
-                return (datetime.now(timezone.utc) - image_built_at) > timedelta(days=7)
+                max_age = timedelta(days=7)
+        return last_at is None or datetime.now(timezone.utc) - last_at > max_age
 
+
+class ImageBuilder:
     def get_image_built_at(self, image: str) -> datetime | None:
         """
         Return when paddock last built a local Docker image, or None if absent
@@ -105,7 +108,7 @@ class ImageBuilder:
         dockerfile = build_config["dockerfile"]
         context = build_config.get("context") or dockerfile.parent
         image_built_at = self.get_image_built_at(image)
-        if self.should_build(policy, image_built_at):
+        if policy.is_due(image_built_at):
             self.run_build(
                 image=image,
                 dockerfile=dockerfile,

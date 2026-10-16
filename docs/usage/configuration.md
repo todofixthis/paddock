@@ -593,7 +593,7 @@ source, takes no part in merging, and ignores the allowlist.
 |---|---|---|
 | Agent arguments | `paddock -- --continue` | Everything after `--` is appended to the agent's command: `claude --continue`. |
 | Command | `paddock /bin/bash` | The first positional argument, and everything after it, replaces the agent's command. Put paddock flags first. |
-| Dry run | `--dry-run` | Prints the `docker run` command and exits 0 without building or running anything. |
+| Dry run | `--dry-run` | Prints the `docker run` command and exits 0 without building, pulling or running anything. |
 | Help | `--help` | Prints usage and exits. |
 | Quiet | `--quiet` | Suppresses logging, warnings and the printed `docker run` command. Errors still print. |
 | Version | `--version` | Prints the paddock version and exits. |
@@ -685,7 +685,7 @@ Relative paths resolve against the workdir; see [Validation](#validation).
 ### `build.dockerfile`
 
 A Dockerfile paddock builds into [`image`](#image) before running it. Setting it turns
-on building.
+on building; without it, [`build.policy`](#buildpolicy) pulls the image instead.
 
 - **Type:** path to an existing file
 - **Default:** none — paddock runs `image` as is, and Docker pulls it if missing
@@ -715,8 +715,7 @@ docker build -t <image> -f <build.dockerfile> [--build-arg …] <build.context>
 > `[projects."<workdir>".build]` and `docker pull` the image before its first run:
 > paddock never rebuilds an image that exists locally under that policy.
 
-Every other `build` directive needs this one: setting `build.policy` alone stops the run
-with `[final:build.dockerfile] Non-empty value expected.`
+[`build.args`](#buildargs) and [`build.context`](#buildcontext) need this one.
 
 To start from the bundled Dockerfile, copy it from
 [`images/`](https://github.com/todofixthis/paddock/tree/main/images). For what any
@@ -735,7 +734,8 @@ Relative paths resolve against the workdir; see [Validation](#validation).
 
 ### `build.policy`
 
-When paddock rebuilds the image.
+When paddock builds the image, or pulls it if no
+[`build.dockerfile`](#builddockerfile) is set.
 
 - **Type:** `"always"`, `"daily"`, `"if-missing"` or `"weekly"`
 - **Default:** `"if-missing"`
@@ -744,25 +744,38 @@ When paddock rebuilds the image.
 - **Command line:** `--build-policy=daily`
 - **Allowlist path:** `build.policy` (or `build`)
 
-| Value | paddock builds when |
+| Value | paddock builds or pulls when |
 |---|---|
 | `always` | Every run. |
-| `daily` | The image is missing, or paddock last built it more than 24 hours ago. |
+| `daily` | The image is missing, or paddock last built or pulled it more than 24 hours ago. |
 | `if-missing` | No image by that name exists locally. |
-| `weekly` | The image is missing, or paddock last built it more than 7 days ago. |
+| `weekly` | The image is missing, or paddock last built or pulled it more than 7 days ago. |
 
 After editing the Dockerfile, run `--build-policy=always` once from a project that
-builds it, rather than changing the policy in a file. Has no effect without [`build.dockerfile`](#builddockerfile).
+builds it, rather than changing the policy in a file.
 
 paddock stamps each build with a `paddock.built-at` label and measures age from it, or
-from the image's creation time for an image paddock didn't build.
+from the image's creation time for an image paddock didn't build. It builds with
+Docker's layer cache, which replays an unchanged `RUN` step, so a `daily` or `weekly`
+rebuild reinstalls nothing that step doesn't pin, the bundled Dockerfile's agent
+included; see [stale installs](docker-images.md#stale-installs) for the fixes.
 
-> [!WARNING]
-> **`daily` and `weekly` don't update unpinned installs**
+Without `build.dockerfile`, paddock runs `docker pull <image>` when the policy says it's
+due, so a registry image built on a schedule stays current. It records each pull in
+`$XDG_STATE_HOME/paddock/pulls.json` (`~/.local/state/paddock/pulls.json` by default),
+and counts an image it has no record of pulling as due. A due pull that fails, offline
+say, stops the run with Docker's error; `--build-policy=if-missing` runs the local copy
+instead.
+
+> [!CAUTION]
+> **A policy in your user file pulls every project's image**
 >
-> paddock builds with Docker's layer cache, which replays an unchanged `RUN` step, so a
-> rebuild reinstalls nothing that step doesn't pin, the bundled Dockerfile's agent
-> included. See [stale installs](docker-images.md#stale-installs) for the fixes.
+> Every project whose `image` has no Dockerfile gets pulled, including a tag you only
+> ever built locally. Its pull fails whenever it's due, or, where a registry you don't
+> control has an image of that name, replaces yours with that image. Fully qualify the
+> images you pull (`ghcr.io/your-name/your-image:latest`), and opt a project out with
+> `policy = "if-missing"` under its `[projects."<workdir>".build]`. A
+> `.paddock/config.toml` can't opt out: the user file outweighs it.
 
 ### `config.allowlist`
 
@@ -837,7 +850,8 @@ The Docker image to run. Required.
 - **Allowlist path:** `image`
 
 With [`build.dockerfile`](#builddockerfile) set, this is also the tag paddock builds.
-Without it, Docker pulls the image on first use if it isn't local.
+Without it, Docker pulls the image on first use if it isn't local, and
+[`build.policy`](#buildpolicy) can keep it current.
 
 The image must have the agent's command on its `PATH` and run as root; see
 [Custom Docker Images](docker-images.md). Set it in your user file, and per project

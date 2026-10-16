@@ -6,35 +6,31 @@ from pathlib import Path
 from paddock.docker.build import BUILT_AT_LABEL, BuildPolicy, ImageBuilder
 
 
-def test_should_build_always():
-    assert ImageBuilder.should_build(
-        BuildPolicy.ALWAYS, image_built_at=datetime.now(timezone.utc)
-    )
+def test_is_due_always():
+    assert BuildPolicy.ALWAYS.is_due(datetime.now(timezone.utc))
 
 
-def test_should_build_if_missing_image_exists():
-    assert not ImageBuilder.should_build(
-        BuildPolicy.IF_MISSING, image_built_at=datetime.now(timezone.utc)
-    )
+def test_is_due_if_missing_image_exists():
+    assert not BuildPolicy.IF_MISSING.is_due(datetime.now(timezone.utc))
 
 
-def test_should_build_if_missing_image_absent():
-    assert ImageBuilder.should_build(BuildPolicy.IF_MISSING, image_built_at=None)
+def test_is_due_if_missing_image_absent():
+    assert BuildPolicy.IF_MISSING.is_due(None)
 
 
-def test_should_build_daily_old_image():
+def test_is_due_daily_old_image():
     old = datetime.now(timezone.utc) - timedelta(hours=25)
-    assert ImageBuilder.should_build(BuildPolicy.DAILY, image_built_at=old)
+    assert BuildPolicy.DAILY.is_due(old)
 
 
-def test_should_build_daily_fresh_image():
+def test_is_due_daily_fresh_image():
     fresh = datetime.now(timezone.utc) - timedelta(hours=1)
-    assert not ImageBuilder.should_build(BuildPolicy.DAILY, image_built_at=fresh)
+    assert not BuildPolicy.DAILY.is_due(fresh)
 
 
-def test_should_build_weekly_old_image():
+def test_is_due_weekly_old_image():
     old = datetime.now(timezone.utc) - timedelta(days=8)
-    assert ImageBuilder.should_build(BuildPolicy.WEEKLY, image_built_at=old)
+    assert BuildPolicy.WEEKLY.is_due(old)
 
 
 def test_run_build_basic(mocker):
