@@ -43,7 +43,7 @@ class Agent(BaseFilter):
 
 
 class Filepath(BaseFilter):
-    """Expands a tilde prefix and returns a ``Path``.
+    """Expands a tilde prefix, anchors a relative path, and returns a ``Path``.
 
     Accepts ``str`` or ``Path`` input. Place after ``f.Unicode`` in a chain
     — this filter asserts the type without coercing it.
@@ -54,6 +54,12 @@ class Filepath(BaseFilter):
     container paths cannot be resolved or checked from the host.
 
     Args:
+        base_dir:
+
+            Directory a relative path is joined onto, after ``~`` expansion
+            (ADR 012). When ``None``, a relative path stays relative, so
+            ``.resolve()`` anchors it to the process cwd.
+
         home_dir:
 
             Home directory to substitute for ``~``. When ``None``,
@@ -91,12 +97,14 @@ class Filepath(BaseFilter):
 
     def __init__(
         self,
+        base_dir: str | Path | None = None,
         home_dir: str | Path | None = None,
         is_dir: bool | None = None,
         must_exist: bool | None = None,
         resolve: bool | None = None,
     ):
         super().__init__()
+        self._base_dir = Path(base_dir) if base_dir is not None else None
         self._home_dir = Path(home_dir) if home_dir is not None else None
         self._is_dir = is_dir
         self._should_resolve = resolve is True or (resolve is None and home_dir is None)
@@ -114,6 +122,10 @@ class Filepath(BaseFilter):
 
         if path.parts and path.parts[0] == "~":
             path = Path(home, *path.parts[1:])
+
+        if self._base_dir is not None:
+            # Joining an absolute path yields it unchanged.
+            path = self._base_dir / path
 
         if self._should_resolve:
             try:
@@ -189,9 +201,9 @@ class VolumeMap(BaseFilter):
     """Validates a volumes mapping from host paths to container path specs.
 
     Keys (host paths) are validated through ``f.Unicode | Filepath`` —
-    tilde-expanded using ``Path.home()``, resolved, and checked for
-    existence. Values (container path specs) are validated through
-    ``Volume``.
+    tilde-expanded using ``Path.home()``, anchored to ``host_base_dir`` when
+    relative, resolved, and checked for existence. Values (container path
+    specs) are validated through ``Volume``.
 
     Returns a ``dict[str, VolumeSpec]`` mapping resolved host-path strings
     to container path specs.
@@ -202,13 +214,23 @@ class VolumeMap(BaseFilter):
             Home directory to use for tilde expansion in container path
             specs. When ``None`` (default), container paths are validated
             for format only without tilde expansion.
+
+        host_base_dir:
+
+            Directory relative host paths resolve against. When ``None``
+            (default), they resolve against the process cwd.
     """
 
-    def __init__(self, container_home_dir: str | Path | None = None):
+    def __init__(
+        self,
+        container_home_dir: str | Path | None = None,
+        host_base_dir: str | Path | None = None,
+    ):
         super().__init__()
         self._container_home_dir = (
             Path(container_home_dir) if container_home_dir is not None else None
         )
+        self._host_base_dir = host_base_dir
 
     def _apply(self, value):
         value = cast(dict, self._filter(value, f.Type(dict)))
@@ -220,7 +242,11 @@ class VolumeMap(BaseFilter):
             sub_key = str(raw_host)
             host_path = cast(
                 Path | None,
-                self._filter(raw_host, f.Unicode | Filepath(), sub_key=sub_key),
+                self._filter(
+                    raw_host,
+                    f.Unicode | Filepath(base_dir=self._host_base_dir),
+                    sub_key=sub_key,
+                ),
             )
             container_spec = cast(
                 VolumeSpec | None,

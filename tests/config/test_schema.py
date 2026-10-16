@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import filters as f
 import pytest
 from filters.pytest import skip_value_check
@@ -13,9 +15,15 @@ from paddock.config.schema import (
 )
 
 
+def _validate(config: dict) -> dict:
+    """Run ConfigSchema with the cwd as base; these configs hold no relative
+    paths, so the base only satisfies the required argument."""
+    return ConfigSchema().validate(config, base_dir=Path.cwd())
+
+
 def test_valid_minimal():
     """Minimal valid config passes; absent optional fields are stripped by DropEmpty."""
-    result = ConfigSchema().validate({"image": "ubuntu:22.04", "agent": "claude"})
+    result = _validate({"image": "ubuntu:22.04", "agent": "claude"})
     assert result["image"] == "ubuntu:22.04"
     assert result["agent"] == "claude"
 
@@ -23,27 +31,25 @@ def test_valid_minimal():
 def test_invalid_empty_image():
     """An empty string is not a valid image name."""
     with pytest.raises(SystemExit):
-        ConfigSchema().validate({"image": "", "agent": "claude"})
+        _validate({"image": "", "agent": "claude"})
 
 
 def test_invalid_missing_image():
     """image is required — omitting it should fail."""
     with pytest.raises(SystemExit):
-        ConfigSchema().validate({"agent": "claude"})
+        _validate({"agent": "claude"})
 
 
 def test_agent_false():
     """agent = False (bool) enables shell mode."""
-    result = ConfigSchema().validate({"image": "ubuntu:22.04", "agent": False})
+    result = _validate({"image": "ubuntu:22.04", "agent": False})
     assert result["agent"] is False
 
 
 def test_unknown_key_rejected():
     """Unknown config keys indicate a typo and should be rejected."""
     with pytest.raises(SystemExit):
-        ConfigSchema().validate(
-            {"image": "ubuntu:22.04", "agent": "claude", "typo": "oops"}
-        )
+        _validate({"image": "ubuntu:22.04", "agent": "claude", "typo": "oops"})
 
 
 def test_valid_build_config(tmp_path):
@@ -59,7 +65,7 @@ def test_valid_build_config(tmp_path):
             "policy": "if-missing",
         },
     }
-    result = ConfigSchema().validate(config)
+    result = _validate(config)
     assert result["build"]["policy"] == "if-missing"
 
 
@@ -75,7 +81,7 @@ def test_valid_build_args(tmp_path):
             "args": {"FOO": "bar", "PYTHON_VERSION": "3.13"},
         },
     }
-    result = ConfigSchema().validate(config)
+    result = _validate(config)
     assert result["build"]["args"] == {"FOO": "bar", "PYTHON_VERSION": "3.13"}
 
 
@@ -100,7 +106,7 @@ def test_valid_volumes(tmp_path):
             str(explicit_rw): "/container/rw:rw",
         },
     }
-    result = ConfigSchema().validate(config)
+    result = _validate(config)
     assert result["volumes"][str(implicit.resolve())] == VolumeSpec(
         "/container/implicit", "ro"
     )
@@ -115,7 +121,7 @@ def test_valid_volumes(tmp_path):
 def test_invalid_volume_value():
     """A volume destination with more than one colon segment is invalid."""
     with pytest.raises(SystemExit):
-        ConfigSchema().validate(
+        _validate(
             {
                 "image": "ubuntu:22.04",
                 "agent": "claude",
@@ -134,7 +140,9 @@ def test_build_dockerfile_tilde_expanded(monkeypatch, tmp_path):
         "build": {"dockerfile": "~/Dockerfile"},
         "image": "myimage",
     }
-    result = f.FilterRunner(standard_config_schema(merged=True), raw)
+    result = f.FilterRunner(
+        standard_config_schema(base_dir=Path.cwd(), merged=True), raw
+    )
     assert result.is_valid()
     assert not str(result.cleaned_data["build"]["dockerfile"]).startswith("~")
 
@@ -151,7 +159,9 @@ def test_build_context_tilde_expanded(monkeypatch, tmp_path):
         "build": {"dockerfile": "~/Dockerfile", "context": "~/myproject"},
         "image": "myimage",
     }
-    result = f.FilterRunner(standard_config_schema(merged=True), raw)
+    result = f.FilterRunner(
+        standard_config_schema(base_dir=Path.cwd(), merged=True), raw
+    )
     assert result.is_valid()
     assert not str(result.cleaned_data["build"]["context"]).startswith("~")
 
@@ -165,7 +175,9 @@ def test_build_context_none_unchanged(tmp_path):
         "build": {"dockerfile": str(dockerfile), "context": None},
         "image": "myimage",
     }
-    result = f.FilterRunner(standard_config_schema(merged=True), raw)
+    result = f.FilterRunner(
+        standard_config_schema(base_dir=Path.cwd(), merged=True), raw
+    )
     assert result.is_valid()
     assert result.cleaned_data["build"].get("context") is None
 
@@ -173,7 +185,7 @@ def test_build_context_none_unchanged(tmp_path):
 def test_standard_schema_non_merged_accepts_minimal(assert_filter_passes):
     """In per-source mode the schema accepts arbitrarily incomplete configs."""
     assert_filter_passes(
-        standard_config_schema(merged=False),
+        standard_config_schema(base_dir=Path.cwd(), merged=False),
         {"image": "ubuntu:22.04"},
         skip_value_check,
     )
@@ -181,13 +193,15 @@ def test_standard_schema_non_merged_accepts_minimal(assert_filter_passes):
 
 def test_standard_schema_non_merged_accepts_empty(assert_filter_passes):
     """Per-source mode allows an entirely empty dict — sources may contribute nothing."""
-    assert_filter_passes(standard_config_schema(merged=False), {}, skip_value_check)
+    assert_filter_passes(
+        standard_config_schema(base_dir=Path.cwd(), merged=False), {}, skip_value_check
+    )
 
 
 def test_standard_schema_merged_requires_image(assert_filter_errors):
     """In merged mode ``image`` is required."""
     assert_filter_errors(
-        standard_config_schema(merged=True),
+        standard_config_schema(base_dir=Path.cwd(), merged=True),
         {"agent": "claude"},
         {"image": [f.NotEmpty.CODE_EMPTY]},
         skip_value_check,
@@ -197,7 +211,7 @@ def test_standard_schema_merged_requires_image(assert_filter_errors):
 def test_standard_schema_merged_requires_agent(assert_filter_errors):
     """In merged mode ``agent`` is required."""
     assert_filter_errors(
-        standard_config_schema(merged=True),
+        standard_config_schema(base_dir=Path.cwd(), merged=True),
         {"image": "x"},
         {"agent": [f.NotEmpty.CODE_EMPTY]},
         skip_value_check,
@@ -207,7 +221,7 @@ def test_standard_schema_merged_requires_agent(assert_filter_errors):
 def test_standard_schema_rejects_unknown_top_level_key(assert_filter_errors):
     """Unknown top-level keys indicate a typo and should be rejected."""
     assert_filter_errors(
-        standard_config_schema(merged=False),
+        standard_config_schema(base_dir=Path.cwd(), merged=False),
         {"image": "x", "wat": "no"},
         {"wat": [f.FilterMapper.CODE_EXTRA_KEY]},
         skip_value_check,
@@ -217,7 +231,7 @@ def test_standard_schema_rejects_unknown_top_level_key(assert_filter_errors):
 def test_standard_schema_with_extra_keys_macro(assert_filter_passes):
     """``extra_keys`` allows additional top-level keys such as ``config``."""
     schema = standard_config_schema(
-        extra_keys={"config": config_meta_schema}, merged=False
+        base_dir=Path.cwd(), extra_keys={"config": config_meta_schema}, merged=False
     )
     assert_filter_passes(
         schema,
@@ -226,10 +240,10 @@ def test_standard_schema_with_extra_keys_macro(assert_filter_passes):
     )
 
 
-def test_user_config_schema_accepts_projects_and_config(assert_filter_passes):
+def test_user_config_schema_accepts_projects_and_config(assert_filter_passes, tmp_path):
     """user_config_schema accepts projects and config sections."""
     assert_filter_passes(
-        user_config_schema,
+        user_config_schema(base_dir=tmp_path),
         'image = "base:1.0"\nagent = "claude"\n'
         '[projects."/abs/path"]\nimage = "p:2"\n'
         "[config.allowlist]\nproject_toml = true\n",
@@ -237,10 +251,12 @@ def test_user_config_schema_accepts_projects_and_config(assert_filter_passes):
     )
 
 
-def test_user_config_schema_rejects_unknown_allowlist_source(assert_filter_errors):
+def test_user_config_schema_rejects_unknown_allowlist_source(
+    assert_filter_errors, tmp_path
+):
     """Unknown allowlist source keys are rejected."""
     assert_filter_errors(
-        user_config_schema,
+        user_config_schema(base_dir=tmp_path),
         'agent = "claude"\nimage = "x"\n[config.allowlist]\nfoo = true\n',
         {"config.allowlist.foo": [f.FilterMapper.CODE_EXTRA_KEY]},
         skip_value_check,
@@ -302,13 +318,16 @@ def test_every_directive_is_accepted_by_the_schema(tmp_path):
         else:
             leaf_value = "x"
         node[parts[-1]] = leaf_value
-        runner = f.FilterRunner(standard_config_schema(merged=False), config)
+        runner = f.FilterRunner(
+            standard_config_schema(base_dir=Path.cwd(), merged=False), config
+        )
         assert runner.is_valid(), (directive, runner.errors)
 
 
 def test_unknown_nested_key_is_rejected():
     """A path outside the declaration fails schema validation."""
     runner = f.FilterRunner(
-        standard_config_schema(merged=False), {"build": {"bogus": "x"}}
+        standard_config_schema(base_dir=Path.cwd(), merged=False),
+        {"build": {"bogus": "x"}},
     )
     assert not runner.is_valid()

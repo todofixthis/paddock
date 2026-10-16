@@ -28,12 +28,15 @@ class UserConfigSource(ConfigSource):
             and ``meta == {}``. If the TOML is invalid, ``instance`` is not
             valid and ``meta == {}``.
         """
-        schema = standard_config_schema(merged=False)
         path = context.user_config_path
+        schema = standard_config_schema(base_dir=context.workdir, merged=False)
         if not path.exists():
             return LoadResult(f.FilterRunner(schema, {}), {})
 
-        full = f.FilterRunner(user_config_schema, path.read_text(encoding="utf-8"))
+        full = f.FilterRunner(
+            user_config_schema(base_dir=context.workdir),
+            path.read_text(encoding="utf-8"),
+        )
         if not full.is_valid():
             return LoadResult(full, {})
 

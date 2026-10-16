@@ -45,4 +45,5 @@ class CliConfigSource(ConfigSource):
         if parsed.volumes:
             raw["volumes"] = dict(parsed.volumes)
 
-        return LoadResult(f.FilterRunner(standard_config_schema(merged=False), raw), {})
+        schema = standard_config_schema(base_dir=context.workdir, merged=False)
+        return LoadResult(f.FilterRunner(schema, raw), {})

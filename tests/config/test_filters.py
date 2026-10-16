@@ -510,3 +510,68 @@ def test_volume_map_container_home_dir(assert_filter_passes, tmp_path):
         {str(host): "~/.config:ro"},
         {str(host): VolumeSpec("/root/.config", "ro")},
     )
+
+
+def test_filepath_relative_resolves_against_base_dir(
+    assert_filter_passes, tmp_path, monkeypatch
+):
+    """A relative path joins onto base_dir rather than the cwd."""
+    base = tmp_path / "base"
+    (base / "data").mkdir(parents=True)
+    monkeypatch.chdir(tmp_path)
+    assert_filter_passes(Filepath(base_dir=base), "data", (base / "data").resolve())
+
+
+def test_filepath_relative_parent_resolves_against_base_dir(
+    assert_filter_passes, tmp_path, monkeypatch
+):
+    """``..`` in a relative path climbs from base_dir, reaching a sibling."""
+    base = tmp_path / "project"
+    base.mkdir()
+    sibling = tmp_path / "sibling"
+    sibling.mkdir()
+    monkeypatch.chdir(tmp_path)
+    assert_filter_passes(Filepath(base_dir=base), "../sibling", sibling.resolve())
+
+
+def test_filepath_absolute_ignores_base_dir(assert_filter_passes, tmp_path):
+    """An absolute path is unaffected by base_dir."""
+    target = tmp_path / "abs"
+    target.mkdir()
+    assert_filter_passes(
+        Filepath(base_dir=tmp_path / "elsewhere"), str(target), target.resolve()
+    )
+
+
+def test_filepath_tilde_ignores_base_dir(assert_filter_passes, tmp_path):
+    """A ~-relative path expands against home, not base_dir."""
+    target = tmp_path / "work"
+    target.mkdir()
+    assert_filter_passes(
+        Filepath(base_dir=tmp_path / "elsewhere"), "~/work", target.resolve()
+    )
+
+
+def test_filepath_relative_missing_under_base_dir(
+    assert_filter_errors, tmp_path, monkeypatch
+):
+    """A relative path that exists only under the cwd fails against base_dir."""
+    (tmp_path / "data").mkdir()
+    monkeypatch.chdir(tmp_path)
+    assert_filter_errors(
+        Filepath(base_dir=tmp_path / "base"),
+        "data",
+        [Filepath.CODE_DOES_NOT_EXIST],
+    )
+
+
+def test_volume_map_host_base_dir(assert_filter_passes, tmp_path, monkeypatch):
+    """Relative host paths resolve against host_base_dir."""
+    base = tmp_path / "base"
+    (base / "data").mkdir(parents=True)
+    monkeypatch.chdir(tmp_path)
+    assert_filter_passes(
+        VolumeMap(host_base_dir=base),
+        {"data": "/data"},
+        {str((base / "data").resolve()): VolumeSpec("/data", "ro")},
+    )

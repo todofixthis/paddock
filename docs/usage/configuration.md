@@ -69,15 +69,35 @@ allowlist would drop still stops the run.
 
 Path values (`build.context`, `build.dockerfile` and the host side of `volumes`) must
 exist when paddock starts. paddock expands a leading `~` to your home directory and
-follows symlinks.
+follows symlinks. A relative path resolves against the workdir, whichever source sets
+it: `.paddock/config.toml` (not `.paddock/` itself), the user file, the environment and
+the command line. A value therefore means the same thing in every source and wherever
+you run paddock from: `"data"` names `<workdir>/data`, and `"../widgets-api"` a sibling
+of the project. A `[projects."<path>"]` entry resolves against its `<path>`, the workdir
+it applies to. The workdir here is its real path, with symlinks resolved, so `..`
+climbs from a symlinked checkout's target, not the link.
+
+A relative path you set once for every project, in the global section of your user
+file, an exported `PADDOCK_*` variable or a shell alias, therefore names a different
+directory in each project, and stops any run in a project that lacks it. Use an
+absolute or `~` path for anything that lives in one place, such as a Dockerfile beside
+your user file, and put a mount only some projects have in their
+[`projects`](#projects) entries.
 
 > [!WARNING]
-> **Relative paths resolve against your shell's directory**
+> **A stale `[projects]` entry stops every run**
 >
-> paddock resolves a relative path against the directory you run paddock from, not the
-> workdir or the config file's directory. The same config then points somewhere
-> different, or nowhere, depending on where you run it from, such as when you pass
-> `--workdir`. Use absolute or `~`-relative paths.
+> paddock validates every `[projects]` entry on each run, not just the current one. An
+> entry with a path that no longer exists stops every run, whichever project you are
+> in. That is usually a relative path whose base has gone: the entry's project was
+> moved or deleted, or its key isn't a real directory, such as a typo or a `~` key. The
+> error names that entry:
+>
+> ```
+> [user:projects./home/alice/code/gone.volumes.data] Path 'data' does not exist or cannot be resolved.
+> ```
+>
+> Remove or fix the stale entry.
 
 ## Reference table
 
@@ -660,8 +680,7 @@ The directory sent to Docker as the build context, when paddock builds the image
 
 Has no effect without `build.dockerfile`. Set it when the Dockerfile `COPY`s files from
 outside its own directory; the bundled Dockerfile `COPY`s nothing, so it needs none.
-Relative paths resolve against the directory you run paddock from; see
-[Validation](#validation).
+Relative paths resolve against the workdir; see [Validation](#validation).
 
 ### `build.dockerfile`
 
@@ -712,8 +731,7 @@ dockerfile = "~/src/paddock/images/Dockerfile"
 policy = "weekly"
 ```
 
-Relative paths resolve against the directory you run paddock from; see
-[Validation](#validation).
+Relative paths resolve against the workdir; see [Validation](#validation).
 
 ### `build.policy`
 
@@ -897,8 +915,8 @@ Use it to give the agent things outside the workdir: reference data, a sibling
 repository, a credentials file.
 
 - **Host path** (the key): must exist when paddock starts. Expands a leading `~` to
-  your home directory; relative paths resolve against the directory you run paddock
-  from (see [Validation](#validation)).
+  your home directory; relative paths resolve against the workdir (see
+  [Validation](#validation)).
 - **Container path:** must be absolute. A leading `~` expands to `/root`.
 - **Mode:** `ro` (read-only, the default) or `rw`, in either case. Mount read-write only
   what the agent should be able to change on your machine.
@@ -938,13 +956,13 @@ grants it the `volumes` key.
 project_toml = ["volumes"]
 ```
 
-`~` in a committed file expands against each developer's own home directory, so
-`~`-relative paths suit a shared file best; there is no way to name a path relative to
-the project. Every developer who enables the project file needs every host path, even
-one whose grant leaves out `volumes`, or paddock stops before starting (see
-[Validation](#validation)). A mount that varies per developer, such as a sibling
-repository cloned somewhere different on each machine, belongs in each developer's own
-[`projects`](#projects) entry instead.
+Relative paths in a committed file resolve against the project, so they suit a shared
+file best: `"../widgets-api"` works for every developer who clones the two side by side.
+`~` expands against each developer's own home directory. Every developer who enables
+the project file needs every host path, even one whose grant leaves out `volumes`, or
+paddock stops before starting (see [Validation](#validation)). A mount that varies per
+developer, such as a sibling repository cloned somewhere different on each machine,
+belongs in each developer's own [`projects`](#projects) entry instead.
 
 ## Troubleshooting
 
@@ -968,8 +986,13 @@ the directive in a TOML file, or for [`build.args`](#buildargs) and
 
 **`[<source>:volumes.<host path>] Path '…' does not exist or cannot be resolved.`**
 
-A volume's host path doesn't exist, or is relative and doesn't exist from where you ran
-paddock. See [Validation](#validation).
+A volume's host path doesn't exist. A relative one is checked against the workdir, not
+where you ran paddock; see [Validation](#validation).
+
+**`[user:projects.<path>.…] Path '…' does not exist or cannot be resolved.`**
+
+A `[projects]` entry, possibly for a project other than this one, names a path that
+doesn't exist. paddock validates every entry on each run; see [Validation](#validation).
 
 **`[agent] Unknown agent "…"; installed agents: …`**
 
