@@ -601,8 +601,8 @@ source, takes no part in merging, and ignores the allowlist.
 
 A prompt needs `--` in front of it: `paddock "fix this bug"` tries to execute a command
 named `fix this bug`. Flags before `--` must be spelt in full; paddock rejects
-abbreviations and unknown flags. paddock exits with the container's exit status, Docker's when a build or pull fails, 1
-on a config error and 2 on an unknown flag.
+abbreviations and unknown flags. paddock exits with the container's exit status,
+Docker's when a build or pull fails, 1 on a config error and 2 on an unknown flag.
 
 ## Directives
 
@@ -765,11 +765,10 @@ Without `build.dockerfile`, paddock runs `docker pull <image>` when the policy s
 due, so a registry image built on a schedule stays current. It records each pull in
 `$XDG_STATE_HOME/paddock/pulls.json` (`~/.local/state/paddock/pulls.json` by default),
 and under `always`, `daily` and `weekly` counts an image it has no record of pulling as
-due. A due pull that fails, offline
-say, stops the run with Docker's error, and every run stops until a pull succeeds;
-pass `--build-policy=if-missing` to run the local copy meanwhile. A `build.dockerfile`
-from any source wins over pulling, so under a user-level one no project can pull; see
-[`build.dockerfile`](#builddockerfile).
+due. A due pull that fails, offline say, stops the run with Docker's error, and every
+run stops until a pull succeeds; pass `--build-policy=if-missing` to run the local copy
+meanwhile. A `build.dockerfile` from any source wins over pulling, so under a user-level
+one no project can pull; see [`build.dockerfile`](#builddockerfile).
 
 > [!CAUTION]
 > **A periodic policy in your user file or environment pulls every project's image**
@@ -1022,11 +1021,14 @@ Use one of the agents listed, or install the package that provides yours.
 
 No source sets [`image`](#image). Set it in your user file or pass `--image`.
 
-**`Error response from daemon: pull access denied for …` after `Pulling …`**
+**A Docker error right after `Pulling …`**
 
-[`build.policy`](#buildpolicy) is pulling an image the registry doesn't have, such as
-one you only built locally. Set `policy = "if-missing"` under that project's
-`[projects."<workdir>".build]`, or pass `--build-policy=if-missing` for one run.
+[`build.policy`](#buildpolicy) is pulling the image, and the registry refused. For an
+image that should come from a registry, check [`image`](#image) for a typo and, for a
+private one, run `docker login` (GitHub packages are private by default). For one you
+only built locally, set `policy = "if-missing"` under that project's
+`[projects."<workdir>".build]`: paddock never pulls an image that exists locally under
+that policy.
 
 **`[workdir] Path "…" does not exist or is not a directory`**
 
