@@ -600,8 +600,7 @@ def test_project_overrides_relative_paths_resolve_against_workdir(
 
 def test_other_project_entry_paths_are_not_checked(tmp_path: Path, monkeypatch):
     """A [projects] entry for another project is checked for shape only, so a
-    host path gone from disk, or a key that isn't a real directory, can't stop
-    a run elsewhere (ADR 013)."""
+    host path gone from disk can't stop a run elsewhere (ADR 013)."""
     workdir = (tmp_path / "project").resolve()
     workdir.mkdir()
     gone = tmp_path / "gone"
@@ -610,8 +609,7 @@ def test_other_project_entry_paths_are_not_checked(tmp_path: Path, monkeypatch):
         monkeypatch,
         'image = "i"\n'
         f'[projects."{gone}".volumes]\n"data" = "/data"\n"{gone}/abs" = "/abs"\n'
-        f'[projects."{gone}".build]\ndockerfile = "Dockerfile"\n'
-        '[projects."~/code/widgets".volumes]\n"data" = "/data"\n',
+        f'[projects."{gone}".build]\ndockerfile = "Dockerfile"\n',
     )
     monkeypatch.chdir(tmp_path)
     r = ConfigLoader().resolve(_empty_parsed(), workdir=workdir, environ={})
@@ -636,6 +634,33 @@ def test_other_project_entry_shape_errors_stop_the_run(tmp_path: Path, monkeypat
     assert labels == [
         f"[user:projects.{relative}.volumes.data.mode]",
         f"[user:projects.{typo}.imgae]",
+    ]
+
+
+@pytest.mark.parametrize(
+    "key",
+    [
+        "~/code/widgets",
+        "code/widgets",
+        "/code/widgets/",
+        "/code/../widgets",
+        "/code/./w",
+    ],
+)
+def test_projects_key_that_cannot_match_stops_the_run(
+    tmp_path: Path, monkeypatch, key: str
+):
+    """A [projects] key that can never equal a resolved workdir is a shape
+    error, not an entry silently ignored."""
+    workdir = (tmp_path / "project").resolve()
+    workdir.mkdir()
+    _setup_home(
+        tmp_path, monkeypatch, f'image = "i"\n[projects."{key}"]\nimage = "x"\n'
+    )
+    with pytest.raises(ExceptionGroup) as exc_info:
+        ConfigLoader().resolve(_empty_parsed(), workdir=workdir, environ={})
+    assert [str(e).split("]")[0] for e in exc_info.value.exceptions] == [
+        f"[user:projects.{key}"
     ]
 
 

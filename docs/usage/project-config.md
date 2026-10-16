@@ -65,7 +65,7 @@ In this example:
 
 A per-project rule replaces your global rule for that source rather than adding to it, so name every key the project needs.
 
-**Note:** project paths must be **absolute** and match the *resolved* workdir exactly. paddock resolves the workdir — making it absolute and following symlinks — before both the `[projects]` lookup and the mounts, so the key must be the real path, not a symlinked one. Tilde expansion (e.g. `[projects."~/code/widgets"]`) is not yet supported — follow [phx-filters#92](https://github.com/phx-nz/phx-filters/issues/92) for updates.
+**Note:** project paths must be **absolute** and match the *resolved* workdir exactly. paddock resolves the workdir — making it absolute and following symlinks — before both the `[projects]` lookup and the mounts, so the key must be the real path, not a symlinked one. Tilde expansion (e.g. `[projects."~/code/widgets"]`) is not yet supported, and paddock stops with an error naming such a key — follow [phx-filters#92](https://github.com/phx-nz/phx-filters/issues/92) for updates.
 
 ## The allowlist
 

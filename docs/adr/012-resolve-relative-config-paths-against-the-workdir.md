@@ -115,12 +115,13 @@ Concrete semantics:
 
 - **The workdir** is the resolved workdir, so `../sibling` from a symlinked checkout is
   a sibling of the real directory, matching the `[projects]` key lookup.
-- **Every `[projects]` entry** resolves against its own key: the workdir it applies
-  to. ~~It is validated whenever the user file loads, so a key that isn't absolute
-  (`~` in a key isn't expanded), which never matches a workdir, resolves its relative
-  paths against the key taken relative to the cwd (a `~` key as a directory literally
-  named `~`), and they usually fail validation.~~ Since ADR 013, only the matching
-  entry's host paths are checked.
+- ~~**Every `[projects]` entry** is validated whenever the user file loads, each against
+  its own key: the workdir it would apply to, and the current workdir for the entry
+  that matches. A key that isn't absolute (`~` in a key isn't expanded) never matches a
+  workdir, and its relative paths resolve against the key taken relative to the cwd
+  (a `~` key as a directory literally named `~`), so they usually fail validation.~~
+  Since ADR 013, only the entry that applies to the run has its host paths checked,
+  against its key, which is the workdir; a key that can never match is a shape error.
 
 ## Consequences
 
@@ -142,7 +143,7 @@ Concrete semantics:
   Spent by ADR 013, which checks paths only in the matching entry.
 - ~~A path that fails validation is reported by its raw value (`Path 'data' does not
   exist`), not the path paddock checked, so a user must know the workdir rule to see
-  where it looked.~~ The error now names the path paddock checked as well.
+  where it looked.~~ The error now names the path paddock checked as well (ADR 013).
 - Resolved paths are absolute, so the merged-config pass that re-runs the schema is
   unaffected by its base.
 - A change to how the workdir is resolved in [`__main__.py`][] changes what every

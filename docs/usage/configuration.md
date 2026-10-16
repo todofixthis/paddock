@@ -916,9 +916,10 @@ paddock uses the entry whose key equals the workdir, resolved to an absolute pat
 symlinks followed. `~` in the key isn't expanded, and an entry for a parent directory
 doesn't apply to its subdirectories. Entries outweigh the rest of your user file but
 not the environment or command line. paddock checks every entry's keys and values on
-each run, but an entry's paths only when it applies. An entry whose key matches no
-workdir, such as a `~` key or one for a project you have since moved, is ignored
-without a warning; re-key it to the project's current path.
+each run, but an entry's paths only when it applies. A key that can never match, such
+as `~/code/widgets`, a relative path or one with a trailing slash, stops every run. An
+entry for a project you have since moved is ignored without a warning; re-key it to the
+project's current path.
 
 Use it for per-project settings you don't want to commit, or a per-project
 [`config.allowlist`](#configallowlist):
@@ -1026,10 +1027,10 @@ A volume's host path doesn't exist. A relative one is checked against the workdi
 where you ran paddock; see [Validation](#validation). The path after `checked` is the
 one paddock looked for.
 
-**`[user:projects.<path>.…] …` or `[project_overrides:…] …`**
+**`[user:projects.<path>…] …` or `[project_overrides:…] …`**
 
-A `[projects]` entry has a misspelt key, a bad value or, for `project_overrides`, a path
-that doesn't exist. `project_overrides` is the entry for this workdir; a `user:projects`
+A `[projects]` entry has a misspelt key, a bad value, a key that can never match a
+workdir or, for `project_overrides`, a path that doesn't exist. `project_overrides` is the entry for this workdir; a `user:projects`
 error may come from any entry, since paddock checks every entry's keys and values on
 each run. A typo in this workdir's entry appears under both names. See
 [Validation](#validation).
