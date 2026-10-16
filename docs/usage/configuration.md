@@ -74,8 +74,8 @@ it: `.paddock/config.toml` (not `.paddock/` itself), the user file, the environm
 the command line. A value therefore means the same thing in every source and wherever
 you run paddock from: `"data"` names `<workdir>/data`, and `"../widgets-api"` a sibling
 of the project. The workdir here is its real path, with symlinks resolved, so `..`
-climbs from a symlinked checkout's target, not the link. A path error names the path
-paddock checked after the value as written.
+climbs from a symlinked checkout's target, not the link. A path error gives the value
+as written, then the path paddock checked.
 
 A relative path you set once for every project, in the global section of your user
 file, an exported `PADDOCK_*` variable or a shell alias, therefore names a different
@@ -915,8 +915,10 @@ Settings for one project, kept in your user file rather than in the project.
 paddock uses the entry whose key equals the workdir, resolved to an absolute path with
 symlinks followed. `~` in the key isn't expanded, and an entry for a parent directory
 doesn't apply to its subdirectories. Entries outweigh the rest of your user file but
-not the environment or command line. paddock checks every entry's keys and values on each run,
-but an entry's paths only when it applies.
+not the environment or command line. paddock checks every entry's keys and values on
+each run, but an entry's paths only when it applies. An entry whose key matches no
+workdir, such as a `~` key or one for a project you have since moved, is ignored
+without a warning; re-key it to the project's current path.
 
 Use it for per-project settings you don't want to commit, or a per-project
 [`config.allowlist`](#configallowlist):
@@ -1024,11 +1026,18 @@ A volume's host path doesn't exist. A relative one is checked against the workdi
 where you ran paddock; see [Validation](#validation). The path after `checked` is the
 one paddock looked for.
 
-**`[user:projects.<path>.…] …`**
+**`[user:projects.<path>.…] …` or `[project_overrides:…] …`**
 
-A `[projects]` entry, possibly for a project other than this one, has a misspelt key
-or a bad value. paddock checks every entry's keys and values on each run; see
+A `[projects]` entry has a misspelt key, a bad value or, for `project_overrides`, a path
+that doesn't exist. `project_overrides` is the entry for this workdir; a `user:projects`
+error may come from any entry, since paddock checks every entry's keys and values on
+each run. A typo in this workdir's entry appears under both names. See
 [Validation](#validation).
+
+**`[<source>:build.…] Expected a file, but '…' is a directory (…).`**
+
+`build.dockerfile` names a directory, or `build.context` a file (`Expected a directory,
+but '…' is not a directory`). The path in brackets is the one paddock checked.
 
 **`[agent] Unknown agent "…"; installed agents: …`**
 
