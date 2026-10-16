@@ -20,9 +20,8 @@ holds a relative path, since [ADR 012][] resolves those against the key.
 That ADR left this coupling to its revisit trigger "a stale `[projects]` entry for
 another project stops runs in practice". This ADR answers it.
 
-The matching entry is validated twice: by the user source, as one of the file's
-entries, and by the `project_overrides` source, which applies it. A bad path in it is
-reported under both labels.
+The matching entry is validated twice, by the user source and by `project_overrides`,
+which applies it, so a bad path in it is reported under both labels.
 
 ## Options
 
@@ -44,9 +43,7 @@ are left as written, touching nothing on disk. `project_overrides` validates the
 matching entry in full, host paths included, against the workdir.
 
 **Pros:** What is checked everywhere is what the user wrote, which doesn't change
-behind their back; what depends on disk is checked only where it applies. A bad path in
-the matching entry is reported once; a shape error in it is still reported by both
-sources.
+behind their back; what depends on disk is checked only where it applies.
 **Cons:** Shape and path checks need separate modes, which the schema must carry.
 **Risks:** A host path in another project's entry that was wrong when written surfaces
 only when that project runs. An entry keyed by a symlinked or since-moved path is
@@ -88,8 +85,9 @@ and Option 4 keeps the second as noise.
   validation. A user file that loaded cleanly can now fail, so the release notes must
   call this out.
 - A bad host path in the matching entry is reported once, as
-  `project_overrides:<key>`, rather than also as `user:projects.<path>.<key>`. Path
-  errors now name the path checked as well as the value as written.
+  `project_overrides:<key>`, rather than also as `user:projects.<path>.<key>`; a shape
+  error in it is still reported by both sources. Path errors now name the path
+  checked as well as the value as written.
 - Shape-only output keeps host paths relative, so it must never reach the merge; the
   user source strips `[projects]` before it does. A new host-path directive must go
   through the same switch as the existing ones, or it touches disk for every entry.
