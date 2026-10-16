@@ -91,9 +91,9 @@ tag on its own; a regex manager reads the `# renovate:` comment above each `ARG`
 }
 ```
 
-Merging a bump changes your Dockerfile, not your image: pull the change, then run
-`--build-policy=always` once, as after any Dockerfile edit. apt packages are impractical
-to pin this way; the next fix covers them.
+Merging a bump changes your Dockerfile, not your image: pull the change, then run paddock
+with `--build-policy=always` once, as after any Dockerfile edit. apt packages are
+impractical to pin this way; the next fix covers them.
 
 ### Build on a schedule in CI
 
