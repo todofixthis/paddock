@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 import subprocess
 import tempfile
@@ -9,6 +10,8 @@ from pathlib import Path
 import filters as f
 
 from paddock.docker.build import BuildPolicy
+
+logger = logging.getLogger("paddock")
 
 # Stands in for the last-pull time of an image present locally that paddock has
 # no record of pulling, so every periodic policy reads it as due.
@@ -105,7 +108,8 @@ class ImagePuller:
         Pull the image if the build policy requires it.
 
         Raises ``subprocess.CalledProcessError`` when a due pull fails, leaving
-        the log untouched, so the next run is still due.
+        the log untouched, so the next run is still due. A log that can't be
+        written only warns.
 
         Args:
             policy: The configured build policy.
@@ -120,7 +124,11 @@ class ImagePuller:
         if not policy.is_due(last_at):
             return False
         subprocess.run(["docker", "pull", image], check=True)
-        self.log.record(image, datetime.now(timezone.utc))
+        # An unwritable log costs a redundant pull next time, not this run.
+        try:
+            self.log.record(image, datetime.now(timezone.utc))
+        except OSError as e:
+            logger.warning("Couldn't record the pull in %s: %s", self.log.path, e)
         return True
 
     def image_exists(self, image: str) -> bool:

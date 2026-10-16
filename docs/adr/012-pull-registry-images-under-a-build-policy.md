@@ -42,7 +42,8 @@ Checked against Docker 29.8 on 2026-10-16:
 
 paddock records each successful pull's time in `$XDG_STATE_HOME/paddock/pulls.json`,
 keyed by image reference as configured, and pulls when the image is missing locally or
-the policy says the last pull is too old.
+the policy says the last pull is too old. An image present with no record counts as
+pulled long ago, so the periodic policies pull it at once.
 
 **Pros:** Works the same on every image store. A run that isn't due costs a local
 `docker image inspect`; a due pull that finds nothing new, one registry round trip.
@@ -80,10 +81,12 @@ Pulling is what a `build` table without a Dockerfile means, rather than somethin
 separate key opts into. Every such config is an error today, so no working config changes
 meaning, and a key would only add a way to set a policy that does nothing. A user wanting
 pulling in one project only sets the policy under that project's
-`[projects."<workdir>".build]` rather than in the user-level `[build]`. A Dockerfile,
+`[projects."<workdir>".build]` rather than in the user-level `[build]` or an exported
+`PADDOCK_BUILD_POLICY`, which outweighs every file. A Dockerfile,
 where one is set, still wins.
 
-A due pull that fails stops paddock with Docker's error, matching `docker run --pull`,
+A due pull that fails stops paddock with Docker's error and `docker pull`'s exit status,
+matching `docker run --pull`,
 rather than running the local copy with a warning, since that copy may be the stale image
 the policy exists to replace. `--build-policy=if-missing` runs the local copy for that
 run.
@@ -92,13 +95,16 @@ run.
 
 - `build.dockerfile` is optional. `build.args` and `build.context` are ignored when
   pulling, so a user-level `args` doesn't break a project whose image is pulled. A
-  `build` table with neither a Dockerfile nor a policy pulls under the default
-  `if-missing`, as `docker run` would anyway.
+  `build` table holding only those pulls under the default `if-missing`, as `docker run`
+  would anyway.
 - A user-level policy pulls every project's `image` that has no Dockerfile, including a
-  tag only ever built locally. Its pull fails on every due run, or, where the name exists
-  on a registry the user doesn't control, replaces the local build with that image. The
-  user docs must say so, and that `[projects."<workdir>".build] policy = "if-missing"`
-  opts a project out. A `.paddock/config.toml` can't: it weighs less than the user file.
+  tag only ever built locally. Having no record, it is due at once, and a failed pull
+  records nothing, so every run fails; where the name exists on a registry the user
+  doesn't control, the pull instead replaces the local build with that image. The user
+  docs must say so, and that `[projects."<workdir>".build] policy = "if-missing"` opts a
+  project out of a user-file policy. A `.paddock/config.toml` can't: it weighs less than
+  the user file. Nothing but `--build-policy` opts out of an exported
+  `PADDOCK_BUILD_POLICY`.
 - A user-level `build.dockerfile` makes every project build, so no project can pull,
   since no source can unset a lower one's Dockerfile.
 - `if-missing` pulls before `docker run` would, so the pull's output and any failure
@@ -107,7 +113,8 @@ run.
   `docker.io/library/ubuntu:latest` are timed separately. It follows the user config's
   XDG rules: an unset, empty or relative `XDG_STATE_HOME` falls back to `~/.local/state`.
   It is written atomically (a temporary file renamed over it), so concurrent runs can
-  lose each other's entry, costing a pull, but never corrupt it, and a corrupt or
-  unreadable file reads as empty.
+  lose each other's entry, costing a pull, but never corrupt it. A corrupt or unreadable
+  file reads as empty, and a failed write warns and lets the run go on, each costing a
+  redundant pull.
 
 [ADR 011]: 011-track-build-time-in-an-image-label.md

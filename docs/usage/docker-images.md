@@ -139,14 +139,18 @@ jobs:
 ```
 
 Docker pulls the image only when no local copy exists. To pick up new builds, set
-[`build.policy`](configuration.md#buildpolicy) to match the schedule, and paddock pulls
-the image when the policy says it's due:
+[`build.policy`](configuration.md#buildpolicy) to `daily`, and paddock pulls the image
+once it's due. Age counts from paddock's last pull, not from the CI build, so `weekly`
+against a weekly build can run an image up to two weeks old; a pull that finds nothing
+new costs one registry round trip. Set it beside the `image` it pulls, as here, since a
+policy in your user file pulls every project's image:
 
 ```toml
+[projects."/home/alice/code/widgets"]
 image = "ghcr.io/your-name/your-image:latest"
 
-[build]
-policy = "weekly"
+[projects."/home/alice/code/widgets".build]
+policy = "daily"
 ```
 
 GitHub makes a package pushed this way private, so the pull needs `docker login ghcr.io`

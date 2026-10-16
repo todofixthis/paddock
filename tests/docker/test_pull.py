@@ -161,3 +161,12 @@ def test_failed_pull_raises_and_leaves_record(mocker, tmp_path):
     with pytest.raises(subprocess.CalledProcessError):
         ImagePuller(log).maybe_pull(policy=BuildPolicy.DAILY, image=IMAGE)
     assert log.last_pulled_at(IMAGE) == before
+
+
+def test_unwritable_log_warns_after_pull(mocker, tmp_path, caplog):
+    _stub_docker(mocker, present=True)
+    blocker = tmp_path / "state"
+    blocker.write_text("a file where the log's directory should be")
+    log = PullLog(blocker / "pulls.json")
+    assert ImagePuller(log).maybe_pull(policy=BuildPolicy.DAILY, image=IMAGE)
+    assert "Couldn't record the pull" in caplog.text

@@ -601,8 +601,8 @@ source, takes no part in merging, and ignores the allowlist.
 
 A prompt needs `--` in front of it: `paddock "fix this bug"` tries to execute a command
 named `fix this bug`. Flags before `--` must be spelt in full; paddock rejects
-abbreviations and unknown flags. paddock exits with the container's exit status, 1 on a
-config error and 2 on an unknown flag.
+abbreviations and unknown flags. paddock exits with the container's exit status, Docker's when a build or pull fails, 1
+on a config error and 2 on an unknown flag.
 
 ## Directives
 
@@ -715,7 +715,8 @@ docker build -t <image> -f <build.dockerfile> [--build-arg …] <build.context>
 > `[projects."<workdir>".build]` and `docker pull` the image before its first run:
 > paddock never rebuilds an image that exists locally under that policy.
 
-[`build.args`](#buildargs) and [`build.context`](#buildcontext) need this one.
+[`build.args`](#buildargs) and [`build.context`](#buildcontext) have no effect without
+this one.
 
 To start from the bundled Dockerfile, copy it from
 [`images/`](https://github.com/todofixthis/paddock/tree/main/images). For what any
@@ -764,18 +765,22 @@ Without `build.dockerfile`, paddock runs `docker pull <image>` when the policy s
 due, so a registry image built on a schedule stays current. It records each pull in
 `$XDG_STATE_HOME/paddock/pulls.json` (`~/.local/state/paddock/pulls.json` by default),
 and counts an image it has no record of pulling as due. A due pull that fails, offline
-say, stops the run with Docker's error; `--build-policy=if-missing` runs the local copy
-instead.
+say, stops the run with Docker's error, and every run stops until a pull succeeds;
+pass `--build-policy=if-missing` to run the local copy meanwhile. A `build.dockerfile`
+from any source wins over pulling, so under a user-level one no project can pull; see
+[`build.dockerfile`](#builddockerfile).
 
 > [!CAUTION]
-> **A policy in your user file pulls every project's image**
+> **A policy in your user file or environment pulls every project's image**
 >
 > Every project whose `image` has no Dockerfile gets pulled, including a tag you only
-> ever built locally. Its pull fails whenever it's due, or, where a registry you don't
-> control has an image of that name, replaces yours with that image. Fully qualify the
-> images you pull (`ghcr.io/your-name/your-image:latest`), and opt a project out with
-> `policy = "if-missing"` under its `[projects."<workdir>".build]`. A
-> `.paddock/config.toml` can't opt out: the user file outweighs it.
+> ever built locally. With no record of pulling it, paddock tries at once, and a failed
+> pull records nothing, so every run stops; where a registry you don't control has an
+> image of that name, the pull instead replaces yours with it. Fully qualify the
+> images you pull (`ghcr.io/your-name/your-image:latest`), and opt a project out of a
+> user-file policy with `policy = "if-missing"` under its `[projects."<workdir>".build]`.
+> A `.paddock/config.toml` can't opt out, and nothing but `--build-policy` overrides an
+> exported `PADDOCK_BUILD_POLICY`.
 
 ### `config.allowlist`
 
@@ -1015,11 +1020,6 @@ Use one of the agents listed, or install the package that provides yours.
 **`[final:image] Non-empty value expected.`**
 
 No source sets [`image`](#image). Set it in your user file or pass `--image`.
-
-**`[final:build.dockerfile] Non-empty value expected.`**
-
-A source sets a `build` directive but none sets
-[`build.dockerfile`](#builddockerfile).
 
 **`[workdir] Path "…" does not exist or is not a directory`**
 
