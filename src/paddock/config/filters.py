@@ -90,9 +90,13 @@ class Filepath(BaseFilter):
     CODE_NOT_A_DIRECTORY = "not_a_directory"
 
     templates = {
-        CODE_DOES_NOT_EXIST: "Path {value!r} does not exist or cannot be resolved.",
-        CODE_IS_A_DIRECTORY: "Expected a file, but {value!r} is a directory.",
-        CODE_NOT_A_DIRECTORY: "Expected a directory, but {value!r} is not a directory.",
+        CODE_DOES_NOT_EXIST: (
+            "Path {value!r} does not exist or cannot be resolved (checked {path})."
+        ),
+        CODE_IS_A_DIRECTORY: "Expected a file, but {value!r} is a directory ({path}).",
+        CODE_NOT_A_DIRECTORY: (
+            "Expected a directory, but {value!r} is not a directory ({path})."
+        ),
     }
 
     def __init__(
@@ -131,18 +135,26 @@ class Filepath(BaseFilter):
             try:
                 path = path.resolve(strict=self._must_exist)
             except OSError:
-                return self._invalid_value(value, self.CODE_DOES_NOT_EXIST)
+                return self._invalid_path(value, path, self.CODE_DOES_NOT_EXIST)
         elif self._must_exist:
             if not path.exists():
-                return self._invalid_value(value, self.CODE_DOES_NOT_EXIST)
+                return self._invalid_path(value, path, self.CODE_DOES_NOT_EXIST)
 
         if self._is_dir is not None and path.exists():
             if self._is_dir and not path.is_dir():
-                return self._invalid_value(value, self.CODE_NOT_A_DIRECTORY)
+                return self._invalid_path(value, path, self.CODE_NOT_A_DIRECTORY)
             if not self._is_dir and path.is_dir():
-                return self._invalid_value(value, self.CODE_IS_A_DIRECTORY)
+                return self._invalid_path(value, path, self.CODE_IS_A_DIRECTORY)
 
         return path
+
+    def _invalid_path(self, value: str | Path, path: Path, reason: str):
+        """Records ``reason`` against ``value``, naming the path checked.
+
+        A relative value is checked against ``base_dir``, so the message names
+        the path paddock looked at as well as the value as written.
+        """
+        return self._invalid_value(value, reason, template_vars={"path": path})
 
 
 class VolumeSpec(NamedTuple):
@@ -202,8 +214,9 @@ class VolumeMap(BaseFilter):
 
     Keys (host paths) are validated through ``f.Unicode | Filepath`` —
     tilde-expanded using ``Path.home()``, anchored to ``host_base_dir`` when
-    relative, resolved, and checked for existence. Values (container path
-    specs) are validated through ``Volume``.
+    relative, resolved, and checked for existence, unless
+    ``check_host_paths`` is ``False``. Values (container path specs) are
+    validated through ``Volume``.
 
     Returns a ``dict[str, VolumeSpec]`` mapping resolved host-path strings
     to container path specs.
@@ -215,6 +228,12 @@ class VolumeMap(BaseFilter):
             specs. When ``None`` (default), container paths are validated
             for format only without tilde expansion.
 
+        check_host_paths:
+
+            When ``False``, host paths are only checked to be strings and are
+            kept as written: nothing is anchored, resolved or looked up on
+            disk (ADR 013).
+
         host_base_dir:
 
             Directory relative host paths resolve against. When ``None``
@@ -223,6 +242,7 @@ class VolumeMap(BaseFilter):
 
     def __init__(
         self,
+        check_host_paths: bool = True,
         container_home_dir: str | Path | None = None,
         host_base_dir: str | Path | None = None,
     ):
@@ -230,7 +250,9 @@ class VolumeMap(BaseFilter):
         self._container_home_dir = (
             Path(container_home_dir) if container_home_dir is not None else None
         )
-        self._host_base_dir = host_base_dir
+        self._host_path = f.Unicode | (
+            Filepath(base_dir=host_base_dir) if check_host_paths else f.NoOp
+        )
 
     def _apply(self, value):
         value = cast(dict, self._filter(value, f.Type(dict)))
@@ -241,12 +263,8 @@ class VolumeMap(BaseFilter):
         for raw_host, raw_container in value.items():
             sub_key = str(raw_host)
             host_path = cast(
-                Path | None,
-                self._filter(
-                    raw_host,
-                    f.Unicode | Filepath(base_dir=self._host_base_dir),
-                    sub_key=sub_key,
-                ),
+                Path | str | None,
+                self._filter(raw_host, self._host_path, sub_key=sub_key),
             )
             container_spec = cast(
                 VolumeSpec | None,

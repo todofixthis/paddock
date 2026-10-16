@@ -565,6 +565,33 @@ def test_filepath_relative_missing_under_base_dir(
     )
 
 
+def test_filepath_error_names_checked_path(tmp_path):
+    """The error names the path checked as well as the value as written."""
+    runner = f.FilterRunner(Filepath(base_dir=tmp_path), "data")
+    assert runner.errors[""][0]["message"] == (
+        f"Path 'data' does not exist or cannot be resolved (checked {tmp_path / 'data'})."
+    )
+
+
+def test_filepath_is_dir_error_names_checked_path(tmp_path):
+    """An is_dir mismatch names the resolved path as well as the value."""
+    (tmp_path / "data").mkdir()
+    runner = f.FilterRunner(Filepath(base_dir=tmp_path, is_dir=False), "data")
+    assert runner.errors[""][0]["message"] == (
+        f"Expected a file, but 'data' is a directory ({(tmp_path / 'data').resolve()})."
+    )
+
+
+def test_volume_map_unchecked_host_paths(assert_filter_passes, tmp_path):
+    """With check_host_paths=False, host paths are kept as written and
+    nothing is looked up on disk."""
+    assert_filter_passes(
+        VolumeMap(check_host_paths=False, host_base_dir=tmp_path),
+        {"missing": "/data", "~/gone": "/gone:rw"},
+        {"missing": VolumeSpec("/data", "ro"), "~/gone": VolumeSpec("/gone", "rw")},
+    )
+
+
 def test_volume_map_host_base_dir(assert_filter_passes, tmp_path, monkeypatch):
     """Relative host paths resolve against host_base_dir."""
     base = tmp_path / "base"

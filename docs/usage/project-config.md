@@ -183,7 +183,7 @@ The project file (`<workdir>/.paddock/config.toml`) does not parse. It aborts th
 
 The project file sets `[config]` (or `projects`), which only your user config may set. A committed file cannot grant itself access.
 
-**`[project_toml:volumes.<path>] Path '<path>' does not exist or cannot be resolved.`**
+**`[project_toml:volumes.<path>] Path '<path>' does not exist or cannot be resolved (checked …).`**
 
 A host path in the project file doesn't exist on this machine. A relative path resolves against the workdir, not `.paddock/`; see [Validation](configuration.md#validation).
 

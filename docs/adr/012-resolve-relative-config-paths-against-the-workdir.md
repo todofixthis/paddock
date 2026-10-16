@@ -3,7 +3,8 @@ status: Accepted
 date: 2026-10-13
 scope: [src/paddock/__main__.py, src/paddock/config/filters.py, src/paddock/config/loader.py, src/paddock/config/schema.py, src/paddock/config/sources/, docs/usage/]
 summary: Resolve a relative host path in config against the workdir, whichever source sets it (each [projects] entry against its own key, the workdir it applies to), passed explicitly by every source; not against the process cwd, and not against a different base per source.
-revisit-when: Global relative paths prove unworkable because they are missing in some projects, such as users asking for mounts skipped when absent; a stale [projects] entry for another project stops runs in practice; users need env or CLI paths to follow the shell's cwd when it differs from the workdir; project config discovery lets the project file's directory diverge from the workdir.
+revisit-when: Global relative paths prove unworkable because they are missing in some projects, such as users asking for mounts skipped when absent; users need env or CLI paths to follow the shell's cwd when it differs from the workdir; project config discovery lets the project file's directory diverge from the workdir.
+revisit-discharged-by: [13]
 ---
 
 # 012: Resolve Relative Config Paths Against the Workdir
@@ -114,11 +115,12 @@ Concrete semantics:
 
 - **The workdir** is the resolved workdir, so `../sibling` from a symlinked checkout is
   a sibling of the real directory, matching the `[projects]` key lookup.
-- **Every `[projects]` entry** is validated whenever the user file loads, each against
-  its own key: the workdir it would apply to, and the current workdir for the entry
-  that matches. A key that isn't absolute (`~` in a key isn't expanded) never matches a
-  workdir, and its relative paths resolve against the key taken relative to the cwd
-  (a `~` key as a directory literally named `~`), so they usually fail validation.
+- **Every `[projects]` entry** resolves against its own key: the workdir it applies
+  to. ~~It is validated whenever the user file loads, so a key that isn't absolute
+  (`~` in a key isn't expanded), which never matches a workdir, resolves its relative
+  paths against the key taken relative to the cwd (a `~` key as a directory literally
+  named `~`), and they usually fail validation.~~ Since ADR 013, only the matching
+  entry's host paths are checked.
 
 ## Consequences
 
@@ -133,13 +135,14 @@ Concrete semantics:
   must call this out.
 - Relative paths in other projects' `[projects]` entries resolve against their own key
   rather than the cwd, so they stop failing in projects that happen not to hold them.
-  Such an entry still fails validation — and stops paddock in every project — once its
+  ~~Such an entry still fails validation — and stops paddock in every project — once its
   own project is moved, deleted or unmounted, as absolute paths in other projects'
   entries always did. Checking paths only in the entry that matches the workdir would
-  remove that coupling; it predates this decision and is left to the revisit trigger.
-- A path that fails validation is reported by its raw value (`Path 'data' does not
+  remove that coupling; it predates this decision and is left to the revisit trigger.~~
+  Spent by ADR 013, which checks paths only in the matching entry.
+- ~~A path that fails validation is reported by its raw value (`Path 'data' does not
   exist`), not the path paddock checked, so a user must know the workdir rule to see
-  where it looked.
+  where it looked.~~ The error now names the path paddock checked as well.
 - Resolved paths are absolute, so the merged-config pass that re-runs the schema is
   unaffected by its base.
 - A change to how the workdir is resolved in [`__main__.py`][] changes what every

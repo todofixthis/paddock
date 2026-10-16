@@ -598,21 +598,63 @@ def test_project_overrides_relative_paths_resolve_against_workdir(
     assert set(r.config["volumes"]) == {str(workdir / "data")}
 
 
-def test_other_project_entry_validates_against_its_own_key(tmp_path: Path, monkeypatch):
-    """A [projects] entry for another project resolves against its own key, so
-    it neither fails nor borrows the current workdir's paths."""
-    other = (tmp_path / "other").resolve()
-    (other / "data").mkdir(parents=True)
+def test_other_project_entry_paths_are_not_checked(tmp_path: Path, monkeypatch):
+    """A [projects] entry for another project is checked for shape only, so a
+    host path gone from disk, or a key that isn't a real directory, can't stop
+    a run elsewhere (ADR 013)."""
+    workdir = (tmp_path / "project").resolve()
+    workdir.mkdir()
+    gone = tmp_path / "gone"
+    _setup_home(
+        tmp_path,
+        monkeypatch,
+        'image = "i"\n'
+        f'[projects."{gone}".volumes]\n"data" = "/data"\n"{gone}/abs" = "/abs"\n'
+        f'[projects."{gone}".build]\ndockerfile = "Dockerfile"\n'
+        '[projects."~/code/widgets".volumes]\n"data" = "/data"\n',
+    )
+    monkeypatch.chdir(tmp_path)
+    r = ConfigLoader().resolve(_empty_parsed(), workdir=workdir, environ={})
+    assert "volumes" not in r.config
+
+
+def test_other_project_entry_shape_errors_stop_the_run(tmp_path: Path, monkeypatch):
+    """Shape errors in another project's entry are still reported on every run."""
+    workdir = (tmp_path / "project").resolve()
+    workdir.mkdir()
+    typo = tmp_path / "typo"
+    relative = tmp_path / "relative"
+    _setup_home(
+        tmp_path,
+        monkeypatch,
+        f'image = "i"\n[projects."{typo}"]\nimgae = "x"\n'
+        f'[projects."{relative}".volumes]\n"data" = "/data:xx"\n',
+    )
+    with pytest.raises(ExceptionGroup) as exc_info:
+        ConfigLoader().resolve(_empty_parsed(), workdir=workdir, environ={})
+    labels = sorted(str(e).split("]")[0] + "]" for e in exc_info.value.exceptions)
+    assert labels == [
+        f"[user:projects.{relative}.volumes.data.mode]",
+        f"[user:projects.{typo}.imgae]",
+    ]
+
+
+def test_matching_entry_missing_path_reported_once(tmp_path: Path, monkeypatch):
+    """A missing host path in the matching entry is reported by
+    project_overrides alone, naming the path checked."""
     workdir = (tmp_path / "project").resolve()
     workdir.mkdir()
     _setup_home(
         tmp_path,
         monkeypatch,
-        f'image = "i"\n[projects."{other}".volumes]\n"data" = "/data"\n',
+        f'image = "i"\n[projects."{workdir}".volumes]\n"data" = "/data"\n',
     )
-    monkeypatch.chdir(tmp_path)
-    r = ConfigLoader().resolve(_empty_parsed(), workdir=workdir, environ={})
-    assert "volumes" not in r.config
+    with pytest.raises(ExceptionGroup) as exc_info:
+        ConfigLoader().resolve(_empty_parsed(), workdir=workdir, environ={})
+    assert [str(e) for e in exc_info.value.exceptions] == [
+        "[project_overrides:volumes.data] Path 'data' does not exist or cannot"
+        f" be resolved (checked {workdir / 'data'})."
+    ]
 
 
 def test_cli_and_env_relative_paths_resolve_against_workdir(

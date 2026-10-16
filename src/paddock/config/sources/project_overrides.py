@@ -34,7 +34,7 @@ class ProjectOverridesSource(ConfigSource):
         chain = (
             f.TomlDecode
             | ExtractProject(project=project)
-            | project_entry_schema(project)
+            | project_entry_schema(Path(project))
         )
         full = f.FilterRunner(chain, path.read_text(encoding="utf-8"))
         if not full.is_valid():
