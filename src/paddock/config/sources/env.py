@@ -22,7 +22,7 @@ def _env_schema(base_dir: Path):
 
     Args:
         base_dir: Directory relative paths resolve against: the workdir, as
-            for every source (ADR 011).
+            for every source (ADR 012).
     """
     return f.FilterMapper(
         {

@@ -85,7 +85,7 @@ def standard_config_schema(
     Args:
         base_dir: Directory relative host paths (``build.context``,
             ``build.dockerfile``, ``volumes`` keys) resolve against: the
-            workdir the config applies to (ADR 011). Required, so a new
+            workdir the config applies to (ADR 012). Required, so a new
             source can't fall back to the cwd by omission.
         extra_keys: Optional mapping of additional top-level keys to allow
             (e.g. ``{"config": config_meta_schema}``).
@@ -139,7 +139,7 @@ def project_entry_schema(project: str | Path):
 
     Allows ``[config]`` as well as the standard config fields. Relative host
     paths resolve against ``project``, the directory the entry configures
-    (ADR 011).
+    (ADR 012).
 
     Args:
         project: The entry's project path, i.e. its key under ``[projects]``.
@@ -176,7 +176,7 @@ def user_config_schema(base_dir: Path):
 
     Args:
         base_dir: Directory relative host paths in the file's global section
-            resolve against: the workdir (ADR 011). Each ``[projects]`` entry
+            resolve against: the workdir (ADR 012). Each ``[projects]`` entry
             resolves against its own key instead, the workdir it applies to.
     """
     return f.TomlDecode | f.FilterMapper(
@@ -203,7 +203,7 @@ class ConfigSchema:
         Args:
             config: The raw config mapping to validate.
             base_dir: The workdir relative host paths resolve against
-                (ADR 011). Required, as for ``standard_config_schema``.
+                (ADR 012). Required, as for ``standard_config_schema``.
 
         Returns:
             The cleaned and normalised config dict.

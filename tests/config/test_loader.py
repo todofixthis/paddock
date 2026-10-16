@@ -476,7 +476,7 @@ def test_dropped_nested_key_warns_with_its_dotted_path(
     _setup_home(
         tmp_path,
         monkeypatch,
-        'agent = "claude"\n' '[config.allowlist]\nproject_toml = ["image"]\n',
+        'agent = "claude"\n[config.allowlist]\nproject_toml = ["image"]\n',
     )
     dockerfile = tmp_path / "Dockerfile"
     dockerfile.write_text("FROM ubuntu:22.04\n")

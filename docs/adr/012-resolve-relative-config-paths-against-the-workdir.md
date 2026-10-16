@@ -6,7 +6,7 @@ summary: Resolve a relative host path in config against the workdir, whichever s
 revisit-when: Global relative paths prove unworkable because they are missing in some projects, such as users asking for mounts skipped when absent; a stale [projects] entry for another project stops runs in practice; users need env or CLI paths to follow the shell's cwd when it differs from the workdir; project config discovery lets the project file's directory diverge from the workdir.
 ---
 
-# 011: Resolve Relative Config Paths Against the Workdir
+# 012: Resolve Relative Config Paths Against the Workdir
 
 ## Context
 
@@ -27,6 +27,8 @@ paddock merges five sources by precedence. What keeps that tractable is that a
 directive's value means the same thing whichever source sets it. The user file holds
 global configuration, so it can't simply be treated like a project-level file, even
 though both are TOML.
+
+Drafted as ADR 011 and renumbered to 012 when an ADR merged first under that number.
 
 ## Options
 

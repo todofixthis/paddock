@@ -57,7 +57,7 @@ class Filepath(BaseFilter):
         base_dir:
 
             Directory a relative path is joined onto, after ``~`` expansion
-            (ADR 011). When ``None``, a relative path stays relative, so
+            (ADR 012). When ``None``, a relative path stays relative, so
             ``.resolve()`` anchors it to the process cwd.
 
         home_dir:
