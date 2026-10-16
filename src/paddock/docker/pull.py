@@ -81,7 +81,11 @@ class PullLog:
             "w", dir=self.path.parent, delete=False, suffix=".tmp"
         ) as tmp:
             json.dump(entries, tmp, indent=2, sort_keys=True)
-        os.replace(tmp.name, self.path)
+        try:
+            os.replace(tmp.name, self.path)
+        except OSError:
+            os.unlink(tmp.name)
+            raise
 
     def _read(self) -> dict[str, str]:
         """
@@ -123,6 +127,7 @@ class ImagePuller:
             last_at = self.log.last_pulled_at(image) or NEVER_PULLED
         if not policy.is_due(last_at):
             return False
+        logger.info("Pulling %s (build.policy = %s)", image, policy)
         subprocess.run(["docker", "pull", image], check=True)
         # An unwritable log costs a redundant pull next time, not this run.
         try:

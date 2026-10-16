@@ -94,11 +94,13 @@ def test_log_treats_corrupt_file_as_empty(tmp_path, contents):
     assert log.last_pulled_at(IMAGE) is not None
 
 
-def test_maybe_pull_daily_pulls_stale_image(mocker, tmp_path):
+def test_maybe_pull_daily_pulls_stale_image(mocker, tmp_path, caplog):
+    caplog.set_level("INFO", logger="paddock")
     mock_run = _stub_docker(mocker, present=True)
     log = _log(tmp_path, pulled_ago=timedelta(hours=25))
     assert ImagePuller(log).maybe_pull(policy=BuildPolicy.DAILY, image=IMAGE)
     assert _pulled(mock_run)
+    assert f"Pulling {IMAGE} (build.policy = daily)" in caplog.text
     pulled_at = log.last_pulled_at(IMAGE)
     assert pulled_at is not None
     assert datetime.now(timezone.utc) - pulled_at < timedelta(minutes=1)

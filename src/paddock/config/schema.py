@@ -36,7 +36,7 @@ class DropEmpty(BaseFilter):
         return out
 
 
-def _build_schema(merged: bool, base_dir: Path):
+def _build_schema(base_dir: Path):
     """Build-section schema; every field is optional.
 
     A ``policy`` without a ``dockerfile`` pulls the image instead of building
@@ -67,7 +67,7 @@ def _standard_fields(merged: bool, base_dir: Path) -> dict[str, object]:
     """
     return {
         "agent": f.NotEmpty(allow_none=not merged) | Agent,
-        "build": _build_schema(merged, base_dir),
+        "build": _build_schema(base_dir),
         "image": f.NotEmpty(allow_none=not merged) | f.Unicode,
         "network": f.Unicode,
         "volumes": (

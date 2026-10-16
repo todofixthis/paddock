@@ -97,14 +97,14 @@ run.
   pulling, so a user-level `args` doesn't break a project whose image is pulled. A
   `build` table holding only those pulls under the default `if-missing`, as `docker run`
   would anyway.
-- A user-level policy pulls every project's `image` that has no Dockerfile, including a
-  tag only ever built locally. Having no record, it is due at once, and a failed pull
-  records nothing, so every run fails; where the name exists on a registry the user
-  doesn't control, the pull instead replaces the local build with that image. The user
-  docs must say so, and that `[projects."<workdir>".build] policy = "if-missing"` opts a
-  project out of a user-file policy. A `.paddock/config.toml` can't: it weighs less than
-  the user file. Nothing but `--build-policy` opts out of an exported
-  `PADDOCK_BUILD_POLICY`.
+- A user-level periodic policy pulls every project's `image` without a Dockerfile,
+  including a tag only ever built locally. Unrecorded, that tag is due at once, and a
+  failed pull records nothing, so every run fails; where a registry the user doesn't
+  control has the name, the pull instead replaces the local build. The user docs must say
+  so, and how to opt out: `[projects."<workdir>".build] policy = "if-missing"` against
+  the user file (a `.paddock/config.toml` weighs too little), and only `--build-policy`
+  against an exported `PADDOCK_BUILD_POLICY`. paddock logs each pull before it starts,
+  so a failure points back to the policy.
 - A user-level `build.dockerfile` makes every project build, so no project can pull,
   since no source can unset a lower one's Dockerfile.
 - `if-missing` pulls before `docker run` would, so the pull's output and any failure

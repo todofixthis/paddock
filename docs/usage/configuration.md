@@ -764,14 +764,15 @@ included; see [stale installs](docker-images.md#stale-installs) for the fixes.
 Without `build.dockerfile`, paddock runs `docker pull <image>` when the policy says it's
 due, so a registry image built on a schedule stays current. It records each pull in
 `$XDG_STATE_HOME/paddock/pulls.json` (`~/.local/state/paddock/pulls.json` by default),
-and counts an image it has no record of pulling as due. A due pull that fails, offline
+and under `always`, `daily` and `weekly` counts an image it has no record of pulling as
+due. A due pull that fails, offline
 say, stops the run with Docker's error, and every run stops until a pull succeeds;
 pass `--build-policy=if-missing` to run the local copy meanwhile. A `build.dockerfile`
 from any source wins over pulling, so under a user-level one no project can pull; see
 [`build.dockerfile`](#builddockerfile).
 
 > [!CAUTION]
-> **A policy in your user file or environment pulls every project's image**
+> **A periodic policy in your user file or environment pulls every project's image**
 >
 > Every project whose `image` has no Dockerfile gets pulled, including a tag you only
 > ever built locally. With no record of pulling it, paddock tries at once, and a failed
@@ -1020,6 +1021,12 @@ Use one of the agents listed, or install the package that provides yours.
 **`[final:image] Non-empty value expected.`**
 
 No source sets [`image`](#image). Set it in your user file or pass `--image`.
+
+**`Error response from daemon: pull access denied for …` after `Pulling …`**
+
+[`build.policy`](#buildpolicy) is pulling an image the registry doesn't have, such as
+one you only built locally. Set `policy = "if-missing"` under that project's
+`[projects."<workdir>".build]`, or pass `--build-policy=if-missing` for one run.
 
 **`[workdir] Path "…" does not exist or is not a directory`**
 
