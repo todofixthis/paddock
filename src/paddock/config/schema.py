@@ -189,8 +189,8 @@ class ProjectMap(BaseFilter):
     applies to this run in full.
 
     Args:
-        base_dir: Passed through to the entry schema; unused, since host
-            paths aren't checked.
+        base_dir: The base the entry schema requires. Host paths aren't
+            checked here, so it doesn't affect the result.
     """
 
     CODE_NOT_A_WORKDIR = "not_a_workdir"
@@ -198,7 +198,8 @@ class ProjectMap(BaseFilter):
     templates = {
         CODE_NOT_A_WORKDIR: (
             "Project key {value!r} can never match a workdir: use an absolute "
-            "path with no '~', '..', '.' or trailing slash."
+            "path with no '~', '.' or '..' segments and no doubled or trailing "
+            "slash."
         ),
     }
 

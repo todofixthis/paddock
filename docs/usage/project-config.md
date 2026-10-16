@@ -193,7 +193,7 @@ A file named `.paddock` exists in the project workdir. Rename or remove it, then
 
 **`project_toml: dropped non-allowlisted keys ... — add them to [config.allowlist].project_toml to keep them`**
 
-Every key in the project file was dropped: no grant for `project_toml` applies to this run — it is off by default (blocked) — or the grant names none of the keys the file sets. If you granted it under `[projects."<path>".config.allowlist]`, check that `<path>` is exactly the resolved workdir: no `~`, no trailing slash, no symlink, and not a parent of the directory you ran paddock from (see the note under [Per-project overrides](#per-project-overrides)). The `--workdir=` in the `docker run` line paddock prints is the path to match. See [Enabling project-level config](#enabling-project-level-config).
+Every key in the project file was dropped: no grant for `project_toml` applies to this run — it is off by default (blocked) — or the grant names none of the keys the file sets. If you granted it under `[projects."<path>".config.allowlist]`, check that `<path>` is exactly the resolved workdir: not a symlink, and not a parent of the directory you ran paddock from (see the note under [Per-project overrides](#per-project-overrides)). The `--workdir=` in the `docker run` line paddock prints is the path to match. See [Enabling project-level config](#enabling-project-level-config).
 
 **Project config is loaded but some keys are ignored**
 

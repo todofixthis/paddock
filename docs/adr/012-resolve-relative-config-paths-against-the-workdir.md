@@ -134,9 +134,9 @@ Concrete semantics:
   as they did before. Under `--workdir` from another
   directory they all now resolve against the workdir, not the shell. The release notes
   must call this out.
-- Relative paths in other projects' `[projects]` entries resolve against their own key
+- ~~Relative paths in other projects' `[projects]` entries resolve against their own key
   rather than the cwd, so they stop failing in projects that happen not to hold them.
-  ~~Such an entry still fails validation — and stops paddock in every project — once its
+  Such an entry still fails validation — and stops paddock in every project — once its
   own project is moved, deleted or unmounted, as absolute paths in other projects'
   entries always did. Checking paths only in the entry that matches the workdir would
   remove that coupling; it predates this decision and is left to the revisit trigger.~~

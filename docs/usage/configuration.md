@@ -918,8 +918,8 @@ doesn't apply to its subdirectories. Entries outweigh the rest of your user file
 not the environment or command line. paddock checks every entry's keys and values on
 each run, but an entry's paths only when it applies. A key that can never match, such
 as `~/code/widgets`, a relative path or one with a trailing slash, stops every run. An
-entry for a project you have since moved is ignored without a warning; re-key it to the
-project's current path.
+entry keyed by a symlink, or for a project you have since moved, is ignored without a
+warning; re-key it to the project's real, current path.
 
 Use it for per-project settings you don't want to commit, or a per-project
 [`config.allowlist`](#configallowlist):
@@ -1030,9 +1030,10 @@ one paddock looked for.
 **`[user:projects.<path>…] …` or `[project_overrides:…] …`**
 
 A `[projects]` entry has a misspelt key, a bad value, a key that can never match a
-workdir or, for `project_overrides`, a path that doesn't exist. `project_overrides` is the entry for this workdir; a `user:projects`
-error may come from any entry, since paddock checks every entry's keys and values on
-each run. A typo in this workdir's entry appears under both names. See
+workdir or, for `project_overrides`, a path that doesn't exist. `project_overrides` is
+the entry for this workdir; a `user:projects` error may come from any entry, since
+paddock checks every entry's keys and values on each run. A typo in this workdir's
+entry appears under both names. See [`projects`](#projects) and
 [Validation](#validation).
 
 **`[<source>:build.…] Expected a file, but '…' is a directory (…).`**

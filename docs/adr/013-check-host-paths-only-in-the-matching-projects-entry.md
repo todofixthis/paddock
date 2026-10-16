@@ -3,7 +3,7 @@ status: Accepted
 date: 2026-10-16
 scope: [src/paddock/config/context.py, src/paddock/config/extract.py, src/paddock/config/filters.py, src/paddock/config/schema.py, src/paddock/config/sources/, docs/usage/]
 summary: Validate every [projects] entry's shape on each run, keys included, but check host paths on disk only in the entry that applies to this run; not every entry's paths, and not skipping other entries' validation altogether.
-revisit-when: More than one [projects] entry can apply to a run, or an entry applies other than by its key equalling the resolved workdir, such as parent-directory inheritance; paddock gains an operation that acts on every project's entry.
+revisit-when: More than one [projects] entry can apply to a run, or an entry applies other than by its key equalling the resolved workdir, such as parent-directory inheritance; paddock gains an operation that acts on every project's entry; users report a [projects] entry silently not applying after its project moved, or because its key is a symlinked path.
 ---
 
 # 013: Check Host Paths Only in the Matching Projects Entry
@@ -84,7 +84,9 @@ and Option 4 keeps the second as noise.
 - Moving or deleting a project no longer affects other projects' runs.
 - A `[projects]` key that can never match a workdir (`~/code/widgets`, a relative
   path, a trailing slash) now stops every run with an error naming it, where before
-  it was ignored unless it held a relative path.
+  it never applied, and stopped runs only when one of its paths or values failed
+  validation. A user file that loaded cleanly can now fail, so the release notes must
+  call this out.
 - A bad host path in the matching entry is reported once, as
   `project_overrides:<key>`, rather than also as `user:projects.<path>.<key>`. Path
   errors now name the path checked as well as the value as written.
