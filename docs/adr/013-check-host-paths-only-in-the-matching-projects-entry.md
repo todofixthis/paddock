@@ -3,7 +3,7 @@ status: Accepted
 date: 2026-10-16
 scope: [src/paddock/config/context.py, src/paddock/config/extract.py, src/paddock/config/filters.py, src/paddock/config/schema.py, src/paddock/config/sources/, docs/usage/]
 summary: Validate every [projects] entry's shape on each run, keys included, but check host paths on disk only in the entry that applies to this run; not every entry's paths, and not skipping other entries' validation altogether.
-revisit-when: More than one [projects] entry can apply to a run, or an entry applies other than by its key equalling the resolved workdir, such as parent-directory inheritance; paddock gains an operation that acts on every project's entry; users report a [projects] entry silently not applying after its project moved, or because its key is a symlinked path.
+revisit-when: More than one [projects] entry can apply to a run, or an entry applies other than by its key equalling the resolved workdir, such as parent-directory inheritance; paddock gains an operation that acts on every project's entry; users report a [projects] entry silently not applying after its project moved, or because its key is a symlinked path; [projects] keys gain tilde expansion.
 ---
 
 # 013: Check Host Paths Only in the Matching Projects Entry

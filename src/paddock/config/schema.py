@@ -214,7 +214,13 @@ class ProjectMap(BaseFilter):
 
         result = {}
         for key, entry in value.items():
-            if not (os.path.isabs(key) and os.path.normpath(key) == key):
+            # normpath keeps a leading '//' (POSIX), which no resolved
+            # workdir has.
+            if (
+                not os.path.isabs(key)
+                or os.path.normpath(key) != key
+                or key.startswith("//")
+            ):
                 self._invalid_value(key, self.CODE_NOT_A_WORKDIR, sub_key=key)
                 continue
             result[key] = self._filter(entry, self._entry, sub_key=key)

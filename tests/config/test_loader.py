@@ -645,6 +645,7 @@ def test_other_project_entry_shape_errors_stop_the_run(tmp_path: Path, monkeypat
         "/code/widgets/",
         "/code/../widgets",
         "/code/./w",
+        "//code/w",
     ],
 )
 def test_projects_key_that_cannot_match_stops_the_run(
