@@ -40,7 +40,8 @@ class ImageBuilder:
 
     def get_image_built_at(self, image: str) -> datetime | None:
         """
-        Return when paddock last built a local Docker image, or None if absent.
+        Return when paddock last built a local Docker image, or None if absent
+        or neither timestamp parses.
 
         Reads the ``BUILT_AT_LABEL`` that ``run_build`` stamps, falling back
         to ``.Created`` for an image paddock didn't build. ``.Created`` alone
@@ -57,6 +58,9 @@ class ImageBuilder:
             return None
         inspected = json.loads(result.stdout)
         labels = (inspected.get("Config") or {}).get("Labels") or {}
+        # A malformed timestamp counts as absent, deliberately: a bad label falls
+        # back to ``.Created``, and with neither valid the image reads as missing,
+        # so the policy rebuilds it, which is a cheap fix.
         for candidate in (labels.get(BUILT_AT_LABEL), inspected.get("Created")):
             runner = f.FilterRunner(f.Required | f.Datetime(), candidate)
             if runner.is_valid():

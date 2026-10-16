@@ -138,3 +138,16 @@ def test_get_image_built_at_ignores_invalid_label(mocker):
 
 def test_get_image_built_at_missing_image(mocker):
     assert _inspect(mocker, "", returncode=1) is None
+
+
+def test_get_image_built_at_treats_malformed_timestamps_as_missing(mocker):
+    built_at = _inspect(
+        mocker,
+        json.dumps(
+            {
+                "Config": {"Labels": {BUILT_AT_LABEL: "soon"}},
+                "Created": "yesterday",
+            }
+        ),
+    )
+    assert built_at is None
