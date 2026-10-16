@@ -6,6 +6,8 @@ from pathlib import Path
 
 import filters as f
 
+# Label every paddock build stamps with its UTC build time. Build policies read
+# an image's age from it, not from ``.Created`` alone (ADR 011).
 BUILT_AT_LABEL = "paddock.built-at"
 
 
