@@ -1023,12 +1023,12 @@ No source sets [`image`](#image). Set it in your user file or pass `--image`.
 
 **A Docker error right after `Pulling …`**
 
-[`build.policy`](#buildpolicy) is pulling the image, and the registry refused. For an
-image that should come from a registry, check [`image`](#image) for a typo and, for a
-private one, run `docker login` (GitHub packages are private by default). For one you
-only built locally, set `policy = "if-missing"` under that project's
-`[projects."<workdir>".build]`: paddock never pulls an image that exists locally under
-that policy.
+[`build.policy`](#buildpolicy) is pulling the image, and the pull failed. Offline, pass
+`--build-policy=if-missing` to run your local copy until you're back. For an image that
+should come from a registry, check [`image`](#image) for a typo and, for a private one,
+run `docker login` (GitHub packages are private by default). For one you only built
+locally, set `policy = "if-missing"` under that project's `[projects."<workdir>".build]`:
+paddock never pulls an image that exists locally under that policy.
 
 **`[workdir] Path "…" does not exist or is not a directory`**
 
