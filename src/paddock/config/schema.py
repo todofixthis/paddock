@@ -176,17 +176,11 @@ def project_entry_schema(base_dir: Path, check_paths: bool = True):
     )
 
 
-class ProjectMap(BaseFilter):
-    """Validates ``[projects]`` for shape only (ADR 014).
+class ProjectKeys(BaseFilter):
+    """Validates the keys of ``[projects]``, leaving entries to the next filter.
 
     Each key must be a normalised absolute path, the only form that can equal
-    a resolved workdir; anything else could never apply. Entries are checked
-    without touching disk: ``ProjectOverridesSource`` checks the one that
-    applies to this run in full.
-
-    Args:
-        base_dir: The base the entry schema requires. Host paths aren't
-            checked here, so it doesn't affect the result.
+    a resolved workdir; anything else could never apply (ADR 014).
     """
 
     CODE_NOT_A_WORKDIR = "not_a_workdir"
@@ -199,17 +193,12 @@ class ProjectMap(BaseFilter):
         ),
     }
 
-    def __init__(self, base_dir: Path):
-        super().__init__()
-        self._entry = project_entry_schema(base_dir, check_paths=False)
-
     def _apply(self, value):
         value = cast(dict, self._filter(value, f.Type(dict)))
         if self._has_errors:
             return None
 
-        result = {}
-        for key, entry in value.items():
+        for key in value:
             # normpath keeps a leading '//' (POSIX), which no resolved
             # workdir has.
             if (
@@ -218,9 +207,7 @@ class ProjectMap(BaseFilter):
                 or key.startswith("//")
             ):
                 self._invalid_value(key, self.CODE_NOT_A_WORKDIR, sub_key=key)
-                continue
-            result[key] = self._filter(entry, self._entry, sub_key=key)
-        return result if not self._has_errors else None
+        return value if not self._has_errors else None
 
 
 @filter_macro
@@ -230,13 +217,19 @@ def user_config_schema(base_dir: Path):
     Args:
         base_dir: Directory relative host paths in the file's global section
             resolve against: the workdir (ADR 012). ``[projects]`` entries are
-            checked for shape only, by ``ProjectMap``.
+            checked for shape only; ``ProjectOverridesSource`` checks the one
+            that applies to this run in full (ADR 014). ``base_dir`` is passed
+            to them only because the entry schema requires one.
     """
     return f.TomlDecode | f.FilterMapper(
         {
             **_standard_fields(merged=False, base_dir=base_dir),
             "config": config_meta_schema,
-            "projects": f.Optional(dict) | ProjectMap(base_dir),
+            "projects": (
+                f.Optional(dict)
+                | ProjectKeys
+                | f.FilterRepeater(project_entry_schema(base_dir, check_paths=False))
+            ),
         },
         allow_extra_keys=False,
         allow_missing_keys=True,
