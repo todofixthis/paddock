@@ -98,7 +98,7 @@ impractical to pin this way; the next fix covers them.
 ### Build on a schedule in CI
 
 Build the image in GitHub Actions on a schedule, push it to a registry, and point
-[`image`](configuration.md#image) at it with no `[build]` table. A hosted runner starts
+[`image`](configuration.md#image) at it with no `build.dockerfile`. A hosted runner starts
 with no layer cache, so every run reinstalls everything; if you add a cache, skip it on
 scheduled runs:
 
@@ -138,10 +138,23 @@ jobs:
           tags: ghcr.io/your-name/your-image:latest
 ```
 
-Docker pulls the image only when no local copy exists, so run
-`docker pull ghcr.io/your-name/your-image:latest` to pick up a new build. GitHub makes a
-package pushed this way private, so the pull needs `docker login ghcr.io` with a token
-that has `read:packages`, unless you make the package public.
+Docker pulls the image only when no local copy exists. To pick up new builds, set
+[`build.policy`](configuration.md#buildpolicy) to `daily`, and paddock pulls the image
+once it's due. Age counts from paddock's last pull, not from the CI build, so `weekly`
+against a weekly build can run an image up to two weeks old; a pull that finds nothing
+new costs one registry round trip. Set it beside the `image` it pulls, as here, since a
+policy in your user file pulls every project's image:
+
+```toml
+[projects."/home/alice/code/widgets"]
+image = "ghcr.io/your-name/your-image:latest"
+
+[projects."/home/alice/code/widgets".build]
+policy = "daily"
+```
+
+GitHub makes a package pushed this way private, so the pull needs `docker login ghcr.io`
+with a token that has `read:packages`, unless you make the package public.
 
 ### Bust the cache for an install that must stay unpinned
 

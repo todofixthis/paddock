@@ -215,7 +215,7 @@ Build the image manually:
      -t my-claude-image \
      -f images/Dockerfile .
 
-Or set a ``[build]`` table in your config and let paddock build it
+Or set ``build.dockerfile`` in your config and let paddock build it
 automatically according to your chosen policy.
 
 For what a custom image needs, and troubleshooting one that won't start, see

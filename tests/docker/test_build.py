@@ -1,50 +1,43 @@
 import json
 import subprocess
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from pathlib import Path
 
-from paddock.docker.build import BUILT_AT_LABEL, BuildPolicy, ImageBuilder
+from paddock.docker.build import BUILT_AT_LABEL, ImageBuilder
+from paddock.docker.source import BuildPolicy
 
 
-def test_should_build_always():
-    assert ImageBuilder.should_build(
-        BuildPolicy.ALWAYS, image_built_at=datetime.now(timezone.utc)
+def _builder(
+    policy: BuildPolicy = BuildPolicy.IF_MISSING, build_args: dict | None = None
+) -> ImageBuilder:
+    """An ``ImageBuilder`` for ``/path/Dockerfile`` with the given policy."""
+    return ImageBuilder(
+        policy=policy,
+        dockerfile=Path("/path/Dockerfile"),
+        context=Path("/path"),
+        build_args=build_args or {},
     )
 
 
-def test_should_build_if_missing_image_exists():
-    assert not ImageBuilder.should_build(
-        BuildPolicy.IF_MISSING, image_built_at=datetime.now(timezone.utc)
+def test_refresh_builds_when_due(mocker):
+    mocker.patch.object(ImageBuilder, "get_image_built_at", return_value=None)
+    mock_run_build = mocker.patch.object(ImageBuilder, "run_build")
+    assert _builder().refresh("myapp:latest")
+    mock_run_build.assert_called_once_with("myapp:latest")
+
+
+def test_refresh_skips_fresh_image(mocker):
+    mocker.patch.object(
+        ImageBuilder, "get_image_built_at", return_value=datetime.now(timezone.utc)
     )
-
-
-def test_should_build_if_missing_image_absent():
-    assert ImageBuilder.should_build(BuildPolicy.IF_MISSING, image_built_at=None)
-
-
-def test_should_build_daily_old_image():
-    old = datetime.now(timezone.utc) - timedelta(hours=25)
-    assert ImageBuilder.should_build(BuildPolicy.DAILY, image_built_at=old)
-
-
-def test_should_build_daily_fresh_image():
-    fresh = datetime.now(timezone.utc) - timedelta(hours=1)
-    assert not ImageBuilder.should_build(BuildPolicy.DAILY, image_built_at=fresh)
-
-
-def test_should_build_weekly_old_image():
-    old = datetime.now(timezone.utc) - timedelta(days=8)
-    assert ImageBuilder.should_build(BuildPolicy.WEEKLY, image_built_at=old)
+    mock_run_build = mocker.patch.object(ImageBuilder, "run_build")
+    assert not _builder(BuildPolicy.DAILY).refresh("myapp:latest")
+    mock_run_build.assert_not_called()
 
 
 def test_run_build_basic(mocker):
     mock_run = mocker.patch("paddock.docker.build.subprocess.run")
-    ImageBuilder().run_build(
-        image="myapp:latest",
-        dockerfile=Path("/path/Dockerfile"),
-        context=Path("/path"),
-        build_args={},
-    )
+    _builder(build_args={}).run_build("myapp:latest")
     mock_run.assert_called_once()
     call_args = mock_run.call_args[0][0]
     assert call_args[:3] == ["docker", "build", "-t"]
@@ -54,12 +47,7 @@ def test_run_build_basic(mocker):
 
 def test_run_build_with_args(mocker):
     mock_run = mocker.patch("paddock.docker.build.subprocess.run")
-    ImageBuilder().run_build(
-        image="myapp:latest",
-        dockerfile=Path("/path/Dockerfile"),
-        context=Path("/path"),
-        build_args={"AGENT": "claude"},
-    )
+    _builder(build_args={"AGENT": "claude"}).run_build("myapp:latest")
     call_args = mock_run.call_args[0][0]
     assert "--build-arg" in call_args
     assert "AGENT=claude" in call_args
@@ -68,12 +56,7 @@ def test_run_build_with_args(mocker):
 def test_run_build_stamps_build_time(mocker):
     mock_run = mocker.patch("paddock.docker.build.subprocess.run")
     before = datetime.now(timezone.utc)
-    ImageBuilder().run_build(
-        image="myapp:latest",
-        dockerfile=Path("/path/Dockerfile"),
-        context=Path("/path"),
-        build_args={},
-    )
+    _builder(build_args={}).run_build("myapp:latest")
     call_args = mock_run.call_args[0][0]
     key, _, value = call_args[call_args.index("--label") + 1].partition("=")
     assert key == BUILT_AT_LABEL
@@ -96,7 +79,7 @@ def _inspect(mocker, stdout: str, returncode: int = 0) -> datetime | None:
         "paddock.docker.build.subprocess.run",
         return_value=subprocess.CompletedProcess([], returncode, stdout=stdout),
     )
-    return ImageBuilder().get_image_built_at("myapp:latest")
+    return ImageBuilder.get_image_built_at("myapp:latest")
 
 
 def test_get_image_built_at_prefers_built_at_label(mocker):

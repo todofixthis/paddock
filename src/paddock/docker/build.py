@@ -1,44 +1,52 @@
 import json
 import subprocess
-from datetime import datetime, timedelta, timezone
-from enum import StrEnum
+from datetime import datetime, timezone
 from pathlib import Path
 
 import filters as f
+
+from paddock.docker.source import BuildPolicy, ImageSource
 
 # Label every paddock build stamps with its UTC build time. Build policies read
 # an image's age from it, not from ``.Created`` alone (ADR 011).
 BUILT_AT_LABEL = "paddock.built-at"
 
 
-class BuildPolicy(StrEnum):
-    ALWAYS = "always"
-    DAILY = "daily"
-    IF_MISSING = "if-missing"
-    WEEKLY = "weekly"
+class ImageBuilder(ImageSource):
+    """Keeps an image current by building it from a Dockerfile (ADR 011)."""
 
+    action = "build"
 
-class ImageBuilder:
+    def __init__(
+        self,
+        *,
+        policy: BuildPolicy,
+        dockerfile: Path,
+        context: Path,
+        build_args: dict[str, str],
+    ) -> None:
+        self.policy = policy
+        self.dockerfile = dockerfile
+        self.context = context
+        self.build_args = build_args
+
+    def refresh(self, image: str) -> bool:
+        """
+        Build the image if the build policy requires it.
+
+        Args:
+            image: The tag to build.
+
+        Returns:
+            True if a build ran, False if skipped.
+        """
+        if not self.policy.is_due(self.get_image_built_at(image)):
+            return False
+        self.run_build(image)
+        return True
+
     @staticmethod
-    def should_build(policy: BuildPolicy, image_built_at: datetime | None) -> bool:
-        """Determine whether to build the image given the policy and current image age."""
-        match policy:
-            case BuildPolicy.ALWAYS:
-                return True
-            case BuildPolicy.IF_MISSING:
-                return image_built_at is None
-            case BuildPolicy.DAILY:
-                if image_built_at is None:
-                    return True
-                return (datetime.now(timezone.utc) - image_built_at) > timedelta(
-                    hours=24
-                )
-            case BuildPolicy.WEEKLY:
-                if image_built_at is None:
-                    return True
-                return (datetime.now(timezone.utc) - image_built_at) > timedelta(days=7)
-
-    def get_image_built_at(self, image: str) -> datetime | None:
+    def get_image_built_at(image: str) -> datetime | None:
         """
         Return when paddock last built a local Docker image, or None if absent
         or neither timestamp parses.
@@ -67,50 +75,20 @@ class ImageBuilder:
                 return runner.cleaned_data
         return None
 
-    def run_build(
-        self,
-        *,
-        image: str,
-        dockerfile: Path,
-        context: Path,
-        build_args: dict[str, str],
-    ) -> None:
+    def run_build(self, image: str) -> None:
         """
         Run docker build, streaming output to stdout.
 
         Stamps ``BUILT_AT_LABEL`` with the build time, so the image's age
         reads correctly even when every layer comes from the cache.
+
+        Args:
+            image: The tag to build.
         """
         built_at = datetime.now(timezone.utc).isoformat()
-        argv: list[str | Path] = ["docker", "build", "-t", image, "-f", dockerfile]
+        argv: list[str | Path] = ["docker", "build", "-t", image, "-f", self.dockerfile]
         argv += ["--label", f"{BUILT_AT_LABEL}={built_at}"]
-        for key, value in build_args.items():
+        for key, value in self.build_args.items():
             argv += ["--build-arg", f"{key}={value}"]
-        argv.append(context)
+        argv.append(self.context)
         subprocess.run(argv, check=True)
-
-    def maybe_build(
-        self,
-        *,
-        build_config: dict,
-        image: str,
-        build_args: dict[str, str],
-    ) -> bool:
-        """
-        Build the image if the build policy requires it.
-
-        Returns True if a build was triggered, False if skipped.
-        """
-        policy = BuildPolicy(build_config.get("policy", "if-missing"))
-        dockerfile = build_config["dockerfile"]
-        context = build_config.get("context") or dockerfile.parent
-        image_built_at = self.get_image_built_at(image)
-        if self.should_build(policy, image_built_at):
-            self.run_build(
-                image=image,
-                dockerfile=dockerfile,
-                context=context,
-                build_args=build_args,
-            )
-            return True
-        return False

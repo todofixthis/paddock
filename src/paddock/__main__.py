@@ -12,8 +12,8 @@ from paddock.cli import parse_args
 from paddock.config.errors import ConfigError, PaddockEnvironmentError
 from paddock.config.loader import ConfigLoader
 from paddock.config.project_dir import ProjectDirManager
-from paddock.docker.build import ImageBuilder
 from paddock.docker.builder import DockerCommandBuilder
+from paddock.docker.factory import ImageSourceFactory
 
 logger = logging.getLogger("paddock")
 
@@ -84,6 +84,27 @@ def _resolve_agent(configured: str | bool) -> BaseAgent:
         sys.exit(1)
 
 
+def _prepare_image(config: dict, agent: BaseAgent) -> None:
+    """Build or pull the image as ``build.policy`` requires, or exit.
+
+    A failed build or pull exits with Docker's status, Docker having already
+    printed why.
+
+    Args:
+        config: The merged config; must contain ``build``.
+        agent: The resolved agent, whose build args a build passes.
+    """
+    source = ImageSourceFactory.from_config(
+        config["build"], agent_build_args=agent.get_build_args(), environ=os.environ
+    )
+    try:
+        refreshed = source.refresh(config["image"])
+    except subprocess.CalledProcessError as e:
+        sys.exit(e.returncode)
+    outcome = "triggered" if refreshed else "skipped (up to date)"
+    logger.info("Image %s: %s", source.action, outcome)
+
+
 def run(argv: list[str] | None = None) -> None:
     parsed = parse_args(argv if argv is not None else sys.argv[1:])
     _setup_logging(parsed.quiet)
@@ -123,19 +144,7 @@ def run(argv: list[str] | None = None) -> None:
                 _log_network_peers(config["network"])
 
             if not parsed.dry_run and config.get("build"):
-                builder = ImageBuilder()
-                build_args = {
-                    **agent.get_build_args(),
-                    **config["build"].get("args", {}),
-                }
-                built = builder.maybe_build(
-                    build_config=config["build"],
-                    image=config["image"],
-                    build_args=build_args,
-                )
-                logger.info(
-                    "Image build: %s", "triggered" if built else "skipped (up to date)"
-                )
+                _prepare_image(config, agent)
 
             docker_argv = command_builder.build(
                 command=parsed.command, agent_args=parsed.agent_args
