@@ -157,6 +157,33 @@ class Filepath(BaseFilter):
         return self._invalid_value(value, reason, template_vars={"path": path})
 
 
+@filter_macro
+def HostPath(base_dir: str | Path, check_paths: bool, is_dir: bool | None = None):
+    """Validates a host path, on disk or for shape only.
+
+    With ``check_paths``, this is ``Filepath`` anchored to ``base_dir``. Without
+    it, the path is kept as written and nothing is looked up on disk, for
+    config that doesn't apply to this run (ADR 014). Place after
+    ``f.Unicode``, as for ``Filepath``.
+
+    Args:
+        base_dir:
+
+            Directory a relative path resolves against.
+
+        check_paths:
+
+            When ``False``, pass the value through unchanged.
+
+        is_dir:
+
+            Passed to ``Filepath``.
+    """
+    if not check_paths:
+        return f.NoOp
+    return Filepath(base_dir=base_dir, is_dir=is_dir)
+
+
 class VolumeSpec(NamedTuple):
     """Structured container path spec produced by the ``Volume`` filter."""
 
@@ -214,9 +241,8 @@ class VolumeMap(BaseFilter):
 
     Keys (host paths) are validated through ``f.Unicode | Filepath`` —
     tilde-expanded using ``Path.home()``, anchored to ``host_base_dir`` when
-    relative, resolved, and checked for existence, unless
-    ``check_host_paths`` is ``False``. Values (container path specs) are
-    validated through ``Volume``.
+    relative, resolved, and checked for existence. Values (container path
+    specs) are validated through ``Volume``.
 
     Returns a ``dict[str, VolumeSpec]`` mapping resolved host-path strings
     to container path specs.
@@ -228,12 +254,6 @@ class VolumeMap(BaseFilter):
             specs. When ``None`` (default), container paths are validated
             for format only without tilde expansion.
 
-        check_host_paths:
-
-            When ``False``, host paths are only checked to be strings and are
-            kept as written: nothing is anchored, resolved or looked up on
-            disk (ADR 014).
-
         host_base_dir:
 
             Directory relative host paths resolve against. When ``None``
@@ -242,7 +262,6 @@ class VolumeMap(BaseFilter):
 
     def __init__(
         self,
-        check_host_paths: bool = True,
         container_home_dir: str | Path | None = None,
         host_base_dir: str | Path | None = None,
     ):
@@ -250,9 +269,7 @@ class VolumeMap(BaseFilter):
         self._container_home_dir = (
             Path(container_home_dir) if container_home_dir is not None else None
         )
-        self._host_path = f.Unicode | (
-            Filepath(base_dir=host_base_dir) if check_host_paths else f.NoOp
-        )
+        self._host_base_dir = host_base_dir
 
     def _apply(self, value):
         value = cast(dict, self._filter(value, f.Type(dict)))
@@ -263,8 +280,12 @@ class VolumeMap(BaseFilter):
         for raw_host, raw_container in value.items():
             sub_key = str(raw_host)
             host_path = cast(
-                Path | str | None,
-                self._filter(raw_host, self._host_path, sub_key=sub_key),
+                Path | None,
+                self._filter(
+                    raw_host,
+                    f.Unicode | Filepath(base_dir=self._host_base_dir),
+                    sub_key=sub_key,
+                ),
             )
             container_spec = cast(
                 VolumeSpec | None,

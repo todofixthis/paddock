@@ -7,7 +7,7 @@ import filters as f
 from filters.base import BaseFilter
 from filters.macros import filter_macro
 
-from paddock.config.filters import Agent, AllowlistEntry, Filepath, VolumeMap
+from paddock.config.filters import Agent, AllowlistEntry, HostPath, Volume, VolumeMap
 
 BUILD_POLICIES = ("always", "daily", "if-missing", "weekly")
 CONTAINER_HOME = "/root"
@@ -37,15 +37,6 @@ class DropEmpty(BaseFilter):
         return out
 
 
-def _host_path(base_dir: Path, check_paths: bool, is_dir: bool):
-    """Host-path filter: checked on disk against ``base_dir``, or kept as
-    written when ``check_paths`` is ``False`` (see ``standard_config_schema``).
-    """
-    if not check_paths:
-        return f.NoOp
-    return Filepath(base_dir=base_dir, is_dir=is_dir)
-
-
 def _build_schema(base_dir: Path, check_paths: bool):
     """Build-section schema; every field is optional.
 
@@ -55,17 +46,26 @@ def _build_schema(base_dir: Path, check_paths: bool):
     return f.FilterMapper(
         {
             "args": f.FilterRepeater(f.Unicode),
-            "context": f.Unicode | _host_path(base_dir, check_paths, is_dir=True),
+            "context": f.Unicode | HostPath(base_dir, check_paths, is_dir=True),
             "dockerfile": (
                 f.NotEmpty(allow_none=True)
                 | f.Unicode
-                | _host_path(base_dir, check_paths, is_dir=False)
+                | HostPath(base_dir, check_paths, is_dir=False)
             ),
             "policy": f.Choice(BUILD_POLICIES),
         },
         allow_extra_keys=False,
         allow_missing_keys=True,
     )
+
+
+def _volumes_schema(base_dir: Path, check_paths: bool):
+    """Volumes schema. Without ``check_paths``, host paths (the keys) are kept
+    as written, since ``FilterRepeater`` validates only the values.
+    """
+    if not check_paths:
+        return f.Type(dict) | f.FilterRepeater(Volume(home_dir=CONTAINER_HOME))
+    return VolumeMap(container_home_dir=CONTAINER_HOME, host_base_dir=base_dir)
 
 
 def _standard_fields(
@@ -78,20 +78,16 @@ def _standard_fields(
     ``base_dir`` and ``check_paths`` govern host paths (see
     ``standard_config_schema``).
     """
-    # Route every host path through _host_path or check_host_paths, so
-    # shape-only validation never touches disk (ADR 014).
+    # Gate every host-path check on check_paths, as HostPath and
+    # _volumes_schema do, so shape-only validation never touches disk
+    # (ADR 014).
     return {
         "agent": f.NotEmpty(allow_none=not merged) | Agent,
         "build": _build_schema(base_dir, check_paths),
         "image": f.NotEmpty(allow_none=not merged) | f.Unicode,
         "network": f.Unicode,
         "volumes": (
-            f.Optional({} if merged else None)
-            | VolumeMap(
-                check_host_paths=check_paths,
-                container_home_dir=CONTAINER_HOME,
-                host_base_dir=base_dir,
-            )
+            f.Optional({} if merged else None) | _volumes_schema(base_dir, check_paths)
         ),
     }
 

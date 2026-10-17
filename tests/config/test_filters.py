@@ -3,7 +3,14 @@ from pathlib import Path
 import filters as f
 import pytest
 
-from paddock.config.filters import Agent, Filepath, Volume, VolumeMap, VolumeSpec
+from paddock.config.filters import (
+    Agent,
+    Filepath,
+    HostPath,
+    Volume,
+    VolumeMap,
+    VolumeSpec,
+)
 
 
 def test_volume_pass_none(assert_filter_passes):
@@ -582,13 +589,38 @@ def test_filepath_is_dir_error_names_checked_path(tmp_path):
     )
 
 
-def test_volume_map_unchecked_host_paths(assert_filter_passes, tmp_path):
-    """With check_host_paths=False, host paths are kept as written and
-    nothing is looked up on disk."""
+def test_host_path_pass_none(assert_filter_passes, tmp_path):
+    """None passes through."""
+    assert_filter_passes(HostPath(tmp_path, check_paths=True), None)
+
+
+def test_host_path_pass_checked(assert_filter_passes, tmp_path):
+    """With check_paths, a relative path resolves against base_dir."""
+    (tmp_path / "data").mkdir()
     assert_filter_passes(
-        VolumeMap(check_host_paths=False, host_base_dir=tmp_path),
-        {"missing": "/data", "~/gone": "/gone:rw"},
-        {"missing": VolumeSpec("/data", "ro"), "~/gone": VolumeSpec("/gone", "rw")},
+        HostPath(tmp_path, check_paths=True), "data", (tmp_path / "data").resolve()
+    )
+
+
+def test_host_path_pass_unchecked(assert_filter_passes, tmp_path):
+    """Without check_paths, a missing path is kept as written."""
+    assert_filter_passes(HostPath(tmp_path, check_paths=False), "missing")
+
+
+def test_host_path_fail_checked_missing(assert_filter_errors, tmp_path):
+    """With check_paths, a missing path is invalid."""
+    assert_filter_errors(
+        HostPath(tmp_path, check_paths=True), "missing", [Filepath.CODE_DOES_NOT_EXIST]
+    )
+
+
+def test_host_path_fail_checked_is_dir(assert_filter_errors, tmp_path):
+    """With check_paths, is_dir reaches Filepath."""
+    (tmp_path / "data").mkdir()
+    assert_filter_errors(
+        HostPath(tmp_path, check_paths=True, is_dir=False),
+        "data",
+        [Filepath.CODE_IS_A_DIRECTORY],
     )
 
 
