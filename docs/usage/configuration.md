@@ -770,6 +770,31 @@ run stops until a pull succeeds; pass `--build-policy=if-missing` to run the loc
 meanwhile. A `build.dockerfile` from any source wins over pulling, so under a user-level
 one no project can pull; see [`build.dockerfile`](#builddockerfile).
 
+paddock records pulls per image reference, as written, not per project, so projects
+naming the same image share its record. With this user file, paddock pulls `:python` at
+most once a day however many projects run it, and `:infra`, which only the infra project
+runs, likewise:
+
+```toml
+image = "ghcr.io/your-name/agent:python"
+
+[build]
+policy = "daily"
+
+[projects."/home/alice/code/infra"]
+image = "ghcr.io/your-name/agent:infra"
+
+[projects."/home/alice/code/widgets"]
+image = "widgets-dev:latest"
+
+[projects."/home/alice/code/widgets".build]
+policy = "if-missing"
+```
+
+The widgets project runs an image built by hand and never pushed, so it opts out of the
+daily pull and pulls only if the image goes missing; without that, the caution below
+applies to it.
+
 > [!CAUTION]
 > **A periodic policy in your user file or environment pulls every project's image**
 >
