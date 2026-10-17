@@ -79,7 +79,7 @@ def _standard_fields(
     ``standard_config_schema``).
     """
     # Route every host path through _host_path or check_host_paths, so
-    # shape-only validation never touches disk (ADR 013).
+    # shape-only validation never touches disk (ADR 014).
     return {
         "agent": f.NotEmpty(allow_none=not merged) | Agent,
         "build": _build_schema(base_dir, check_paths),
@@ -113,7 +113,7 @@ def standard_config_schema(
             source can't fall back to the cwd by omission.
         check_paths: ``False`` checks shape only: host paths are kept as
             written and nothing is looked up on disk, for config that doesn't
-            apply to this run (ADR 013). Its output must not reach the merge.
+            apply to this run (ADR 014). Its output must not reach the merge.
         extra_keys: Optional mapping of additional top-level keys to allow
             (e.g. ``{"config": config_meta_schema}``).
         merged: ``False`` (default) is the per-source pass: every required
@@ -170,7 +170,7 @@ def project_entry_schema(base_dir: Path, check_paths: bool = True):
         base_dir: The entry's key, the workdir it configures, which its
             relative host paths resolve against (ADR 012).
         check_paths: ``False`` checks shape only, for entries that don't
-            apply to this run (ADR 013).
+            apply to this run (ADR 014).
     """
     return standard_config_schema(
         base_dir=base_dir,
@@ -181,7 +181,7 @@ def project_entry_schema(base_dir: Path, check_paths: bool = True):
 
 
 class ProjectMap(BaseFilter):
-    """Validates ``[projects]`` for shape only (ADR 013).
+    """Validates ``[projects]`` for shape only (ADR 014).
 
     Each key must be a normalised absolute path, the only form that can equal
     a resolved workdir; anything else could never apply. Entries are checked

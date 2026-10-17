@@ -600,7 +600,7 @@ def test_project_overrides_relative_paths_resolve_against_workdir(
 
 def test_other_project_entry_paths_are_not_checked(tmp_path: Path, monkeypatch):
     """A [projects] entry for another project is checked for shape only, so a
-    host path gone from disk can't stop a run elsewhere (ADR 013)."""
+    host path gone from disk can't stop a run elsewhere (ADR 014)."""
     workdir = (tmp_path / "project").resolve()
     workdir.mkdir()
     gone = tmp_path / "gone"

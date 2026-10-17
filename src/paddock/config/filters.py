@@ -232,7 +232,7 @@ class VolumeMap(BaseFilter):
 
             When ``False``, host paths are only checked to be strings and are
             kept as written: nothing is anchored, resolved or looked up on
-            disk (ADR 013).
+            disk (ADR 014).
 
         host_base_dir:
 

@@ -6,7 +6,7 @@ summary: Validate every [projects] entry's shape on each run, keys included, but
 revisit-when: More than one [projects] entry can apply to a run, or an entry applies other than by its key equalling the resolved workdir, such as parent-directory inheritance; paddock gains an operation that acts on every project's entry; users report a [projects] entry silently not applying after its project moved, or because its key is a symlinked path; [projects] keys gain tilde expansion.
 ---
 
-# 013: Check Host Paths Only in the Matching Projects Entry
+# 014: Check Host Paths Only in the Matching Projects Entry
 
 ## Context
 
@@ -22,6 +22,8 @@ another project stops runs in practice". This ADR answers it.
 
 The matching entry is validated twice, by the user source and by `project_overrides`,
 which applies it, so a bad path in it is reported under both labels.
+
+Drafted as ADR 013 and renumbered to 014 when an ADR merged first under that number.
 
 ## Options
 
