@@ -9,7 +9,7 @@ from pathlib import Path
 
 import filters as f
 
-from paddock.docker.build import BuildPolicy
+from paddock.docker.source import BuildPolicy, ImageSource
 
 logger = logging.getLogger("paddock")
 
@@ -101,22 +101,23 @@ class PullLog:
         return entries if isinstance(entries, dict) else {}
 
 
-class ImagePuller:
+class ImagePuller(ImageSource):
     """Keeps a registry-hosted image current under a build policy (ADR 013)."""
 
-    def __init__(self, log: PullLog) -> None:
+    action = "pull"
+
+    def __init__(self, *, policy: BuildPolicy, log: PullLog) -> None:
+        self.policy = policy
         self.log = log
 
-    def maybe_pull(self, *, policy: BuildPolicy, image: str) -> bool:
+    def refresh(self, image: str) -> bool:
         """
         Pull the image if the build policy requires it.
 
-        Raises ``subprocess.CalledProcessError`` when a due pull fails, leaving
-        the log untouched, so the next run is still due. A log that can't be
-        written only warns.
+        A failed pull leaves the log untouched, so the next run is still due.
+        A log that can't be written only warns.
 
         Args:
-            policy: The configured build policy.
             image: The image reference to pull.
 
         Returns:
@@ -125,9 +126,9 @@ class ImagePuller:
         last_at = None
         if self.image_exists(image):
             last_at = self.log.last_pulled_at(image) or NEVER_PULLED
-        if not policy.is_due(last_at):
+        if not self.policy.is_due(last_at):
             return False
-        logger.info("Pulling %s (build.policy = %s)", image, policy)
+        logger.info("Pulling %s (build.policy = %s)", image, self.policy)
         subprocess.run(["docker", "pull", image], check=True)
         # An unwritable log costs a redundant pull next time, not this run.
         try:
@@ -136,7 +137,8 @@ class ImagePuller:
             logger.warning("Couldn't record the pull in %s: %s", self.log.path, e)
         return True
 
-    def image_exists(self, image: str) -> bool:
+    @staticmethod
+    def image_exists(image: str) -> bool:
         """Return whether an image named ``image`` exists locally."""
         result = subprocess.run(
             ["docker", "image", "inspect", image],

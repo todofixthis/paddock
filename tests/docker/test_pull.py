@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from paddock.docker.build import BuildPolicy
 from paddock.docker.pull import ImagePuller, PullLog
+from paddock.docker.source import BuildPolicy
 
 IMAGE = "ghcr.io/example/agent:python"
 
@@ -94,11 +94,11 @@ def test_log_treats_corrupt_file_as_empty(tmp_path, contents):
     assert log.last_pulled_at(IMAGE) is not None
 
 
-def test_maybe_pull_daily_pulls_stale_image(mocker, tmp_path, caplog):
+def test_refresh_daily_pulls_stale_image(mocker, tmp_path, caplog):
     caplog.set_level("INFO", logger="paddock")
     mock_run = _stub_docker(mocker, present=True)
     log = _log(tmp_path, pulled_ago=timedelta(hours=25))
-    assert ImagePuller(log).maybe_pull(policy=BuildPolicy.DAILY, image=IMAGE)
+    assert ImagePuller(policy=BuildPolicy.DAILY, log=log).refresh(IMAGE)
     assert _pulled(mock_run)
     assert f"Pulling {IMAGE} (build.policy = daily)" in caplog.text
     pulled_at = log.last_pulled_at(IMAGE)
@@ -106,53 +106,51 @@ def test_maybe_pull_daily_pulls_stale_image(mocker, tmp_path, caplog):
     assert datetime.now(timezone.utc) - pulled_at < timedelta(minutes=1)
 
 
-def test_maybe_pull_daily_skips_fresh_image(mocker, tmp_path):
+def test_refresh_daily_skips_fresh_image(mocker, tmp_path):
     mock_run = _stub_docker(mocker, present=True)
     log = _log(tmp_path, pulled_ago=timedelta(hours=1))
-    assert not ImagePuller(log).maybe_pull(policy=BuildPolicy.DAILY, image=IMAGE)
+    assert not ImagePuller(policy=BuildPolicy.DAILY, log=log).refresh(IMAGE)
     assert not _pulled(mock_run)
 
 
-def test_maybe_pull_weekly_skips_image_pulled_days_ago(mocker, tmp_path):
+def test_refresh_weekly_skips_image_pulled_days_ago(mocker, tmp_path):
     mock_run = _stub_docker(mocker, present=True)
     log = _log(tmp_path, pulled_ago=timedelta(days=3))
-    assert not ImagePuller(log).maybe_pull(policy=BuildPolicy.WEEKLY, image=IMAGE)
+    assert not ImagePuller(policy=BuildPolicy.WEEKLY, log=log).refresh(IMAGE)
     assert not _pulled(mock_run)
 
 
-def test_maybe_pull_daily_pulls_image_paddock_never_pulled(mocker, tmp_path):
+def test_refresh_daily_pulls_image_paddock_never_pulled(mocker, tmp_path):
     mock_run = _stub_docker(mocker, present=True)
-    assert ImagePuller(_log(tmp_path)).maybe_pull(policy=BuildPolicy.DAILY, image=IMAGE)
+    assert ImagePuller(policy=BuildPolicy.DAILY, log=_log(tmp_path)).refresh(IMAGE)
     assert _pulled(mock_run)
 
 
-def test_maybe_pull_pulls_missing_image_despite_fresh_record(mocker, tmp_path):
+def test_refresh_pulls_missing_image_despite_fresh_record(mocker, tmp_path):
     mock_run = _stub_docker(mocker, present=False)
     log = _log(tmp_path, pulled_ago=timedelta(hours=1))
-    assert ImagePuller(log).maybe_pull(policy=BuildPolicy.DAILY, image=IMAGE)
+    assert ImagePuller(policy=BuildPolicy.DAILY, log=log).refresh(IMAGE)
     assert _pulled(mock_run)
 
 
-def test_maybe_pull_always_pulls_fresh_image(mocker, tmp_path):
+def test_refresh_always_pulls_fresh_image(mocker, tmp_path):
     mock_run = _stub_docker(mocker, present=True)
     log = _log(tmp_path, pulled_ago=timedelta(minutes=1))
-    assert ImagePuller(log).maybe_pull(policy=BuildPolicy.ALWAYS, image=IMAGE)
+    assert ImagePuller(policy=BuildPolicy.ALWAYS, log=log).refresh(IMAGE)
     assert _pulled(mock_run)
 
 
-def test_maybe_pull_if_missing_skips_present_image(mocker, tmp_path):
+def test_refresh_if_missing_skips_present_image(mocker, tmp_path):
     mock_run = _stub_docker(mocker, present=True)
-    assert not ImagePuller(_log(tmp_path)).maybe_pull(
-        policy=BuildPolicy.IF_MISSING, image=IMAGE
+    assert not ImagePuller(policy=BuildPolicy.IF_MISSING, log=_log(tmp_path)).refresh(
+        IMAGE
     )
     assert not _pulled(mock_run)
 
 
-def test_maybe_pull_if_missing_pulls_absent_image(mocker, tmp_path):
+def test_refresh_if_missing_pulls_absent_image(mocker, tmp_path):
     mock_run = _stub_docker(mocker, present=False)
-    assert ImagePuller(_log(tmp_path)).maybe_pull(
-        policy=BuildPolicy.IF_MISSING, image=IMAGE
-    )
+    assert ImagePuller(policy=BuildPolicy.IF_MISSING, log=_log(tmp_path)).refresh(IMAGE)
     assert _pulled(mock_run)
 
 
@@ -161,7 +159,7 @@ def test_failed_pull_raises_and_leaves_record(mocker, tmp_path):
     log = _log(tmp_path, pulled_ago=timedelta(hours=25))
     before = log.last_pulled_at(IMAGE)
     with pytest.raises(subprocess.CalledProcessError):
-        ImagePuller(log).maybe_pull(policy=BuildPolicy.DAILY, image=IMAGE)
+        ImagePuller(policy=BuildPolicy.DAILY, log=log).refresh(IMAGE)
     assert log.last_pulled_at(IMAGE) == before
 
 
@@ -170,5 +168,5 @@ def test_unwritable_log_warns_after_pull(mocker, tmp_path, caplog):
     blocker = tmp_path / "state"
     blocker.write_text("a file where the log's directory should be")
     log = PullLog(blocker / "pulls.json")
-    assert ImagePuller(log).maybe_pull(policy=BuildPolicy.DAILY, image=IMAGE)
+    assert ImagePuller(policy=BuildPolicy.DAILY, log=log).refresh(IMAGE)
     assert "Couldn't record the pull" in caplog.text

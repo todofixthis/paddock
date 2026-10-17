@@ -4,7 +4,6 @@ from pathlib import Path
 import pytest
 
 from paddock.__main__ import run
-from paddock.docker.build import BuildPolicy
 
 
 def _write_user_config(home: Path, contents: str) -> None:
@@ -157,11 +156,11 @@ def test_dry_run_skips_image_build(capsys, tmp_path: Path, mocker, monkeypatch):
         "paddock.docker.builder.DockerCommandBuilder._container_name_available",
         return_value=True,
     )
-    mock_maybe_build = mocker.patch("paddock.__main__.ImageBuilder.maybe_build")
+    mock_build = mocker.patch("paddock.docker.build.ImageBuilder.refresh")
     with pytest.raises(SystemExit) as exc:
         run(["--dry-run"])
     assert exc.value.code == 0
-    mock_maybe_build.assert_not_called()
+    mock_build.assert_not_called()
 
 
 def _write_pull_config(tmp_path: Path, mocker, monkeypatch) -> None:
@@ -187,10 +186,10 @@ def _write_pull_config(tmp_path: Path, mocker, monkeypatch) -> None:
 def test_policy_without_dockerfile_pulls_image(tmp_path: Path, mocker, monkeypatch):
     """A build policy with no Dockerfile pulls the image instead of building."""
     _write_pull_config(tmp_path, mocker, monkeypatch)
-    mock_maybe_pull = mocker.patch(
-        "paddock.__main__.ImagePuller.maybe_pull", return_value=True
+    mock_pull = mocker.patch(
+        "paddock.docker.pull.ImagePuller.refresh", return_value=True
     )
-    mock_maybe_build = mocker.patch("paddock.__main__.ImageBuilder.maybe_build")
+    mock_build = mocker.patch("paddock.docker.build.ImageBuilder.refresh")
     mock_run = mocker.patch(
         "paddock.__main__.subprocess.run",
         return_value=subprocess.CompletedProcess([], 0),
@@ -198,10 +197,8 @@ def test_policy_without_dockerfile_pulls_image(tmp_path: Path, mocker, monkeypat
     with pytest.raises(SystemExit) as exc:
         run([])
     assert exc.value.code == 0
-    mock_maybe_pull.assert_called_once_with(
-        policy=BuildPolicy.DAILY, image="ghcr.io/example/agent:python"
-    )
-    mock_maybe_build.assert_not_called()
+    mock_pull.assert_called_once_with("ghcr.io/example/agent:python")
+    mock_build.assert_not_called()
     mock_run.assert_called_once()
 
 
@@ -209,7 +206,7 @@ def test_failed_pull_exits_without_running(tmp_path: Path, mocker, monkeypatch):
     """A due pull that fails stops paddock with Docker's exit status."""
     _write_pull_config(tmp_path, mocker, monkeypatch)
     mocker.patch(
-        "paddock.__main__.ImagePuller.maybe_pull",
+        "paddock.docker.pull.ImagePuller.refresh",
         side_effect=subprocess.CalledProcessError(1, ["docker", "pull"]),
     )
     mock_run = mocker.patch("paddock.__main__.subprocess.run")
@@ -222,11 +219,11 @@ def test_failed_pull_exits_without_running(tmp_path: Path, mocker, monkeypatch):
 def test_dry_run_skips_image_pull(tmp_path: Path, mocker, monkeypatch):
     """--dry-run must not pull, just as it never builds."""
     _write_pull_config(tmp_path, mocker, monkeypatch)
-    mock_maybe_pull = mocker.patch("paddock.__main__.ImagePuller.maybe_pull")
+    mock_pull = mocker.patch("paddock.docker.pull.ImagePuller.refresh")
     with pytest.raises(SystemExit) as exc:
         run(["--dry-run"])
     assert exc.value.code == 0
-    mock_maybe_pull.assert_not_called()
+    mock_pull.assert_not_called()
 
 
 def test_policy_with_dockerfile_builds_image(tmp_path: Path, mocker, monkeypatch):
@@ -243,18 +240,18 @@ def test_policy_with_dockerfile_builds_image(tmp_path: Path, mocker, monkeypatch
         "paddock.docker.builder.DockerCommandBuilder._container_name_available",
         return_value=True,
     )
-    mock_maybe_build = mocker.patch(
-        "paddock.__main__.ImageBuilder.maybe_build", return_value=False
+    mock_build = mocker.patch(
+        "paddock.docker.build.ImageBuilder.refresh", return_value=False
     )
-    mock_maybe_pull = mocker.patch("paddock.__main__.ImagePuller.maybe_pull")
+    mock_pull = mocker.patch("paddock.docker.pull.ImagePuller.refresh")
     mocker.patch(
         "paddock.__main__.subprocess.run",
         return_value=subprocess.CompletedProcess([], 0),
     )
     with pytest.raises(SystemExit):
         run([])
-    mock_maybe_build.assert_called_once()
-    mock_maybe_pull.assert_not_called()
+    mock_build.assert_called_once()
+    mock_pull.assert_not_called()
 
 
 def test_paddock_dir_not_a_directory_exits_one(capsys, tmp_path: Path, monkeypatch):

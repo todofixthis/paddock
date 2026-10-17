@@ -1,7 +1,7 @@
 ---
 status: Accepted
 date: 2026-10-16
-scope: [docs/usage/, src/paddock/__main__.py, src/paddock/config/loader.py, src/paddock/config/schema.py, src/paddock/docker/build.py, src/paddock/docker/pull.py]
+scope: [docs/usage/, src/paddock/config/loader.py, src/paddock/config/schema.py, src/paddock/docker/factory.py, src/paddock/docker/pull.py, src/paddock/docker/source.py]
 summary: A build table without build.dockerfile makes paddock pull image on build.policy's schedule (a Dockerfile, where set, still builds with ADR 011's label), timing pulls from a paddock-owned state file under XDG_STATE_HOME rather than .Metadata.LastTagTime or a pull on every run, and stopping when a due pull fails, as docker run --pull does, rather than running the local copy; no separate opt-in key.
 revisit-when: Docker records a reliable last-pull time on every image store paddock supports; a project needs a build policy without a Dockerfile to mean something other than pulling; redundant pulls prove costly, through registry rate limits or drift across several Docker daemons; due pulls failing offline block work often enough that users need a fallback to the local copy.
 ---
