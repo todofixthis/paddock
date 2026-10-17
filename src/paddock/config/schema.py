@@ -198,6 +198,8 @@ class ProjectKeys(BaseFilter):
         if self._has_errors:
             return None
 
+        # A custom filter only because FilterRepeater filters values, not keys;
+        # refactor once https://github.com/todofixthis/filters/issues/92 lands.
         for key in value:
             # normpath keeps a leading '//' (POSIX), which no resolved
             # workdir has.
