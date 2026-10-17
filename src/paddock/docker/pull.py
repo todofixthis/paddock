@@ -74,6 +74,10 @@ class PullLog:
             image: The image reference, as configured.
             pulled_at: When the pull finished.
         """
+        # Deliberately unlocked (ADR 013): another run recording between this
+        # read and the replace below loses its entry, costing that image one
+        # redundant pull. Re-checking the file before the replace would still
+        # race, and ``fcntl.flock`` is POSIX-only, not worth it for one pull.
         entries = self._read()
         entries[image] = pulled_at.isoformat()
         self.path.parent.mkdir(parents=True, exist_ok=True)
