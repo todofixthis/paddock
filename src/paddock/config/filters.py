@@ -90,9 +90,13 @@ class Filepath(BaseFilter):
     CODE_NOT_A_DIRECTORY = "not_a_directory"
 
     templates = {
-        CODE_DOES_NOT_EXIST: "Path {value!r} does not exist or cannot be resolved.",
-        CODE_IS_A_DIRECTORY: "Expected a file, but {value!r} is a directory.",
-        CODE_NOT_A_DIRECTORY: "Expected a directory, but {value!r} is not a directory.",
+        CODE_DOES_NOT_EXIST: (
+            "Path {value!r} does not exist or cannot be resolved (checked {path})."
+        ),
+        CODE_IS_A_DIRECTORY: "Expected a file, but {value!r} is a directory ({path}).",
+        CODE_NOT_A_DIRECTORY: (
+            "Expected a directory, but {value!r} is not a directory ({path})."
+        ),
     }
 
     def __init__(
@@ -131,18 +135,53 @@ class Filepath(BaseFilter):
             try:
                 path = path.resolve(strict=self._must_exist)
             except OSError:
-                return self._invalid_value(value, self.CODE_DOES_NOT_EXIST)
+                return self._invalid_path(value, path, self.CODE_DOES_NOT_EXIST)
         elif self._must_exist:
             if not path.exists():
-                return self._invalid_value(value, self.CODE_DOES_NOT_EXIST)
+                return self._invalid_path(value, path, self.CODE_DOES_NOT_EXIST)
 
         if self._is_dir is not None and path.exists():
             if self._is_dir and not path.is_dir():
-                return self._invalid_value(value, self.CODE_NOT_A_DIRECTORY)
+                return self._invalid_path(value, path, self.CODE_NOT_A_DIRECTORY)
             if not self._is_dir and path.is_dir():
-                return self._invalid_value(value, self.CODE_IS_A_DIRECTORY)
+                return self._invalid_path(value, path, self.CODE_IS_A_DIRECTORY)
 
         return path
+
+    def _invalid_path(self, value: str | Path, path: Path, reason: str):
+        """Records ``reason`` against ``value``, naming the path checked.
+
+        A relative value is checked against ``base_dir``, so the message names
+        the path paddock looked at as well as the value as written.
+        """
+        return self._invalid_value(value, reason, template_vars={"path": path})
+
+
+@filter_macro
+def HostPath(base_dir: str | Path, check_paths: bool, is_dir: bool | None = None):
+    """Validates a host path, on disk or for shape only.
+
+    With ``check_paths``, this is ``Filepath`` anchored to ``base_dir``. Without
+    it, the path is kept as written and nothing is looked up on disk, for
+    config that doesn't apply to this run (ADR 014). Place after
+    ``f.Unicode``, as for ``Filepath``.
+
+    Args:
+        base_dir:
+
+            Directory a relative path resolves against.
+
+        check_paths:
+
+            When ``False``, pass the value through unchanged.
+
+        is_dir:
+
+            Passed to ``Filepath``.
+    """
+    if not check_paths:
+        return f.NoOp
+    return Filepath(base_dir=base_dir, is_dir=is_dir)
 
 
 class VolumeSpec(NamedTuple):

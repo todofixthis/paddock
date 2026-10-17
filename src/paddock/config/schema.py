@@ -1,3 +1,4 @@
+import os
 import sys
 from pathlib import Path
 from typing import cast
@@ -6,7 +7,7 @@ import filters as f
 from filters.base import BaseFilter
 from filters.macros import filter_macro
 
-from paddock.config.filters import Agent, AllowlistEntry, Filepath, VolumeMap
+from paddock.config.filters import Agent, AllowlistEntry, HostPath, Volume, VolumeMap
 
 BUILD_POLICIES = ("always", "daily", "if-missing", "weekly")
 CONTAINER_HOME = "/root"
@@ -36,7 +37,7 @@ class DropEmpty(BaseFilter):
         return out
 
 
-def _build_schema(base_dir: Path):
+def _build_schema(base_dir: Path, check_paths: bool):
     """Build-section schema; every field is optional.
 
     A ``policy`` without a ``dockerfile`` pulls the image instead of building
@@ -45,11 +46,11 @@ def _build_schema(base_dir: Path):
     return f.FilterMapper(
         {
             "args": f.FilterRepeater(f.Unicode),
-            "context": f.Unicode | Filepath(base_dir=base_dir, is_dir=True),
+            "context": f.Unicode | HostPath(base_dir, check_paths, is_dir=True),
             "dockerfile": (
                 f.NotEmpty(allow_none=True)
                 | f.Unicode
-                | Filepath(base_dir=base_dir, is_dir=False)
+                | HostPath(base_dir, check_paths, is_dir=False)
             ),
             "policy": f.Choice(BUILD_POLICIES),
         },
@@ -58,21 +59,35 @@ def _build_schema(base_dir: Path):
     )
 
 
-def _standard_fields(merged: bool, base_dir: Path) -> dict[str, object]:
+def _volumes_schema(base_dir: Path, check_paths: bool):
+    """Volumes schema. Without ``check_paths``, host paths (the keys) are kept
+    as written, since ``FilterRepeater`` validates only the values.
+    """
+    if not check_paths:
+        return f.Type(dict) | f.FilterRepeater(Volume(home_dir=CONTAINER_HOME))
+    return VolumeMap(container_home_dir=CONTAINER_HOME, host_base_dir=base_dir)
+
+
+def _standard_fields(
+    merged: bool, base_dir: Path, check_paths: bool = True
+) -> dict[str, object]:
     """Top-level standard config fields. Mode-aware.
 
     In merged mode required fields disallow ``None``; in per-source mode they
     allow ``None`` so sources can be incomplete without false errors.
-    ``base_dir`` anchors relative host paths (see ``standard_config_schema``).
+    ``base_dir`` and ``check_paths`` govern host paths (see
+    ``standard_config_schema``).
     """
+    # Gate every host-path check on check_paths, as HostPath and
+    # _volumes_schema do, so shape-only validation never touches disk
+    # (ADR 014).
     return {
         "agent": f.NotEmpty(allow_none=not merged) | Agent,
-        "build": _build_schema(base_dir),
+        "build": _build_schema(base_dir, check_paths),
         "image": f.NotEmpty(allow_none=not merged) | f.Unicode,
         "network": f.Unicode,
         "volumes": (
-            f.Optional({} if merged else None)
-            | VolumeMap(container_home_dir=CONTAINER_HOME, host_base_dir=base_dir)
+            f.Optional({} if merged else None) | _volumes_schema(base_dir, check_paths)
         ),
     }
 
@@ -81,6 +96,7 @@ def _standard_fields(merged: bool, base_dir: Path) -> dict[str, object]:
 def standard_config_schema(
     *,
     base_dir: Path,
+    check_paths: bool = True,
     extra_keys: dict | None = None,
     merged: bool = False,
 ):
@@ -91,6 +107,9 @@ def standard_config_schema(
             ``build.dockerfile``, ``volumes`` keys) resolve against: the
             workdir the config applies to (ADR 012). Required, so a new
             source can't fall back to the cwd by omission.
+        check_paths: ``False`` checks shape only: host paths are kept as
+            written and nothing is looked up on disk, for config that doesn't
+            apply to this run (ADR 014). Its output must not reach the merge.
         extra_keys: Optional mapping of additional top-level keys to allow
             (e.g. ``{"config": config_meta_schema}``).
         merged: ``False`` (default) is the per-source pass: every required
@@ -102,7 +121,7 @@ def standard_config_schema(
         A filter chain ``FilterMapper(...) | DropEmpty``. ``DropEmpty`` strips
         ``None``/empty-dict leaves so per-source results merge cleanly.
     """
-    fields = _standard_fields(merged, base_dir)
+    fields = _standard_fields(merged, base_dir, check_paths)
     if extra_keys:
         fields.update(extra_keys)
     return (
@@ -138,40 +157,59 @@ config_meta_schema = f.FilterMapper(
 
 
 @filter_macro
-def project_entry_schema(project: str | Path):
+def project_entry_schema(base_dir: Path, check_paths: bool = True):
     """Macro validating one ``[projects."<path>"]`` entry (per-source).
 
-    Allows ``[config]`` as well as the standard config fields. Relative host
-    paths resolve against ``project``, the directory the entry configures
-    (ADR 012).
+    Allows ``[config]`` as well as the standard config fields.
 
     Args:
-        project: The entry's project path, i.e. its key under ``[projects]``.
+        base_dir: The entry's key, the workdir it configures, which its
+            relative host paths resolve against (ADR 012).
+        check_paths: ``False`` checks shape only, for entries that don't
+            apply to this run (ADR 014).
     """
     return standard_config_schema(
+        base_dir=base_dir,
+        check_paths=check_paths,
         extra_keys={"config": config_meta_schema},
         merged=False,
-        base_dir=Path(project),
     )
 
 
-class ProjectMap(BaseFilter):
-    """Validates ``[projects]``, each entry against its own project path.
+class ProjectKeys(BaseFilter):
+    """Validates the keys of ``[projects]``, leaving entries to the next filter.
 
-    Unlike ``f.FilterRepeater``, the schema varies per key: an entry's relative
-    paths resolve against that entry's key, not the project being run.
+    Each key must be a normalised absolute path, the only form that can equal
+    a resolved workdir; anything else could never apply (ADR 014).
     """
+
+    CODE_NOT_A_WORKDIR = "not_a_workdir"
+
+    templates = {
+        CODE_NOT_A_WORKDIR: (
+            "Project key {value!r} can never match a workdir: use an absolute "
+            "path with no '~', '.' or '..' segments and no doubled or trailing "
+            "slash."
+        ),
+    }
 
     def _apply(self, value):
         value = cast(dict, self._filter(value, f.Type(dict)))
         if self._has_errors:
             return None
 
-        result = {
-            key: self._filter(entry, project_entry_schema(key), sub_key=str(key))
-            for key, entry in value.items()
-        }
-        return result if not self._has_errors else None
+        # A custom filter only because FilterRepeater filters values, not keys;
+        # refactor once https://github.com/todofixthis/filters/issues/92 lands.
+        for key in value:
+            # normpath keeps a leading '//' (POSIX), which no resolved
+            # workdir has.
+            if (
+                not os.path.isabs(key)
+                or os.path.normpath(key) != key
+                or key.startswith("//")
+            ):
+                self._invalid_value(key, self.CODE_NOT_A_WORKDIR, sub_key=key)
+        return value if not self._has_errors else None
 
 
 @filter_macro
@@ -180,14 +218,20 @@ def user_config_schema(base_dir: Path):
 
     Args:
         base_dir: Directory relative host paths in the file's global section
-            resolve against: the workdir (ADR 012). Each ``[projects]`` entry
-            resolves against its own key instead, the workdir it applies to.
+            resolve against: the workdir (ADR 012). ``[projects]`` entries are
+            checked for shape only; ``ProjectOverridesSource`` checks the one
+            that applies to this run in full (ADR 014). ``base_dir`` is passed
+            to them only because the entry schema requires one.
     """
     return f.TomlDecode | f.FilterMapper(
         {
             **_standard_fields(merged=False, base_dir=base_dir),
             "config": config_meta_schema,
-            "projects": f.Optional(dict) | ProjectMap,
+            "projects": (
+                f.Optional(dict)
+                | ProjectKeys
+                | f.FilterRepeater(project_entry_schema(base_dir, check_paths=False))
+            ),
         },
         allow_extra_keys=False,
         allow_missing_keys=True,

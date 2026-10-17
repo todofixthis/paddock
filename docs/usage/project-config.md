@@ -65,7 +65,7 @@ In this example:
 
 A per-project rule replaces your global rule for that source rather than adding to it, so name every key the project needs.
 
-**Note:** project paths must be **absolute** and match the *resolved* workdir exactly. paddock resolves the workdir — making it absolute and following symlinks — before both the `[projects]` lookup and the mounts, so the key must be the real path, not a symlinked one. Tilde expansion (e.g. `[projects."~/code/widgets"]`) is not yet supported — follow [phx-filters#92](https://github.com/phx-nz/phx-filters/issues/92) for updates.
+**Note:** project paths must be **absolute** and match the *resolved* workdir exactly. paddock resolves the workdir — making it absolute and following symlinks — before both the `[projects]` lookup and the mounts, so the key must be the real path, not a symlinked one. Tilde expansion (e.g. `[projects."~/code/widgets"]`) is not yet supported, and paddock stops with an error naming such a key — follow [phx-filters#92](https://github.com/phx-nz/phx-filters/issues/92) for updates.
 
 ## The allowlist
 
@@ -183,7 +183,7 @@ The project file (`<workdir>/.paddock/config.toml`) does not parse. It aborts th
 
 The project file sets `[config]` (or `projects`), which only your user config may set. A committed file cannot grant itself access.
 
-**`[project_toml:volumes.<path>] Path '<path>' does not exist or cannot be resolved.`**
+**`[project_toml:volumes.<path>] Path '<path>' does not exist or cannot be resolved (checked …).`**
 
 A host path in the project file doesn't exist on this machine. A relative path resolves against the workdir, not `.paddock/`; see [Validation](configuration.md#validation).
 
@@ -193,7 +193,7 @@ A file named `.paddock` exists in the project workdir. Rename or remove it, then
 
 **`project_toml: dropped non-allowlisted keys ... — add them to [config.allowlist].project_toml to keep them`**
 
-Every key in the project file was dropped: no grant for `project_toml` applies to this run — it is off by default (blocked) — or the grant names none of the keys the file sets. If you granted it under `[projects."<path>".config.allowlist]`, check that `<path>` is exactly the resolved workdir: no `~`, no trailing slash, no symlink, and not a parent of the directory you ran paddock from (see the note under [Per-project overrides](#per-project-overrides)). The `--workdir=` in the `docker run` line paddock prints is the path to match. See [Enabling project-level config](#enabling-project-level-config).
+Every key in the project file was dropped: no grant for `project_toml` applies to this run — it is off by default (blocked) — or the grant names none of the keys the file sets. If you granted it under `[projects."<path>".config.allowlist]`, check that `<path>` is exactly the resolved workdir: not a symlink, and not a parent of the directory you ran paddock from (see the note under [Per-project overrides](#per-project-overrides)). The `--workdir=` in the `docker run` line paddock prints is the path to match. See [Enabling project-level config](#enabling-project-level-config).
 
 **Project config is loaded but some keys are ignored**
 

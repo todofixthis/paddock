@@ -28,9 +28,9 @@ whether the alert applies to them:
 
 ```markdown
 > [!WARNING]
-> **A stale `[projects]` entry stops every run**
+> **The build applies to whichever `image` the run ends up with**
 >
-> paddock validates every `[projects]` entry on each run, not just the current one, …
+> With `build.dockerfile` in your user file, a per-project `image` …
 ```
 
 Write alerts in this GitHub syntax, not MyST `{note}` directives, so they render on

@@ -58,7 +58,7 @@ paddock validates every enabled source before merging, then the merged result. A
 error stops the run before Docker starts, naming the source and key:
 
 ```
-[user:build.dockerfile] Path 'images/Dockerfile' does not exist or cannot be resolved.
+[user:build.dockerfile] Path 'images/Dockerfile' does not exist or cannot be resolved (checked /home/alice/code/widgets/images/Dockerfile).
 ```
 
 `final` in place of a source name means the merged config is incomplete, e.g.
@@ -73,9 +73,9 @@ follows symlinks. A relative path resolves against the workdir, whichever source
 it: `.paddock/config.toml` (not `.paddock/` itself), the user file, the environment and
 the command line. A value therefore means the same thing in every source and wherever
 you run paddock from: `"data"` names `<workdir>/data`, and `"../widgets-api"` a sibling
-of the project. A `[projects."<path>"]` entry resolves against its `<path>`, the workdir
-it applies to. The workdir here is its real path, with symlinks resolved, so `..`
-climbs from a symlinked checkout's target, not the link.
+of the project. The workdir here is its real path, with symlinks resolved, so `..`
+climbs from a symlinked checkout's target, not the link. A path error gives the value
+as written, then the path paddock checked.
 
 A relative path you set once for every project, in the global section of your user
 file, an exported `PADDOCK_*` variable or a shell alias, therefore names a different
@@ -84,20 +84,9 @@ absolute or `~` path for anything that lives in one place, such as a Dockerfile 
 your user file, and put a mount only some projects have in their
 [`projects`](#projects) entries.
 
-> [!WARNING]
-> **A stale `[projects]` entry stops every run**
->
-> paddock validates every `[projects]` entry on each run, not just the current one. An
-> entry with a path that no longer exists stops every run, whichever project you are
-> in. That is usually a relative path whose base has gone: the entry's project was
-> moved or deleted, or its key isn't a real directory, such as a typo or a `~` key. The
-> error names that entry:
->
-> ```
-> [user:projects./home/alice/code/gone.volumes.data] Path 'data' does not exist or cannot be resolved.
-> ```
->
-> Remove or fix the stale entry.
+paddock checks every [`projects`](#projects) entry's keys and values on each run, but
+checks paths only in the entry for this workdir. Another project's entry can't stop this
+run by naming a path that has gone, such as after that project moved.
 
 ## Reference table
 
@@ -926,7 +915,11 @@ Settings for one project, kept in your user file rather than in the project.
 paddock uses the entry whose key equals the workdir, resolved to an absolute path with
 symlinks followed. `~` in the key isn't expanded, and an entry for a parent directory
 doesn't apply to its subdirectories. Entries outweigh the rest of your user file but
-not the environment or command line.
+not the environment or command line. paddock checks every entry's keys and values on
+each run, but an entry's paths only when it applies. A key that can never match, such
+as `~/code/widgets`, a relative path or one with a trailing slash, stops every run. An
+entry keyed by a symlink, or for a project you have since moved, is ignored without a
+warning; re-key it to the project's real, current path.
 
 Use it for per-project settings you don't want to commit, or a per-project
 [`config.allowlist`](#configallowlist):
@@ -1028,15 +1021,25 @@ the [reference table](#reference-table)), no spelling works: unset the variable 
 the directive in a TOML file, or for [`build.args`](#buildargs) and
 [`volumes`](#volumes) with `--build-args-KEY=VALUE` or `--volume`.
 
-**`[<source>:volumes.<host path>] Path '…' does not exist or cannot be resolved.`**
+**`[<source>:volumes.<host path>] Path '…' does not exist or cannot be resolved (checked …).`**
 
 A volume's host path doesn't exist. A relative one is checked against the workdir, not
-where you ran paddock; see [Validation](#validation).
+where you ran paddock; see [Validation](#validation). The path after `checked` is the
+one paddock looked for.
 
-**`[user:projects.<path>.…] Path '…' does not exist or cannot be resolved.`**
+**`[user:projects.<path>…] …` or `[project_overrides:…] …`**
 
-A `[projects]` entry, possibly for a project other than this one, names a path that
-doesn't exist. paddock validates every entry on each run; see [Validation](#validation).
+A `[projects]` entry has a misspelt key, a bad value, a key that can never match a
+workdir or, for `project_overrides`, a path that doesn't exist. `project_overrides` is
+the entry for this workdir; a `user:projects` error may come from any entry, since
+paddock checks every entry's keys and values on each run. A typo in this workdir's
+entry appears under both names. See [`projects`](#projects) and
+[Validation](#validation).
+
+**`[<source>:build.…] Expected a file, but '…' is a directory (…).`**
+
+`build.dockerfile` names a directory, or `build.context` a file (`Expected a directory,
+but '…' is not a directory`). The path in brackets is the one paddock checked.
 
 **`[agent] Unknown agent "…"; installed agents: …`**
 

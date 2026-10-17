@@ -3,7 +3,14 @@ from pathlib import Path
 import filters as f
 import pytest
 
-from paddock.config.filters import Agent, Filepath, Volume, VolumeMap, VolumeSpec
+from paddock.config.filters import (
+    Agent,
+    Filepath,
+    HostPath,
+    Volume,
+    VolumeMap,
+    VolumeSpec,
+)
 
 
 def test_volume_pass_none(assert_filter_passes):
@@ -562,6 +569,58 @@ def test_filepath_relative_missing_under_base_dir(
         Filepath(base_dir=tmp_path / "base"),
         "data",
         [Filepath.CODE_DOES_NOT_EXIST],
+    )
+
+
+def test_filepath_error_names_checked_path(tmp_path):
+    """The error names the path checked as well as the value as written."""
+    runner = f.FilterRunner(Filepath(base_dir=tmp_path), "data")
+    assert runner.errors[""][0]["message"] == (
+        f"Path 'data' does not exist or cannot be resolved (checked {tmp_path / 'data'})."
+    )
+
+
+def test_filepath_is_dir_error_names_checked_path(tmp_path):
+    """An is_dir mismatch names the resolved path as well as the value."""
+    (tmp_path / "data").mkdir()
+    runner = f.FilterRunner(Filepath(base_dir=tmp_path, is_dir=False), "data")
+    assert runner.errors[""][0]["message"] == (
+        f"Expected a file, but 'data' is a directory ({(tmp_path / 'data').resolve()})."
+    )
+
+
+def test_host_path_pass_none(assert_filter_passes, tmp_path):
+    """None passes through."""
+    assert_filter_passes(HostPath(tmp_path, check_paths=True), None)
+
+
+def test_host_path_pass_checked(assert_filter_passes, tmp_path):
+    """With check_paths, a relative path resolves against base_dir."""
+    (tmp_path / "data").mkdir()
+    assert_filter_passes(
+        HostPath(tmp_path, check_paths=True), "data", (tmp_path / "data").resolve()
+    )
+
+
+def test_host_path_pass_unchecked(assert_filter_passes, tmp_path):
+    """Without check_paths, a missing path is kept as written."""
+    assert_filter_passes(HostPath(tmp_path, check_paths=False), "missing")
+
+
+def test_host_path_fail_checked_missing(assert_filter_errors, tmp_path):
+    """With check_paths, a missing path is invalid."""
+    assert_filter_errors(
+        HostPath(tmp_path, check_paths=True), "missing", [Filepath.CODE_DOES_NOT_EXIST]
+    )
+
+
+def test_host_path_fail_checked_is_dir(assert_filter_errors, tmp_path):
+    """With check_paths, is_dir reaches Filepath."""
+    (tmp_path / "data").mkdir()
+    assert_filter_errors(
+        HostPath(tmp_path, check_paths=True, is_dir=False),
+        "data",
+        [Filepath.CODE_IS_A_DIRECTORY],
     )
 
 
