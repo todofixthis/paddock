@@ -35,7 +35,7 @@ jobs:
           # Newest version in the test matrix. Reading `requires-python` from
           # pyproject.toml resolves to the latest CPython, which can outrun
           # dependency wheels.
-          python-version: "3.14"
+          python-version: "3.15"
       - name: Install dependencies
         # The project plus docs tools only, matching ReadTheDocs; `uv run
         # --no-sync` below keeps it that way instead of re-adding dev tools
@@ -69,7 +69,7 @@ jobs:
           # Newest version in the test matrix. Reading `requires-python` from
           # pyproject.toml resolves to the latest CPython, which can outrun
           # dependency wheels.
-          python-version: "3.14"
+          python-version: "3.15"
       # --locked also fails the job on a uv.lock that has drifted from
       # pyproject.toml
       - name: Install dependencies
@@ -118,7 +118,7 @@ jobs:
           # Newest version in the test matrix. Reading `requires-python` from
           # pyproject.toml resolves to the latest CPython, which can outrun
           # dependency wheels.
-          python-version: "3.14"
+          python-version: "3.15"
       # --locked also fails the job on a uv.lock that has drifted from
       # pyproject.toml
       - name: Install dependencies
