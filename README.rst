@@ -65,7 +65,7 @@ Drop into a plain bash shell inside the current directory:
 
 .. code-block:: bash
 
-   paddock --image=ubuntu:24.04 --agent=false
+   paddock --image=ubuntu:26.04 --agent=false
 
 Run Claude Code in an isolated container:
 
@@ -77,7 +77,7 @@ Print the assembled ``docker run`` command without executing it:
 
 .. code-block:: bash
 
-   paddock --image=ubuntu:24.04 --agent=false --dry-run
+   paddock --image=ubuntu:26.04 --agent=false --dry-run
 
 Configuration
 -------------
