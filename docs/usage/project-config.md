@@ -35,7 +35,7 @@ A grant directly under `[config.allowlist]` applies to every repository you run 
 
 - `build.dockerfile` / `build.context` — paddock runs `docker build` on the host, from the project's Dockerfile and context.
 - `volumes` — any existing host path, including `~`-relative ones expanded against *your* home (`~/.ssh`, say), mounted `rw` if the mapping says so.
-- `agent` — selecting `claude` mounts your `~/.claude` read-write, plus `~/.claude.json` if it exists.
+- `agent` — selecting `claude` mounts your `~/.claude` read-write, plus `~/.claude.json` if it exists; selecting `opencode` mounts your OpenCode config and data directories, sign-in included, read-write. Either way, the container can change config your host's agent later acts on, such as the commands it runs as MCP servers or hooks.
 - `network` — including `host`.
 
 `project_toml = true` permits every key. Granted globally, it is the same decision as ticking "I trust this project" when an IDE or coding agent opens a repository, taken once for every repository at once. Reserve it for repositories you would run a script from.

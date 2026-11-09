@@ -22,7 +22,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Node.js (required for Claude Code)
+# Install Node.js (required for Claude Code and OpenCode)
 RUN curl -fsSL "https://deb.nodesource.com/setup_${NODE_VERSION}.x" | bash - \
     && apt-get install -y nodejs \
     && apt-get clean \
@@ -32,5 +32,6 @@ RUN curl -fsSL "https://deb.nodesource.com/setup_${NODE_VERSION}.x" | bash - \
 RUN case "$AGENT" in \
     claude) npm install -g @anthropic-ai/claude-code ;; \
     none) echo "No agent selected" ;; \
+    opencode) npm install -g @opencode/cli ;; \
     *) echo "Unknown agent: $AGENT" && exit 1 ;; \
     esac

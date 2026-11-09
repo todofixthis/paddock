@@ -12,11 +12,11 @@ docker run --rm -it --name paddock-<dir>-<agent> --workdir=<workdir> \
   -v <workdir>:<workdir>:rw <other volumes> [--network <network>] <image> <command>
 ```
 
-`<command>` is the agent's command (`claude` for the `claude` agent, `/bin/bash` for
-`false`). A command before `--` replaces it (`paddock /bin/bash`); with none, arguments
-after `--` extend it (`paddock -- --continue` runs `claude --continue`). paddock never
-passes `--entrypoint`, so the image's own `ENTRYPOINT`, if it has one, receives
-`<command>` as its arguments.
+`<command>` is the agent's command (`claude` for the `claude` agent, `opencode` for
+`opencode`, `/bin/bash` for `false`). A command before `--` replaces it
+(`paddock /bin/bash`); with none, arguments after `--` extend it
+(`paddock -- --continue` runs `claude --continue`). paddock never passes `--entrypoint`,
+so the image's own `ENTRYPOINT`, if it has one, receives `<command>` as its arguments.
 
 A custom image therefore needs:
 
