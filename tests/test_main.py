@@ -415,3 +415,35 @@ def test_logs_every_mounted_volume(
     ]
     assert f"{minimal_config / '.claude.json'}:/root/.claude.json:rw" in mounted
     assert logged == mounted
+
+
+def test_container_exit_status_survives_failed_paddock_dir_removal(
+    tmp_path: Path, mocker, monkeypatch
+):
+    """A ``.paddock`` that won't delete must not mask the container's status.
+
+    Docker Desktop on macOS can briefly deny ``rmdir`` after the container
+    exits. The error once escaped ``ProjectDirManager.__exit__`` and replaced
+    the ``SystemExit``, so paddock exited 1 with a traceback.
+    """
+    _write_user_config(
+        tmp_path,
+        'image = "ubuntu:22.04"\nagent = "claude"\n'
+        "[config.allowlist]\nproject_toml = true\n",
+    )
+    monkeypatch.chdir(tmp_path)
+    assert not (tmp_path / ".paddock").exists()
+    mock_run = mocker.patch("paddock.__main__.subprocess.run")
+    mock_run.return_value.returncode = 37
+    mocker.patch(
+        "paddock.docker.builder.DockerCommandBuilder._container_name_available",
+        return_value=True,
+    )
+    mocker.patch("paddock.config.project_dir.sleep")
+    rmdir = mocker.patch.object(
+        Path, "rmdir", autospec=True, side_effect=PermissionError(13, "denied")
+    )
+    with pytest.raises(SystemExit) as exc:
+        run([])
+    assert exc.value.code == 37
+    rmdir.assert_called()
