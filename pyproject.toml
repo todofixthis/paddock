@@ -35,7 +35,7 @@ classifiers = [
     "Topic :: Software Development :: Build Tools",
 ]
 dependencies = [
-    "phx-class-registry>=5.2.1,<6.0.0",
+    "phx-class-registry>=6.0.0,<6.1.0",
     "phx-filters>=3.7.0,<4.0.0",
 ]
 description = "Launch coding agents in isolated Docker containers."
