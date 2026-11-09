@@ -106,7 +106,8 @@ jobs:
   # runs, so a Renovate bump that breaks the build fails here rather than for
   # users. The steps, not the job, skip when nothing changed: the job always
   # reports a result, so the gate need not tell a justified skip from a broken
-  # condition (ADR 015).
+  # condition (ADR 015). Only an explicit 'false' skips them, so a missing or
+  # misspelt output builds rather than passing unbuilt.
   image:
     needs: changes
     runs-on: ubuntu-latest
@@ -119,18 +120,18 @@ jobs:
 
     steps:
       - name: Report a skipped build
-        if: needs.changes.outputs.image != 'true'
+        if: needs.changes.outputs.image == 'false'
         run: echo "⏭️ Image unchanged; skipping the build."
       - name: Clone repo
-        if: needs.changes.outputs.image == 'true'
+        if: needs.changes.outputs.image != 'false'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Build image
-        if: needs.changes.outputs.image == 'true'
+        if: needs.changes.outputs.image != 'false'
         env:
           AGENT: ${{ matrix.agent }}
         run: docker build --build-arg "AGENT=${AGENT}" -t "paddock-smoke:${AGENT}" -f images/Dockerfile images
       - name: Smoke test image
-        if: needs.changes.outputs.image == 'true'
+        if: needs.changes.outputs.image != 'false'
         timeout-minutes: 5
         env:
           AGENT: ${{ matrix.agent }}

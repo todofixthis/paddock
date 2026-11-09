@@ -38,7 +38,8 @@ required without passing any skip.
 ### Option 2: One gate failing on any skip; conditional jobs skip steps (Accepted)
 
 cookiecutter-py's gate, unchanged. `image` always runs, and its build and smoke steps skip
-when the `changes` job found nothing to build, so the job still reports success or failure.
+only when the `changes` job reported an explicit `false`, so the job still reports success
+or failure, and broken change detection builds rather than skipping.
 
 **Cons:** Each push starts three `image` runners that do nothing for a few seconds.
 
@@ -65,14 +66,16 @@ price of a few idle runner-seconds.
 
 `always()`, not `!cancelled()`: GitHub counts a skipped required check as passing, so a
 gate skipped on cancellation would make the cancelled commit mergeable untested. Nothing
-here cancels runs automatically, so only a manual cancel leaves a commit red.
+here cancels superseded runs, so only a manual cancel or a job timeout leaves a commit red.
 
 ## Consequences
 
 - The `main and develop` ruleset must require `gate` and nothing else. A maintainer
   changes it by hand.
 - A new job must join the gate's `needs`, or it can fail without blocking a merge.
-- A job that may have nothing to do conditions its steps, not itself.
+- A job that may have nothing to do conditions its steps, not itself, and skips them only
+  on an explicit negative output (`!= 'false'`, not `== 'true'`), so that a broken
+  condition fails safe.
 - Rotating Python versions no longer touches the ruleset; the rotate-python-versions
   skill says so.
 

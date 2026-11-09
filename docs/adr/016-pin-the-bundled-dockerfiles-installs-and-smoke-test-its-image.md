@@ -78,8 +78,8 @@ tag's digest), which can break the build without a commit.
 
 ## Consequences
 
-- The README table is a `list-table` with one `- ``value``` line under each
-  `* - ``ARG``` line. Renovate replaces a value without re-padding, which would break a
+- The README table is a `list-table`: each row's ARG line (``` * - ``NODE_VERSION`` ```)
+  is followed by its value line (``` - ``22`` ```). Renovate replaces a value without re-padding, which would break a
   grid table whenever the value's width changed, and each row's regex manager matches
   that layout.
 - A new install in the Dockerfile needs an annotated `ARG`, and its README row its own
