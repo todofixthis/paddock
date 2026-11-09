@@ -14,10 +14,118 @@
         "phx-claude-siat@(?<currentDigest>[0-9a-f]{40})#subdirectory=skills/writing-adrs'[^\\n]*# (?<currentValue>\\d+\\.\\d+\\.\\d+)",
         "phx-claude-siat/blob/(?<currentValue>\\d+\\.\\d+\\.\\d+)/"
       ]
+    },
+    {
+      "customType": "regex",
+      "description": "Update the Dockerfile's annotated ARG version pins",
+      "managerFilePatterns": [
+        "/^images/Dockerfile$/"
+      ],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)(?: versioning=(?<versioning>\\S+))?\\nARG [A-Z0-9_]+=(?<currentValue>\\S+)"
+      ]
+    },
+    {
+      "customType": "regex",
+      "datasourceTemplate": "docker",
+      "depNameTemplate": "ubuntu",
+      "description": "Update the Ubuntu tags in the user docs alongside the Dockerfile's base image (ADR 010)",
+      "managerFilePatterns": [
+        "/^README\\.rst$/",
+        "/^docs/usage/.+\\.md$/"
+      ],
+      "matchStrings": [
+        "ubuntu:(?<currentValue>\\d+\\.\\d+)",
+        "``UBUNTU_VERSION``\\n\\s+- ``(?<currentValue>\\d+\\.\\d+)``"
+      ],
+      "versioningTemplate": "ubuntu"
+    },
+    {
+      "customType": "regex",
+      "datasourceTemplate": "npm",
+      "depNameTemplate": "@anthropic-ai/claude-code",
+      "description": "Update README.rst's CLAUDE_CODE_VERSION default alongside the Dockerfile's",
+      "managerFilePatterns": [
+        "/^README\\.rst$/"
+      ],
+      "matchStrings": [
+        "``CLAUDE_CODE_VERSION``\\n\\s+- ``(?<currentValue>[^`]+)``"
+      ]
+    },
+    {
+      "customType": "regex",
+      "datasourceTemplate": "node-version",
+      "depNameTemplate": "node",
+      "description": "Update README.rst's NODE_VERSION default alongside the Dockerfile's",
+      "managerFilePatterns": [
+        "/^README\\.rst$/"
+      ],
+      "matchStrings": [
+        "``NODE_VERSION``\\n\\s+- ``(?<currentValue>[^`]+)``"
+      ],
+      "versioningTemplate": "node"
+    },
+    {
+      "customType": "regex",
+      "datasourceTemplate": "npm",
+      "depNameTemplate": "@opencode/cli",
+      "description": "Update README.rst's OPENCODE_VERSION default alongside the Dockerfile's",
+      "managerFilePatterns": [
+        "/^README\\.rst$/"
+      ],
+      "matchStrings": [
+        "``OPENCODE_VERSION``\\n\\s+- ``(?<currentValue>[^`]+)``"
+      ]
+    },
+    {
+      "customType": "regex",
+      "datasourceTemplate": "python-version",
+      "depNameTemplate": "python",
+      "description": "Update README.rst's PYTHON_VERSION default alongside the Dockerfile's",
+      "managerFilePatterns": [
+        "/^README\\.rst$/"
+      ],
+      "matchStrings": [
+        "``PYTHON_VERSION``\\n\\s+- ``(?<currentValue>[^`]+)``"
+      ],
+      "versioningTemplate": "python"
     }
   ],
   "extends": [
     "config:recommended",
     "helpers:pinGitHubActionDigests"
+  ],
+  "packageRules": [
+    {
+      "description": "Track Claude Code's stable channel rather than latest, which moves almost daily",
+      "followTag": "stable",
+      "matchPackageNames": [
+        "@anthropic-ai/claude-code"
+      ]
+    },
+    {
+      "description": "Keep PYTHON_VERSION at major.minor, which deadsnakes' package names use, and skip pre-releases",
+      "extractVersion": "^(?<version>\\d+\\.\\d+)\\.\\d+$",
+      "matchDatasources": [
+        "python-version"
+      ],
+      "matchDepNames": [
+        "python"
+      ],
+      "matchFileNames": [
+        "README.rst",
+        "images/Dockerfile"
+      ]
+    },
+    {
+      "description": "Bump the Dockerfile's base image and the docs' Ubuntu tags in one pull request (ADR 010)",
+      "groupName": "Ubuntu",
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchDepNames": [
+        "ubuntu"
+      ]
+    }
   ]
 }

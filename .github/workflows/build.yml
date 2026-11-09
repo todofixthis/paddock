@@ -21,6 +21,47 @@ jobs:
       - name: Check ADRs
         run: uvx --from 'git+https://github.com/todofixthis/phx-claude-siat@0725567cec6bab6a227c2a3d569e64c226c33a4e#subdirectory=skills/writing-adrs' phx-adr check # 8.1.0
 
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      image: ${{ steps.changes.outputs.image }}
+
+    steps:
+      - name: Clone repo
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      # A branch compares against where it left the default branch, not its
+      # previous push: diffed per push, a push leaving the image alone would
+      # skip the build, and the gate would pass a head commit whose image an
+      # earlier push broke. develop and main compare against the previous push.
+      - name: Check whether the image changed
+        id: changes
+        env:
+          BEFORE: ${{ github.event.before }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          if [[ "${GITHUB_REF_NAME}" == "${DEFAULT_BRANCH}" || "${GITHUB_REF_NAME}" == main ]]; then
+            base="${BEFORE}"
+          else
+            base=$(git merge-base "origin/${DEFAULT_BRANCH}" HEAD) || base=""
+          fi
+          # A new branch's first push, or a force-push, can leave no base to
+          # diff against, so build
+          if [[ -z "${base}" ]] || ! git cat-file -e "${base}^{commit}" 2>/dev/null; then
+            echo "⚠️ No base commit to diff against; building."
+            echo "image=true" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+          # Anything that changes what the image contains or how it's tested
+          if git diff --name-only "${base}" HEAD | grep -qE '^(images/|\.github/scripts/smoke-test\.sh$|\.github/workflows/build\.yml$)'; then
+            echo "▶️ Image changed since ${base}; building."
+            echo "image=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "⏭️ Image unchanged since ${base}; skipping the build."
+            echo "image=false" >> "${GITHUB_OUTPUT}"
+          fi
+
   docs:
     runs-on: ubuntu-latest
 
@@ -52,6 +93,38 @@ jobs:
         run: |
           uv build
           uvx twine@7.0.0 check --strict dist/*
+
+  # Builds the bundled Dockerfile once per agent, then checks each install
+  # against the Dockerfile's ARG defaults, so a Renovate bump that breaks the
+  # build or installs the wrong version fails here rather than for users.
+  image:
+    needs: changes
+    if: needs.changes.outputs.image == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      # One agent failing shouldn't cancel the others' builds
+      fail-fast: false
+      matrix:
+        agent: [claude, none, opencode]
+
+    steps:
+      - name: Clone repo
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Build image
+        env:
+          AGENT: ${{ matrix.agent }}
+        run: docker build --build-arg "AGENT=${AGENT}" -t "paddock-smoke:${AGENT}" -f images/Dockerfile images
+      - name: Smoke test image
+        timeout-minutes: 5
+        env:
+          AGENT: ${{ matrix.agent }}
+        run: |
+          docker run --rm \
+            -v "${PWD}/.github/scripts/smoke-test.sh:/tmp/smoke-test.sh:ro" \
+            -v "${PWD}/images/Dockerfile:/tmp/Dockerfile:ro" \
+            "paddock-smoke:${AGENT}" \
+            bash /tmp/smoke-test.sh /tmp/Dockerfile "${AGENT}"
 
   # The jobs below repeat the pre-commit hook's lint, test and type checks, so a
   # commit made with --no-verify can't slip past review.
@@ -125,3 +198,33 @@ jobs:
         run: uv sync --locked
       - name: Type check
         run: uv run --no-sync mypy src/
+
+  # The single required status check, so branch protection needn't list every
+  # job, nor wait forever on one skipped by design. It fails on any job that
+  # didn't succeed, a skip included, except image skipped because changes found
+  # nothing to build: a job skipped by mistake can't pass unnoticed.
+  # always(), not !cancelled(): a skipped required check counts as passing, so
+  # cancelling a run would make its commit mergeable untested.
+  gate:
+    needs: [adrs, changes, docs, image, lint, test, typecheck]
+    if: always()
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Fail if any check did not succeed
+        env:
+          IMAGE_CHANGED: ${{ needs.changes.outputs.image }}
+          NEEDS: ${{ toJSON(needs) }}
+        run: |
+          failed=$(jq -r --arg changed "${IMAGE_CHANGED}" '
+            to_entries[]
+            | select(.value.result != "success")
+            | select((.key == "image" and .value.result == "skipped" and $changed == "false") | not)
+            | "\(.key): \(.value.result)"
+          ' <<< "${NEEDS}")
+          if [[ -n "${failed}" ]]; then
+            echo "❌ Required jobs did not succeed:"
+            echo "${failed}"
+            exit 1
+          fi
+          echo "✅ All required jobs succeeded, or were skipped as unneeded."

@@ -106,7 +106,7 @@ Flags that carry no config key — `--dry-run`, `--quiet`, `--version`, `--workd
 
 The project file has the lowest weight of any source; see [Precedence](configuration.md#precedence) for the full order and how values merge.
 
-**Example:** your user config sets `image = "ubuntu:22.04"`. A project's `.paddock/config.toml` sets `image = "widgets-dev:latest"`. Because `project_toml` (weight 10) is merged before `user` (weight 20), the user config wins — `ubuntu:22.04` is used, regardless of the project file.
+**Example:** your user config sets `image = "ubuntu:26.04"`. A project's `.paddock/config.toml` sets `image = "widgets-dev:latest"`. Because `project_toml` (weight 10) is merged before `user` (weight 20), the user config wins — `ubuntu:26.04` is used, regardless of the project file.
 
 To set the image for one project, put it in a per-project override in your user config instead:
 

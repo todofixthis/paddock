@@ -205,17 +205,30 @@ Python (via the deadsnakes PPA), Node.js, and the selected coding agent.
 
 Build arguments:
 
-+--------------------+-------------------+----------------------------------------------+
-| ARG                | Default           | Description                                  |
-+====================+===================+==============================================+
-| ``UBUNTU_VERSION`` | ``26.04``         | Ubuntu base image tag                        |
-+--------------------+-------------------+----------------------------------------------+
-| ``AGENT``          | ``none``          | ``claude``, ``opencode`` or ``none``         |
-+--------------------+-------------------+----------------------------------------------+
-| ``NODE_VERSION``   | ``22``            | Node.js major version                        |
-+--------------------+-------------------+----------------------------------------------+
-| ``PYTHON_VERSION`` | ``3.13``          | Python version (installed from deadsnakes)   |
-+--------------------+-------------------+----------------------------------------------+
+.. list-table::
+   :header-rows: 1
+
+   * - ARG
+     - Default
+     - Description
+   * - ``UBUNTU_VERSION``
+     - ``26.04``
+     - Ubuntu base image tag
+   * - ``AGENT``
+     - ``none``
+     - ``claude``, ``opencode`` or ``none``
+   * - ``CLAUDE_CODE_VERSION``
+     - ``2.1.311``
+     - Claude Code version, for ``AGENT=claude``
+   * - ``NODE_VERSION``
+     - ``22``
+     - Node.js major version
+   * - ``OPENCODE_VERSION``
+     - ``2.2.6``
+     - OpenCode version, for ``AGENT=opencode``
+   * - ``PYTHON_VERSION``
+     - ``3.13``
+     - Python version (installed from deadsnakes)
 
 Build the image manually:
 
