@@ -1,69 +1,80 @@
 ---
 status: Accepted
 date: 2026-11-09
-scope: [.github/workflows/]
-summary: Branch protection requires only a gate job that depends on every other CI job and fails on any result but success, a skip included unless the job's own change detection skipped it, rather than requiring each job by name.
-revisit-when: GitHub branch protection can require a check that a path filter skipped without blocking the merge; a workflow other than build.yml needs its own required check.
+scope: [.github/workflows/, .agents/skills/rotate-python-versions/]
+summary: The main and develop ruleset requires only a gate job that runs under always() (not !cancelled()), needs every other CI job, and fails on any result but success, a skip included; a job that may have nothing to do skips its steps, never itself.
+revisit-when: GitHub rulesets can require a check that a condition skipped without passing it unnoticed; CI gains a pull_request or merge_group trigger, or a merge queue; a workflow other than build.yml needs its own required check.
 ---
 
 # 015: Gate CI on a Single Required Job
 
 ## Context
 
-[ADR 016][] adds an `image` job that builds the bundled Dockerfile only when a change
-touches it. A required check that never reports holds a pull request open forever, so a
-workflow-level `paths` filter can't be used for it. A job skipped by its `if:` reports
-success instead, so requiring the `image` job by name would pass a run that skipped it by
-mistake, such as one whose change detection broke.
+The `main and develop` ruleset requires seven checks by name: `adrs`, `docs`, `lint`,
+`typecheck` and one per test matrix leg (`test (3.12)` to `test (3.14)`). Adding, renaming
+or splitting a job, or rotating a Python version, means editing the ruleset, a platform
+setting that no file in this repository records. Miss one and a required check for a
+removed job never reports, blocking every pull request.
 
-Requiring each job by name also means updating branch protection, a platform setting no
-file in this repository records, for every job added, renamed or split.
+[ADR 016][] adds an `image` job with nothing to do unless a change touches the Docker
+image. A required check that never reports blocks merging, so a workflow-level `paths`
+filter can't skip it. A job skipped by its `if:` reports success, so a required `image`
+job would pass a run that skipped it by mistake, such as one whose change detection broke.
 
 [`todofixthis/cookiecutter-py`][cookiecutter-py] already ends its CI with a `gate` job,
 the only required check, which fails on any result but success.
-[`todofixthis/config-paddock`][config-paddock] has a gate too, beside a path-conditioned
-image build, and lets any skip pass.
+[`todofixthis/config-paddock`][config-paddock] has a gate beside a job-level
+path-conditioned build, and lets any skip pass.
 
 ## Options
 
 ### Option 1: Do nothing
 
-Require each job by name in branch protection.
+Keep requiring each job by name.
 
-**Cons:** A path-conditioned job can't be required without passing on any skip. Every job
-change needs a matching edit to a setting nobody reviews.
+**Cons:** Every job or matrix change needs a matching ruleset edit. `image` can't be
+required without passing any skip.
 
-### Option 2: One gate that only passes skips it can account for (Accepted)
+### Option 2: One gate failing on any skip; conditional jobs skip steps (Accepted)
 
-A `gate` job runs with `if: always()`, needs every other job, and fails unless each
-succeeded. The one exception is `image`, which may be skipped when the `changes` job
-reported nothing to build.
+cookiecutter-py's gate, unchanged. `image` always runs, and its build and smoke steps skip
+when the `changes` job found nothing to build, so the job still reports success or failure.
 
-**Cons:** The gate lists every job, so a new job left out of `needs` is unguarded. It also
-fails on a run cancelled by a newer push, leaving that superseded commit red.
+**Cons:** Each push starts three `image` runners that do nothing for a few seconds.
 
-### Option 3: One gate that passes any skip
+### Option 3: One gate that excuses a skip change detection justifies
+
+`image` skips as a job; the gate passes that skip only when `changes` reported nothing to
+build.
+
+**Cons:** The gate carries an exception per conditional job, keyed to that job's change
+detection, and grows with each one.
+
+### Option 4: One gate that passes any skip
 
 config-paddock's form: fail only on `failure` or `cancelled`.
 
-**Cons:** A job skipped by a broken condition passes unnoticed, which is the gap Option 1
-leaves for `image`.
+**Cons:** A job skipped by a broken condition passes unnoticed.
 
 ## Decision
 
-Option 2. It keeps cookiecutter-py's guarantee that a skip can't pass unnoticed while
-allowing the one skip that change detection justifies, and it moves the list of required
-checks out of a platform setting into a reviewed file. `always()`, not `!cancelled()`:
-GitHub counts a skipped required check as passing, so a gate skipped on cancellation would
-make the cancelled commit mergeable untested.
+Option 2. A single gate takes the list of required checks out of the ruleset and into a
+reviewed file. Conditioning steps rather than jobs lets the gate stay cookiecutter-py's
+plain rule, with no exceptions to keep in step with each job's change detection, for the
+price of a few idle runner-seconds.
+
+`always()`, not `!cancelled()`: GitHub counts a skipped required check as passing, so a
+gate skipped on cancellation would make the cancelled commit mergeable untested. Nothing
+here cancels runs automatically, so only a manual cancel leaves a commit red.
 
 ## Consequences
 
-- Branch protection on `develop` and `main` must require `gate` and nothing else. This is
-  a repository setting a maintainer changes by hand.
-- A new job must be added to the gate's `needs`, or it can fail without blocking a merge.
-- A new path-conditioned job needs its own exception in the gate, keyed to the change
-  detection that skips it, not a blanket pass for skips.
+- The `main and develop` ruleset must require `gate` and nothing else. A maintainer
+  changes it by hand.
+- A new job must join the gate's `needs`, or it can fail without blocking a merge.
+- A job that may have nothing to do conditions its steps, not itself.
+- Rotating Python versions no longer touches the ruleset; the rotate-python-versions
+  skill says so.
 
 [ADR 016]: 016-pin-the-bundled-dockerfiles-installs-and-smoke-test-its-image.md
 [config-paddock]: https://github.com/todofixthis/config-paddock/blob/main/.github/workflows/build.yml

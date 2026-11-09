@@ -116,16 +116,6 @@
         "README.rst",
         "images/Dockerfile"
       ]
-    },
-    {
-      "description": "Bump the Dockerfile's base image and the docs' Ubuntu tags in one pull request (ADR 010)",
-      "groupName": "Ubuntu",
-      "matchDatasources": [
-        "docker"
-      ],
-      "matchDepNames": [
-        "ubuntu"
-      ]
     }
   ]
 }

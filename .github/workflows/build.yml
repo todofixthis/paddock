@@ -2,6 +2,11 @@
 name: CI
 on:
   push: ~
+  # Weekly, so an upstream change that breaks the image build (an apt package,
+  # the deadsnakes PPA, NodeSource's setup script, the Ubuntu tag) surfaces
+  # without waiting for a commit to touch images/. Runs on the default branch.
+  schedule:
+    - cron: "43 19 * * 0"
 permissions:
   contents: read
 
@@ -34,7 +39,8 @@ jobs:
       # A branch compares against where it left the default branch, not its
       # previous push: diffed per push, a push leaving the image alone would
       # skip the build, and the gate would pass a head commit whose image an
-      # earlier push broke. develop and main compare against the previous push.
+      # earlier push broke. develop and main compare against the previous push;
+      # a scheduled run has no previous push, so it always builds.
       - name: Check whether the image changed
         id: changes
         env:
@@ -46,15 +52,17 @@ jobs:
           else
             base=$(git merge-base "origin/${DEFAULT_BRANCH}" HEAD) || base=""
           fi
-          # A new branch's first push, or a force-push, can leave no base to
-          # diff against, so build
+          # A schedule, a new branch's first push or a force-push can leave no
+          # base to diff against, so build
           if [[ -z "${base}" ]] || ! git cat-file -e "${base}^{commit}" 2>/dev/null; then
             echo "⚠️ No base commit to diff against; building."
             echo "image=true" >> "${GITHUB_OUTPUT}"
             exit 0
           fi
-          # Anything that changes what the image contains or how it's tested
-          if git diff --name-only "${base}" HEAD | grep -qE '^(images/|\.github/scripts/smoke-test\.sh$|\.github/workflows/build\.yml$)'; then
+          # Anything that changes what the image contains or how it's tested.
+          # --no-renames also lists a file moved out of these paths.
+          changed=$(git diff --no-renames --name-only "${base}" HEAD -- images/ .github/scripts/smoke-test.sh .github/workflows/build.yml)
+          if [[ -n "${changed}" ]]; then
             echo "▶️ Image changed since ${base}; building."
             echo "image=true" >> "${GITHUB_OUTPUT}"
           else
@@ -94,12 +102,13 @@ jobs:
           uv build
           uvx twine@7.0.0 check --strict dist/*
 
-  # Builds the bundled Dockerfile once per agent, then checks each install
-  # against the Dockerfile's ARG defaults, so a Renovate bump that breaks the
-  # build or installs the wrong version fails here rather than for users.
+  # Builds the bundled Dockerfile once per agent and checks that each install
+  # runs, so a Renovate bump that breaks the build fails here rather than for
+  # users. The steps, not the job, skip when nothing changed: the job always
+  # reports a result, so the gate need not tell a justified skip from a broken
+  # condition (ADR 015).
   image:
     needs: changes
-    if: needs.changes.outputs.image == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
@@ -109,13 +118,19 @@ jobs:
         agent: [claude, none, opencode]
 
     steps:
+      - name: Report a skipped build
+        if: needs.changes.outputs.image != 'true'
+        run: echo "⏭️ Image unchanged; skipping the build."
       - name: Clone repo
+        if: needs.changes.outputs.image == 'true'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Build image
+        if: needs.changes.outputs.image == 'true'
         env:
           AGENT: ${{ matrix.agent }}
         run: docker build --build-arg "AGENT=${AGENT}" -t "paddock-smoke:${AGENT}" -f images/Dockerfile images
       - name: Smoke test image
+        if: needs.changes.outputs.image == 'true'
         timeout-minutes: 5
         env:
           AGENT: ${{ matrix.agent }}
@@ -199,12 +214,12 @@ jobs:
       - name: Type check
         run: uv run --no-sync mypy src/
 
-  # The single required status check, so branch protection needn't list every
-  # job, nor wait forever on one skipped by design. It fails on any job that
-  # didn't succeed, a skip included, except image skipped because changes found
-  # nothing to build: a job skipped by mistake can't pass unnoticed.
-  # always(), not !cancelled(): a skipped required check counts as passing, so
-  # cancelling a run would make its commit mergeable untested.
+  # The single required status check, in the main and develop ruleset, so the
+  # ruleset needn't list every job or matrix leg. It fails on any job that
+  # didn't succeed, a skip included, so a job skipped by mistake can't pass
+  # unnoticed (ADR 015). always(), not !cancelled(): a skipped required check
+  # counts as passing, so cancelling a run would make its commit mergeable
+  # untested.
   gate:
     needs: [adrs, changes, docs, image, lint, test, typecheck]
     if: always()
@@ -212,19 +227,9 @@ jobs:
 
     steps:
       - name: Fail if any check did not succeed
-        env:
-          IMAGE_CHANGED: ${{ needs.changes.outputs.image }}
-          NEEDS: ${{ toJSON(needs) }}
+        if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') || contains(needs.*.result, 'skipped')
         run: |
-          failed=$(jq -r --arg changed "${IMAGE_CHANGED}" '
-            to_entries[]
-            | select(.value.result != "success")
-            | select((.key == "image" and .value.result == "skipped" and $changed == "false") | not)
-            | "\(.key): \(.value.result)"
-          ' <<< "${NEEDS}")
-          if [[ -n "${failed}" ]]; then
-            echo "❌ Required jobs did not succeed:"
-            echo "${failed}"
-            exit 1
-          fi
-          echo "✅ All required jobs succeeded, or were skipped as unneeded."
+          echo "❌ A required job failed, was cancelled or was skipped."
+          exit 1
+      - name: All required jobs succeeded
+        run: echo "✅ All required jobs succeeded."

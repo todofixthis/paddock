@@ -53,8 +53,7 @@ Three fixes, best first.
 ### Pin versions and let Renovate bump them
 
 Pin each install to a version in an `ARG`. Bumping the `ARG` changes the step, so the
-next build reruns it. The bundled Dockerfile pins its agents this way, trimmed here to
-Claude Code:
+next build reruns it. For example, an agent step pinned this way:
 
 ```dockerfile
 # renovate: datasource=npm depName=@anthropic-ai/claude-code

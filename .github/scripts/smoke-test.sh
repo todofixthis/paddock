@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Smoke test for images/Dockerfile. Runs inside the built image, with the
-# Dockerfile mounted beside it, and checks each install against the ARG
-# defaults the image was built from, so a Renovate bump is checked against
-# what it actually installed.
+# Dockerfile mounted beside it, and checks each install runs and reports the
+# version its ARG default names. Most of those versions a successful build
+# already guarantees; the Node.js major is the one that can differ, since
+# NodeSource missing a release leaves Ubuntu's own nodejs (ADR 016).
 #
 # Usage: smoke-test.sh <Dockerfile> <claude|none|opencode>
 set -euo pipefail
