@@ -291,7 +291,7 @@ def test_unknown_agent_exits_one(capsys, tmp_path: Path, monkeypatch):
     assert exc.value.code == 1
     captured = capsys.readouterr()
     assert captured.err.strip() == (
-        '[agent] Unknown agent "bogus"; installed agents: claude, false, opencode'
+        '[agent] Unknown agent "bogus"; installed agents: claude, false'
     )
     assert not (tmp_path / ".paddock").exists()
 
