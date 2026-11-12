@@ -166,17 +166,6 @@ to ``/root/.claude:rw``, and ``~/.claude.json`` to ``/root/.claude.json:rw``
 if it exists, so authentication, onboarding and configuration persist between
 sessions.
 
-``opencode``
-~~~~~~~~~~~~
-
-Runs ``opencode`` inside the container.  Mounts the host's
-``$XDG_CONFIG_HOME/opencode`` and ``$XDG_DATA_HOME/opencode`` (by default
-``~/.config/opencode`` and ``~/.local/share/opencode``) to
-``/root/.config/opencode:rw`` and ``/root/.local/share/opencode:rw``, each only
-if it exists, so sign-in, settings and sessions persist between runs.  Create
-them first (``mkdir -p ~/.config/opencode ~/.local/share/opencode``), or
-anything OpenCode writes there in the container is lost when it exits.
-
 ``false`` (shell)
 ~~~~~~~~~~~~~~~~~
 
@@ -210,7 +199,7 @@ Build arguments:
 +====================+===================+==============================================+
 | ``UBUNTU_VERSION`` | ``24.04``         | Ubuntu base image tag                        |
 +--------------------+-------------------+----------------------------------------------+
-| ``AGENT``          | ``none``          | ``claude``, ``opencode`` or ``none``         |
+| ``AGENT``          | ``none``          | ``claude`` or ``none``                       |
 +--------------------+-------------------+----------------------------------------------+
 | ``NODE_VERSION``   | ``22``            | Node.js major version                        |
 +--------------------+-------------------+----------------------------------------------+
