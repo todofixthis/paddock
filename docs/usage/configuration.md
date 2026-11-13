@@ -608,21 +608,12 @@ The coding agent to run in the container, or `false` for a plain bash shell.
 
 The agent decides:
 
-- **The command.** `claude` runs `claude`; `opencode` runs `opencode`; `false` runs
-  `/bin/bash`.
+- **The command.** `claude` runs `claude`; `false` runs `/bin/bash`.
 - **Extra mounts.** `claude` mounts your `~/.claude` read-write at `/root/.claude`, plus
-  `~/.claude.json` if it exists, so sign-in and settings persist between runs. `opencode`
-  mounts your `$XDG_CONFIG_HOME/opencode` and `$XDG_DATA_HOME/opencode` (by default
-  `~/.config/opencode` and `~/.local/share/opencode`) read-write at
-  `/root/.config/opencode` and `/root/.local/share/opencode`, each only if it exists.
-  Create them first (run OpenCode on the host once, or
-  `mkdir -p ~/.config/opencode ~/.local/share/opencode`), or everything OpenCode
-  writes there in the container — sign-in, settings, sessions — is lost when it
-  exits. OpenCode's state directory isn't shared, so don't change OpenCode's config on
-  the host and in the container at the same time: neither sees the other's lock.
-  `false` mounts nothing extra.
+  `~/.claude.json` if it exists, so sign-in and settings persist between runs. `false`
+  mounts nothing extra.
 - **The `AGENT` build argument** passed when paddock [builds the image](#builddockerfile):
-  `claude` for `claude`, `opencode` for `opencode`, `none` for `false`.
+  `claude` for `claude`, `none` for `false`.
 - **The container name**, `paddock-<workdir name>-<agent>`.
 
 Installed packages can add agents; see
@@ -630,7 +621,7 @@ Installed packages can add agents; see
 name stops the run and lists the installed agents:
 
 ```
-[agent] Unknown agent "claud"; installed agents: claude, false, opencode
+[agent] Unknown agent "claud"; installed agents: claude, false
 ```
 
 Use `false` to explore an image or debug it. With [`build.dockerfile`](#builddockerfile)

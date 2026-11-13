@@ -4,8 +4,17 @@
 set -euo pipefail
 
 DEFAULT_E2E_IMAGE="mcr.microsoft.com/azurelinux/base/core:3.0"
+DEFAULT_VENV_DIR=".venv"
 E2E_IMAGE="${E2E_IMAGE:-$DEFAULT_E2E_IMAGE}"
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
+
+# uv reads this as absolute or relative to the project root.
+VENV_DIR="${UV_PROJECT_ENVIRONMENT:-$DEFAULT_VENV_DIR}"
+case "$VENV_DIR" in
+    /*) ;;
+    *) VENV_DIR="$REPO_ROOT/$VENV_DIR" ;;
+esac
+E2E_BIN="$VENV_DIR/bin/paddock"
 
 stray="$(env | grep '^PADDOCK_' || true)"
 if [ -n "$stray" ]; then
@@ -39,12 +48,15 @@ if ! docker image inspect "$E2E_IMAGE" >/dev/null 2>&1; then
 fi
 echo "✅ image present: $E2E_IMAGE"
 
-if [ ! -x "$REPO_ROOT/.venv/bin/paddock" ]; then
+if [ ! -x "$E2E_BIN" ]; then
     echo "▶️ syncing venv"
     (cd "$REPO_ROOT" && uv sync --group=dev >/dev/null) || { echo "❌ uv sync failed"; exit 1; }
 fi
-[ -x "$REPO_ROOT/.venv/bin/paddock" ] || { echo "❌ no paddock binary after sync"; exit 1; }
-echo "✅ binary: $REPO_ROOT/.venv/bin/paddock"
+[ -x "$E2E_BIN" ] || { echo "❌ no paddock binary after sync at $E2E_BIN"; exit 1; }
+echo "✅ binary: $E2E_BIN"
 
-command -v script >/dev/null || { echo "❌ 'script' (util-linux) missing; real runs need a pseudo-TTY"; exit 1; }
+command -v script >/dev/null || { echo "❌ 'script' missing; real runs need a pseudo-TTY"; exit 1; }
 echo "✅ pseudo-TTY wrapper available"
+
+command -v timeout >/dev/null || { echo "❌ 'timeout' missing; real runs need a time limit"; exit 1; }
+echo "✅ timeout available"

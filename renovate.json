@@ -67,18 +67,6 @@
     },
     {
       "customType": "regex",
-      "datasourceTemplate": "npm",
-      "depNameTemplate": "@opencode/cli",
-      "description": "Update README.rst's OPENCODE_VERSION default alongside the Dockerfile's",
-      "managerFilePatterns": [
-        "/^README\\.rst$/"
-      ],
-      "matchStrings": [
-        "``OPENCODE_VERSION``\\n\\s+- ``(?<currentValue>[^`]+)``"
-      ]
-    },
-    {
-      "customType": "regex",
       "datasourceTemplate": "python-version",
       "depNameTemplate": "python",
       "description": "Update README.rst's PYTHON_VERSION default alongside the Dockerfile's",

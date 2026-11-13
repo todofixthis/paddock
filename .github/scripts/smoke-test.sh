@@ -5,11 +5,11 @@
 # already guarantees; the Node.js major is the one that can differ, since
 # NodeSource missing a release leaves Ubuntu's own nodejs (ADR 016).
 #
-# Usage: smoke-test.sh <Dockerfile> <claude|none|opencode>
+# Usage: smoke-test.sh <Dockerfile> <claude|none>
 set -euo pipefail
 
-dockerfile="${1:?usage: smoke-test.sh <Dockerfile> <claude|none|opencode>}"
-agent="${2:?usage: smoke-test.sh <Dockerfile> <claude|none|opencode>}"
+dockerfile="${1:?usage: smoke-test.sh <Dockerfile> <claude|none>}"
+agent="${2:?usage: smoke-test.sh <Dockerfile> <claude|none>}"
 
 fail() {
   echo "❌ $1" >&2
@@ -72,14 +72,8 @@ case "${agent}" in
     check_output "${claude_code_version}" timeout 60 claude --version
     ;;
   none)
-    for cmd in claude opencode; do
-      ! command -v "${cmd}" >/dev/null 2>&1 || fail "${cmd} installed with AGENT=none"
-    done
+    ! command -v claude >/dev/null 2>&1 || fail "claude installed with AGENT=none"
     echo "✅ no agent installed"
-    ;;
-  opencode)
-    opencode_version=$(arg_default OPENCODE_VERSION)
-    check_output "${opencode_version}" timeout 60 opencode --version
     ;;
   *)
     fail "unknown agent: ${agent}"

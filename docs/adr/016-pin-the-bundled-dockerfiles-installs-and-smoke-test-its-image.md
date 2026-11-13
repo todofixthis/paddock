@@ -10,7 +10,7 @@ revisit-when: Renovate's Dockerfile and docs pull requests outpace review; a pin
 
 ## Context
 
-[`images/Dockerfile`][Dockerfile] installs Claude Code and OpenCode unpinned. [ADR 011][]
+[`images/Dockerfile`][Dockerfile] installs Claude Code unpinned. [ADR 011][]
 left freshness to the Dockerfile and documents pinning with Renovate as the best fix, yet
 the bundled Dockerfile was the docs' own example of a stale install.
 
@@ -35,7 +35,7 @@ install). Doc copies drift on every bump, and a broken Dockerfile ships unnotice
 
 ### Option 2: Pin every install, and let Renovate bump the doc copies with it (Accepted)
 
-Each version the Dockerfile installs (Claude Code, Node.js, OpenCode, Python) moves to an
+Each version the Dockerfile installs (Claude Code, Node.js, Python) moves to an
 `ARG` with a `# renovate:` annotation, which a regex manager reads, as in
 [`todofixthis/config-paddock`][config-paddock]. Regex managers over `README.rst` and
 `docs/usage/` match each copy; a copy shares its pin's dependency name, so Renovate puts
@@ -88,8 +88,8 @@ tag's digest), which can break the build without a commit.
   included. An example that must name an older release needs a form the pattern skips.
 - Merging a pin bump changes what users' builds install: review it as a user-facing
   change, as ADR 010 does for the base image.
-- Each change to `images/`, the smoke script or the CI workflow builds the image three
-  times, once per agent; Renovate's Actions bumps touch the workflow, so they do too.
+- Each change to `images/`, the smoke script or the CI workflow builds the image once per
+  agent; Renovate's Actions bumps touch the workflow, so they do too.
 - Python's pin keeps `major.minor` through an `extractVersion` rule, because deadsnakes
   names packages that way. Node.js keeps its major under Renovate's `node` versioning,
   which proposed 26 from 22, skipping the non-LTS 23 and 25.

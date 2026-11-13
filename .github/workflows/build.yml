@@ -116,7 +116,7 @@ jobs:
       # One agent failing shouldn't cancel the others' builds
       fail-fast: false
       matrix:
-        agent: [claude, none, opencode]
+        agent: [claude, none]
 
     steps:
       - name: Report a skipped build

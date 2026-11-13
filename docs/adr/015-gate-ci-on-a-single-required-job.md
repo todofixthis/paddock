@@ -41,7 +41,7 @@ cookiecutter-py's gate, unchanged. `image` always runs, and its build and smoke 
 only when the `changes` job reported an explicit `false`, so the job still reports success
 or failure, and broken change detection builds rather than skipping.
 
-**Cons:** Each push starts three `image` runners that do nothing for a few seconds.
+**Cons:** Each push starts an `image` runner per agent that does nothing for a few seconds.
 
 ### Option 3: One gate that excuses a skip change detection justifies
 
