@@ -65,7 +65,7 @@ Drop into a plain bash shell inside the current directory:
 
 .. code-block:: bash
 
-   paddock --image=ubuntu:24.04 --agent=false
+   paddock --image=ubuntu:26.04 --agent=false
 
 Run Claude Code in an isolated container:
 
@@ -77,7 +77,7 @@ Print the assembled ``docker run`` command without executing it:
 
 .. code-block:: bash
 
-   paddock --image=ubuntu:24.04 --agent=false --dry-run
+   paddock --image=ubuntu:26.04 --agent=false --dry-run
 
 Configuration
 -------------
@@ -194,17 +194,27 @@ Python (via the deadsnakes PPA), Node.js, and the selected coding agent.
 
 Build arguments:
 
-+--------------------+-------------------+----------------------------------------------+
-| ARG                | Default           | Description                                  |
-+====================+===================+==============================================+
-| ``UBUNTU_VERSION`` | ``24.04``         | Ubuntu base image tag                        |
-+--------------------+-------------------+----------------------------------------------+
-| ``AGENT``          | ``none``          | ``claude`` or ``none``                       |
-+--------------------+-------------------+----------------------------------------------+
-| ``NODE_VERSION``   | ``22``            | Node.js major version                        |
-+--------------------+-------------------+----------------------------------------------+
-| ``PYTHON_VERSION`` | ``3.13``          | Python version (installed from deadsnakes)   |
-+--------------------+-------------------+----------------------------------------------+
+.. list-table::
+   :header-rows: 1
+
+   * - ARG
+     - Default
+     - Description
+   * - ``UBUNTU_VERSION``
+     - ``26.04``
+     - Ubuntu base image tag
+   * - ``AGENT``
+     - ``none``
+     - ``claude`` or ``none``
+   * - ``CLAUDE_CODE_VERSION``
+     - ``2.1.311``
+     - Claude Code version, for ``AGENT=claude``
+   * - ``NODE_VERSION``
+     - ``22``
+     - Node.js major version
+   * - ``PYTHON_VERSION``
+     - ``3.13``
+     - Python version (installed from deadsnakes)
 
 Build the image manually:
 

@@ -46,14 +46,14 @@ is unchanged. A step that installs whatever is current, such as
 `npm install -g @anthropic-ai/claude-code` or `apt-get upgrade`, runs once; every later
 build reuses what it installed then. [`build.policy`](configuration.md#buildpolicy)'s
 `daily` and `weekly` rebuild on schedule, but from that cache, so they never update such
-an install. The bundled Dockerfile's agent step is one.
+an install.
 
 Three fixes, best first.
 
 ### Pin versions and let Renovate bump them
 
 Pin each install to a version in an `ARG`. Bumping the `ARG` changes the step, so the
-next build reruns it. In a copy of the bundled Dockerfile, the agent step becomes:
+next build reruns it. For example, an agent step pinned this way:
 
 ```dockerfile
 # renovate: datasource=npm depName=@anthropic-ai/claude-code

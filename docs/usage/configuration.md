@@ -696,7 +696,7 @@ docker build -t <image> -f <build.dockerfile> [--build-arg …] <build.context>
 > **The build applies to whichever `image` the run ends up with**
 >
 > With `build.dockerfile` in your user file, a per-project `image` or an
-> `--image=ubuntu:24.04` gets built from your Dockerfile too, replacing the image of
+> `--image=ubuntu:26.04` gets built from your Dockerfile too, replacing the image of
 > that name. No source can switch building off once a lower one turns it on, so set
 > `[build]` beside the one `image` it builds: in a [`projects`](#projects) entry, or in
 > your user file only if you never run another image. To run a prebuilt image in one
@@ -747,8 +747,8 @@ builds it, rather than changing the policy in a file.
 paddock stamps each build with a `paddock.built-at` label and measures age from it, or
 from the image's creation time for an image paddock didn't build. It builds with
 Docker's layer cache, which replays an unchanged `RUN` step, so a `daily` or `weekly`
-rebuild reinstalls nothing that step doesn't pin, the bundled Dockerfile's agent
-included; see [stale installs](docker-images.md#stale-installs) for the fixes.
+rebuild reinstalls nothing that step doesn't pin; see
+[stale installs](docker-images.md#stale-installs) for the fixes.
 
 Without `build.dockerfile`, paddock runs `docker pull <image>` when the policy says it's
 due, so a registry image built on a schedule stays current. It records each pull in
