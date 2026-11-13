@@ -113,3 +113,86 @@ def test_disabled_ignores_a_symlinked_project_dir(tmp_path: Path):
     link.symlink_to(tmp_path)
     with ProjectDirManager(tmp_path, readonly=True, enabled=False) as vol:
         assert vol is None
+
+
+def _flaky_rmdir(mocker, error: OSError, failures: int):
+    """Patch ``Path.rmdir`` to raise ``error`` ``failures`` times, then succeed.
+
+    Args:
+        mocker: The pytest-mock fixture.
+        error: The exception each failing call raises.
+        failures: How many calls raise before the real ``rmdir`` runs.
+
+    Returns:
+        The autospec mock standing in for ``Path.rmdir``.
+    """
+    real_rmdir = Path.rmdir
+    remaining = [failures]
+
+    def fake(self: Path) -> None:
+        if remaining[0] > 0:
+            remaining[0] -= 1
+            raise error
+        real_rmdir(self)
+
+    return mocker.patch.object(Path, "rmdir", autospec=True, side_effect=fake)
+
+
+def test_exit_retries_transient_permission_error(tmp_path: Path, mocker):
+    sleep = mocker.patch("paddock.config.project_dir.sleep")
+    rmdir = _flaky_rmdir(mocker, PermissionError(13, "denied"), failures=1)
+    with ProjectDirManager(tmp_path, readonly=True, enabled=True):
+        pass
+    assert not (tmp_path / ".paddock").exists()
+    assert rmdir.call_count == 2
+    sleep.assert_called_once_with(0.1)
+
+
+def test_exit_persistent_permission_error_warns_and_keeps(
+    tmp_path: Path, mocker, caplog
+):
+    sleep = mocker.patch("paddock.config.project_dir.sleep")
+    rmdir = _flaky_rmdir(mocker, PermissionError(13, "denied"), failures=10)
+    with caplog.at_level(logging.WARNING, logger="paddock"):
+        with ProjectDirManager(tmp_path, readonly=True, enabled=True):
+            pass
+    assert (tmp_path / ".paddock").is_dir()
+    assert rmdir.call_count == 10
+    # No sleep after the last attempt.
+    assert sleep.call_count == 9
+    assert any(str(tmp_path / ".paddock") in r.getMessage() for r in caplog.records)
+
+
+def test_exit_other_os_error_from_rmdir_warns_without_retry(
+    tmp_path: Path, mocker, caplog
+):
+    sleep = mocker.patch("paddock.config.project_dir.sleep")
+    rmdir = _flaky_rmdir(mocker, OSError(16, "busy"), failures=1)
+    with caplog.at_level(logging.WARNING, logger="paddock"):
+        with ProjectDirManager(tmp_path, readonly=True, enabled=True):
+            pass
+    assert (tmp_path / ".paddock").is_dir()
+    assert rmdir.call_count == 1
+    sleep.assert_not_called()
+    assert any(str(tmp_path / ".paddock") in r.getMessage() for r in caplog.records)
+
+
+def test_exit_rmdir_file_not_found_is_silent(tmp_path: Path, mocker, caplog):
+    mocker.patch("paddock.config.project_dir.sleep")
+    rmdir = _flaky_rmdir(mocker, FileNotFoundError(2, "gone"), failures=1)
+    with caplog.at_level(logging.WARNING, logger="paddock"):
+        with ProjectDirManager(tmp_path, readonly=True, enabled=True):
+            pass
+    assert rmdir.call_count == 1
+    assert not caplog.records
+
+
+def test_exit_iterdir_permission_error_warns(tmp_path: Path, mocker, caplog):
+    mocker.patch.object(
+        Path, "iterdir", autospec=True, side_effect=PermissionError(13, "denied")
+    )
+    with caplog.at_level(logging.WARNING, logger="paddock"):
+        with ProjectDirManager(tmp_path, readonly=True, enabled=True):
+            pass
+    assert (tmp_path / ".paddock").is_dir()
+    assert any(str(tmp_path / ".paddock") in r.getMessage() for r in caplog.records)

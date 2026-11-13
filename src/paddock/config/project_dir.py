@@ -1,5 +1,6 @@
 import logging
 from pathlib import Path
+from time import sleep
 
 from paddock.config.errors import PaddockEnvironmentError
 from paddock.config.filters import VolumeSpec
@@ -18,6 +19,12 @@ class ProjectDirManager:
     spec; on exit removes it only if paddock created it and it is still empty.
     When ``enabled`` is ``False`` it is an inert no-op yielding ``None``.
     """
+
+    # Docker Desktop on macOS can deny rmdir with EACCES for a moment after
+    # the container exits; measured outside paddock, it cleared within ~50 ms.
+    # The window below is a judgement call on that measurement.
+    RMDIR_ATTEMPTS = 10
+    RMDIR_RETRY_DELAY = 0.1
 
     def __init__(self, workdir: Path, *, readonly: bool, enabled: bool) -> None:
         """Initialises the manager for a single ``.paddock`` lifecycle.
@@ -73,17 +80,53 @@ class ProjectDirManager:
     def __exit__(self, *exc: object) -> None:
         """Removes ``.paddock`` if paddock created it and it is empty.
 
-        If the directory has contents after the container exits, a warning is
-        logged and the directory is left in place for manual review. A
-        pre-existing directory is never removed.
+        If the directory has contents after the container exits, or cannot be
+        inspected or removed, a warning is logged and the directory is left in
+        place for manual review. A pre-existing directory is never removed.
+
+        Note:
+            No ``OSError`` may escape: one raised here would replace the
+            ``SystemExit`` carrying the container's exit code.
         """
-        if not self._created or not self._dir.exists():
+        if not self._created:
             return
-        if any(self._dir.iterdir()):
-            logger.warning(
-                "%s has contents after container exit — leaving in place "
-                "for manual review",
-                self._dir,
-            )
+        try:
+            if not self._dir.exists():
+                return
+            has_contents = any(self._dir.iterdir())
+        except OSError as e:
+            self._warn_left_in_place(f"could not be inspected ({e})")
             return
-        self._dir.rmdir()
+        if has_contents:
+            self._warn_left_in_place("has contents after container exit")
+            return
+        self._remove_dir()
+
+    def _remove_dir(self) -> None:
+        """Removes the empty ``.paddock``, retrying a transient ``EACCES``.
+
+        Gives up with a warning after ``RMDIR_ATTEMPTS`` permission errors or
+        on any other ``OSError``. A directory already gone counts as removed.
+        """
+        for attempt in range(1, self.RMDIR_ATTEMPTS + 1):
+            try:
+                self._dir.rmdir()
+                return
+            except FileNotFoundError:
+                return
+            except PermissionError as e:
+                if attempt == self.RMDIR_ATTEMPTS:
+                    self._warn_left_in_place(f"could not be removed ({e})")
+                    return
+                sleep(self.RMDIR_RETRY_DELAY)
+            except OSError as e:
+                self._warn_left_in_place(f"could not be removed ({e})")
+                return
+
+    def _warn_left_in_place(self, reason: str) -> None:
+        """Logs that ``.paddock`` is being left in place, and why.
+
+        Args:
+            reason: What went wrong, phrased to follow the directory path.
+        """
+        logger.warning("%s %s — leaving in place for manual review", self._dir, reason)
