@@ -210,7 +210,7 @@ Build arguments:
      - ``2.1.311``
      - Claude Code version, for ``AGENT=claude``
    * - ``NODE_VERSION``
-     - ``22``
+     - ``26``
      - Node.js major version
    * - ``PYTHON_VERSION``
      - ``3.13``
