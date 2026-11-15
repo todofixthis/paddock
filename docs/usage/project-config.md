@@ -36,6 +36,7 @@ A grant directly under `[config.allowlist]` applies to every repository you run 
 - `build.dockerfile` / `build.context` — paddock runs `docker build` on the host, from the project's Dockerfile and context.
 - `volumes` — any existing host path, including `~`-relative ones expanded against *your* home (`~/.ssh`, say), mounted `rw` if the mapping says so.
 - `agent` — selecting `claude` mounts your `~/.claude` read-write, plus `~/.claude.json` if it exists.
+- `agents` — arguments for any agent you have set none for yourself; see the caution under [The allowlist](#the-allowlist).
 - `network` — including `host`.
 
 `project_toml = true` permits every key. Granted globally, it is the same decision as ticking "I trust this project" when an IDE or coding agent opens a repository, taken once for every repository at once. Reserve it for repositories you would run a script from.
@@ -81,6 +82,17 @@ Each gated source has an entry in `[config.allowlist]`. Valid values are:
 | `false` | The source is completely blocked. |
 | `[]` (empty list) | Same as `false` — nothing is permitted. |
 | `["image", "build.dockerfile"]` | Only the listed keys are permitted; dotted paths descend into nested tables. |
+
+`agents` is a single key: it covers every agent's settings, and no dotted path narrows it to one agent.
+
+> [!CAUTION]
+> **Allowlisting `agents` lets a project file pass arguments to your agent**
+>
+> An argument can switch off an agent's own safeguards: Claude Code's
+> `--dangerously-skip-permissions`, for one. Allowlist `agents` only for a project
+> whose files you trust as much as your own config; `project_toml = true` already
+> includes it. An `extra_args` you set for that agent in your user config, even `[]`,
+> takes precedence over the project file's.
 
 List entries are validated against the known config key paths. An unknown path (e.g. a typo like `"imgae"`) is rejected when the user config is loaded.
 
@@ -158,7 +170,7 @@ A gated source (`project_toml`, `env`, or `cli`) contributed keys the rule does 
 <source>: dropped non-allowlisted keys <paths> — add them to [config.allowlist].<source> to keep them
 ```
 
-`<paths>` lists the dotted leaf paths dropped (`image`, `build.dockerfile`), with `volumes` and `build.args` reported as single paths rather than one entry per mapping.
+`<paths>` lists the dotted leaf paths dropped (`image`, `build.dockerfile`), with `agents`, `volumes` and `build.args` reported as single paths rather than one entry per mapping.
 
 A source that is disabled failed validation — malformed TOML, an unknown key, or a bad value. Its errors are discarded with it rather than aborting the run, and it contributes nothing, so no keys are dropped:
 

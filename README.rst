@@ -36,7 +36,8 @@ sources overwrite earlier ones:
 5. CLI flags
 
 Higher sources win per key, except that ``volumes`` and ``build.args`` add
-up across sources.  The project-level file is ignored until you
+up across sources, and ``agents`` merges per agent while each ``extra_args``
+list is replaced whole.  The project-level file is ignored until you
 enable it; see `Configuration`_.
 
 Requirements
@@ -137,6 +138,15 @@ command:
    paddock --agent=claude -- "fix this bug"
    # runs: claude --resume
    paddock --agent=claude -- --resume
+
+Arguments you want on every run can live in config instead, under the agent's
+name; paddock places them before anything after ``--``.  See
+`agents.<name>.extra_args <https://phx-paddock.readthedocs.io/en/latest/usage/configuration.html#agents-name-extra-args>`__.
+
+.. code-block:: toml
+
+   [agents.claude]
+   extra_args = ["--resume"]
 
 The first positional argument before ``--`` starts a command that replaces
 the agent's, running in a container still configured for that agent (its
