@@ -706,3 +706,134 @@ def test_cli_and_env_relative_paths_resolve_against_workdir(
     )
     assert r.config["build"]["dockerfile"] == (workdir / "Dockerfile").resolve()
     assert set(r.config["volumes"]) == {str((workdir / "data").resolve())}
+
+
+def _agents_config(tmp_path: Path, project: str) -> str:
+    """A user config with a global Claude extra_args and a project entry.
+
+    Args:
+        tmp_path: The workdir, whose resolved path keys the project entry.
+        project: TOML placed under the workdir's ``[projects]`` entry.
+    """
+    return (
+        'image = "i"\nagent = "claude"\n'
+        '[agents.claude]\nextra_args = ["--a", "--b"]\n'
+        f'[projects."{tmp_path.resolve()}"]\n{project}'
+    )
+
+
+def test_project_override_replaces_extra_args(tmp_path: Path, monkeypatch):
+    """A higher source's extra_args replaces the list; it never concatenates."""
+    _setup_home(
+        tmp_path,
+        monkeypatch,
+        _agents_config(tmp_path, 'agents.claude.extra_args = ["--c"]\n'),
+    )
+    r = ConfigLoader().resolve(_empty_parsed(), workdir=tmp_path, environ={})
+    assert r.config["agents"]["claude"]["extra_args"] == ["--c"]
+
+
+def test_project_override_clears_extra_args(tmp_path: Path, monkeypatch):
+    """An empty list in a higher source clears the inherited one."""
+    _setup_home(
+        tmp_path,
+        monkeypatch,
+        _agents_config(tmp_path, "agents.claude.extra_args = []\n"),
+    )
+    r = ConfigLoader().resolve(_empty_parsed(), workdir=tmp_path, environ={})
+    assert r.config["agents"]["claude"]["extra_args"] == []
+
+
+def test_agents_settings_merge_per_agent(tmp_path: Path, monkeypatch):
+    """Settings for different agents merge; one does not displace another."""
+    _setup_home(
+        tmp_path,
+        monkeypatch,
+        _agents_config(tmp_path, 'agents.false.extra_args = ["-l"]\n'),
+    )
+    r = ConfigLoader().resolve(_empty_parsed(), workdir=tmp_path, environ={})
+    assert r.config["agents"] == {
+        "claude": {"extra_args": ["--a", "--b"]},
+        "false": {"extra_args": ["-l"]},
+    }
+
+
+def test_another_projects_agents_entry_does_not_apply(tmp_path: Path, monkeypatch):
+    """Only the workdir's own [projects] entry contributes agents settings."""
+    _setup_home(
+        tmp_path,
+        monkeypatch,
+        'image = "i"\nagent = "claude"\n'
+        '[projects."/elsewhere".agents.claude]\nextra_args = ["--x"]\n',
+    )
+    r = ConfigLoader().resolve(_empty_parsed(), workdir=tmp_path, environ={})
+    assert "agents" not in r.config
+
+
+def test_env_cannot_set_agents(tmp_path: Path, monkeypatch):
+    """agents has no environment form: the variable is an unknown name."""
+    _setup_home(tmp_path, monkeypatch, 'image = "i"\nagent = "claude"\n')
+    with pytest.raises(ExceptionGroup) as exc:
+        ConfigLoader().resolve(
+            _empty_parsed(),
+            workdir=tmp_path,
+            environ={"PADDOCK_AGENTS_CLAUDE_EXTRA_ARGS": "x"},
+        )
+    assert [str(e) for e in exc.value.exceptions] == [
+        "[env:PADDOCK_AGENTS_CLAUDE_EXTRA_ARGS] Unexpected key "
+        '"PADDOCK_AGENTS_CLAUDE_EXTRA_ARGS".'
+    ]
+
+
+def _project_file_with_agents(tmp_path: Path) -> None:
+    """Write a project file that sets Claude's extra_args."""
+    pd = tmp_path / ".paddock"
+    pd.mkdir()
+    (pd / "config.toml").write_text('[agents.claude]\nextra_args = ["--x"]\n')
+
+
+def test_project_toml_agents_dropped_unless_allowlisted(
+    tmp_path: Path, monkeypatch, caplog
+):
+    """agents is dropped whole, and reported as one path, unless allowlisted."""
+    _setup_home(
+        tmp_path,
+        monkeypatch,
+        'image = "i"\nagent = "claude"\n'
+        '[config.allowlist]\nproject_toml = ["volumes"]\n',
+    )
+    _project_file_with_agents(tmp_path)
+    with caplog.at_level(logging.WARNING, logger="paddock"):
+        r = ConfigLoader().resolve(_empty_parsed(), workdir=tmp_path, environ={})
+    assert "agents" not in r.config
+    assert [rec.message for rec in caplog.records] == [
+        "project_toml: dropped non-allowlisted keys agents — add them to "
+        "[config.allowlist].project_toml to keep them"
+    ]
+
+
+def test_project_toml_agents_kept_when_allowlisted(tmp_path: Path, monkeypatch):
+    """The single agents directive admits the whole table."""
+    _setup_home(
+        tmp_path,
+        monkeypatch,
+        'image = "i"\nagent = "claude"\n'
+        '[config.allowlist]\nproject_toml = ["agents"]\n',
+    )
+    _project_file_with_agents(tmp_path)
+    r = ConfigLoader().resolve(_empty_parsed(), workdir=tmp_path, environ={})
+    assert r.config["agents"]["claude"]["extra_args"] == ["--x"]
+
+
+def test_user_extra_args_beat_the_project_file(tmp_path: Path, monkeypatch):
+    """A user-level extra_args, even empty, wins over the project file's."""
+    _setup_home(
+        tmp_path,
+        monkeypatch,
+        'image = "i"\nagent = "claude"\n'
+        "[agents.claude]\nextra_args = []\n"
+        "[config.allowlist]\nproject_toml = true\n",
+    )
+    _project_file_with_agents(tmp_path)
+    r = ConfigLoader().resolve(_empty_parsed(), workdir=tmp_path, environ={})
+    assert r.config["agents"]["claude"]["extra_args"] == []

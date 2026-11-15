@@ -312,6 +312,18 @@ def test_allowlist_entry_rejects_unknown_dotted_path(assert_filter_errors):
     )
 
 
+def test_allowlist_entry_rejects_a_path_under_agents(assert_filter_errors):
+    """``agents`` is one directive: no dotted path descends into it (ADR 017)."""
+    from paddock.config.filters import AllowlistEntry
+
+    assert_filter_errors(
+        AllowlistEntry,
+        ["agents.claude"],
+        {"0": [f.Choice.CODE_INVALID]},
+        skip_value_check,
+    )
+
+
 def test_every_directive_is_accepted_by_the_schema(tmp_path):
     """Each declared directive round-trips through the real schema."""
     # Top-level keys whose schema value is itself a mapping (nested build
@@ -319,7 +331,11 @@ def test_every_directive_is_accepted_by_the_schema(tmp_path):
     # and ``build.dockerfile`` are filesystem paths validated by ``Filepath``
     # and need a real directory/file; every other directive is a scalar leaf
     # and accepts a plain string.
-    mapping_valued = {"volumes", *(key for key, subs in CONFIG_FIELDS.items() if subs)}
+    mapping_valued = {
+        "agents",
+        "volumes",
+        *(key for key, subs in CONFIG_FIELDS.items() if subs),
+    }
     dockerfile = tmp_path / "Dockerfile"
     dockerfile.write_text("")
     path_leaves = {"build.context": str(tmp_path), "build.dockerfile": str(dockerfile)}
@@ -355,3 +371,75 @@ def test_unknown_nested_key_is_rejected():
         {"build": {"bogus": "x"}},
     )
     assert not runner.is_valid()
+
+
+def _per_source_schema():
+    """The per-source standard schema; these configs hold no relative paths."""
+    return standard_config_schema(base_dir=Path.cwd(), merged=False)
+
+
+def test_agents_accepts_extra_args(assert_filter_passes):
+    """extra_args is a list of strings, kept verbatim, spaces and blanks too."""
+    config = {"agents": {"claude": {"extra_args": ["--resume", "a b", ""]}}}
+    assert_filter_passes(_per_source_schema(), config, config)
+
+
+def test_agents_accepts_a_name_no_agent_has(assert_filter_passes):
+    """The schema never consults the registry; unknown names warn later."""
+    config = {"agents": {"claud": {"extra_args": ["-x"]}}}
+    assert_filter_passes(_per_source_schema(), config, config)
+
+
+def test_agents_keeps_an_empty_list(assert_filter_passes):
+    """An empty extra_args survives DropEmpty, so it can clear a lower list."""
+    config: dict = {"agents": {"claude": {"extra_args": []}}}
+    assert_filter_passes(_per_source_schema(), config, config)
+
+
+def test_agents_rejects_a_string_extra_args(assert_filter_errors):
+    """A string is not split into arguments, nor into characters."""
+    assert_filter_errors(
+        _per_source_schema(),
+        {"agents": {"claude": {"extra_args": "--resume"}}},
+        {"agents.claude.extra_args": [f.Type.CODE_WRONG_TYPE]},
+        skip_value_check,
+    )
+
+
+def test_agents_rejects_a_non_string_entry(assert_filter_errors):
+    """Entries are not coerced: an integer is an error, not ``"1"``."""
+    assert_filter_errors(
+        _per_source_schema(),
+        {"agents": {"claude": {"extra_args": ["a", 1]}}},
+        {"agents.claude.extra_args.1": [f.Type.CODE_WRONG_TYPE]},
+        skip_value_check,
+    )
+
+
+def test_agents_rejects_an_unknown_setting(assert_filter_errors):
+    """Only extra_args is a setting."""
+    assert_filter_errors(
+        _per_source_schema(),
+        {"agents": {"claude": {"server": {}}}},
+        {"agents.claude.server": [f.FilterMapper.CODE_EXTRA_KEY]},
+        skip_value_check,
+    )
+
+
+def test_agents_rejects_a_non_table(assert_filter_errors):
+    """agents must be a table keyed by agent name."""
+    assert_filter_errors(
+        _per_source_schema(),
+        {"agents": "claude"},
+        {"agents": [f.Type.CODE_WRONG_TYPE]},
+        skip_value_check,
+    )
+
+
+def test_project_entry_accepts_agents(assert_filter_passes, tmp_path):
+    """A [projects] entry may carry agents settings."""
+    assert_filter_passes(
+        user_config_schema(base_dir=tmp_path),
+        '[projects."/x".agents.claude]\nextra_args = ["--resume"]\n',
+        skip_value_check,
+    )

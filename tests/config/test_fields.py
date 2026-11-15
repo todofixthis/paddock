@@ -4,7 +4,7 @@ from paddock.config.fields import CONFIG_FIELDS, allowlist_directives
 def test_directives_include_top_level_keys():
     """Every top-level config key is a valid directive."""
     directives = set(allowlist_directives())
-    assert {"agent", "build", "image", "network", "volumes"} <= directives
+    assert {"agent", "agents", "build", "image", "network", "volumes"} <= directives
 
 
 def test_directives_include_nested_build_keys():

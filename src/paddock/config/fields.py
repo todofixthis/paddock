@@ -5,6 +5,7 @@
 # ``_filters`` internals.
 CONFIG_FIELDS: dict[str, tuple[str, ...]] = {
     "agent": (),
+    "agents": (),
     "build": ("args", "context", "dockerfile", "policy"),
     "image": (),
     "network": (),
