@@ -84,7 +84,9 @@ separate worktree exists.
 - [ ] **Step 1: Write the failing schema tests** in `tests/config/test_schema.py`,
   with `assert_filter_passes` / `assert_filter_errors` on
   `standard_config_schema(base_dir=Path.cwd(), merged=False)`. Not the file's
-  `_validate()` helper, which cannot assert an error key:
+  `_validate()` helper, which cannot assert an error key. Pass `skip_value_check` as
+  the last argument to every `assert_filter_errors` call, as the file's existing
+  error tests do; the `assert_filter_passes` tests compare against the input value:
 
   - `test_agents_accepts_extra_args`:
     `{"agents": {"claude": {"extra_args": ["--resume", "a b", ""]}}}` cleans to the
@@ -118,7 +120,8 @@ separate worktree exists.
 
   Run: `uv run pytest tests/config/test_schema.py tests/config/test_fields.py -q`
   Expected: the new tests FAIL (`agents` is an unexpected key, or missing from the
-  directives); every other test passes.
+  directives), except `test_allowlist_entry_rejects_a_path_under_agents`; every
+  other test passes.
 
 - [ ] **Step 3: Implement**
 
@@ -231,7 +234,9 @@ separate worktree exists.
 - [ ] **Step 2: Run them and confirm they fail**
 
   Run: `uv run pytest tests/test_main.py -q`
-  Expected: the new tests FAIL on the argv or log assertions; the rest pass.
+  Expected: the `applies_extra_args`, `shell_agent`, `cli_agent_switch` and
+  `unknown_agent_settings` tests FAIL. The `replacement_command` and
+  `no_agents_table` tests pass already and pin existing behaviour.
 
 - [ ] **Step 3: Implement** in `src/paddock/__main__.py`, in that module's existing
   style of private helpers with docstrings:
@@ -246,7 +251,8 @@ separate worktree exists.
     `logger.warning('[agents.%s] No agent named "%s" is installed, so its settings
     are ignored; installed agents: %s', ...)`. Build the installed list with one
     helper, `_installed_agents() -> str`, and have `_resolve_agent`'s error use it
-    too.
+    too. The helper is for the message only: membership is
+    `name not in agent_registry`.
   - In `run`, call `_warn_unknown_agent_settings(config)` straight after
     `_resolve_agent`, and pass `agent_args=[*_extra_args(config,
     _agent_key(config["agent"])), *parsed.agent_args]` to `command_builder.build`.
@@ -365,6 +371,8 @@ separate worktree exists.
   them.
 - The three helpers added to `__main__.py` are module-level functions, matching that
   module's existing style, despite the class-first rule elsewhere.
+- `run` derives the agent key a second time rather than have `_resolve_agent`
+  return it; one cheap pure call beats a wider return type.
 - `[agents.""]` passes the schema and warns as `[agents.]`; `FilterRepeater` cannot
   check keys, and the warning already reports it.
 - `[agents.claud]` with no keys under it is stripped as an empty table and draws no
