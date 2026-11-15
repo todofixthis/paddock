@@ -154,8 +154,9 @@ extra_args = ["--plugin-dir=./"]
 
 #### `agents.<name>`
 
-`<name>` must be a registered client or server; anything else is a config error that
-lists the installed names.
+`<name>` is a client's or server's registry key. A name nothing installed has draws a
+warning after the merge and its settings are ignored (ADR 017): a validation error
+would stop every run on a machine missing a plugin that a shared config names.
 
 - `extra_args`: list of strings, for client `<name>`. Appended after the client's
   command and before the tokens after `--`. It never reaches Paddock's own flags:
