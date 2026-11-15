@@ -634,3 +634,12 @@ def test_volume_map_host_base_dir(assert_filter_passes, tmp_path, monkeypatch):
         {"data": "/data"},
         {str((base / "data").resolve()): VolumeSpec("/data", "ro")},
     )
+
+
+def test_agent_table_rejected(assert_filter_errors):
+    """A table is not an agent name.
+
+    ``[agent.claude]`` written for ``[agents.claude]`` must fail here, not
+    be stringified into an "unknown agent" named after the whole table.
+    """
+    assert_filter_errors(Agent, {"claude": {}}, [Agent.CODE_INVALID])
