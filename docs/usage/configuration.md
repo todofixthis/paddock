@@ -167,7 +167,7 @@ PADDOCK_AGENT=claude
 
 ```toml
 [agents.claude]
-extra_args = ["--resume"]
+extra_args = ["--verbose"]
 ```
 
 </td>
@@ -175,7 +175,7 @@ extra_args = ["--resume"]
 
 ```toml
 [projects."<workdir>".agents.claude]
-extra_args = ["--resume"]
+extra_args = ["--verbose"]
 ```
 
 </td>
@@ -183,7 +183,7 @@ extra_args = ["--resume"]
 
 ```toml
 [agents.claude]
-extra_args = ["--resume"]
+extra_args = ["--verbose"]
 ```
 
 </td>
@@ -626,7 +626,7 @@ source, takes no part in merging, and ignores the allowlist.
 
 | Option | Command line | Effect |
 |---|---|---|
-| Agent arguments | `paddock -- --continue` | Everything after `--` is appended to the agent's command: `claude --continue`. |
+| Agent arguments | `paddock -- --continue` | Everything after `--` is appended to the agent's command, after any [`extra_args`](#agentsnameextra_args): `claude --continue`. |
 | Command | `paddock /bin/bash` | The first positional argument, and everything after it, replaces the agent's command. Put paddock flags first. |
 | Dry run | `--dry-run` | Prints the `docker run` command and exits 0 without building, pulling or running anything. |
 | Help | `--help` | Prints usage and exits. |
@@ -682,8 +682,9 @@ after `--`.
 
 - **Type:** list of strings
 - **Default:** none
-- **TOML:** `extra_args = ["--resume"]` under `[agents.claude]`
-- **Environment:** none
+- **TOML:** `extra_args = ["--verbose"]` under `[agents.claude]`; the table is
+  `agents`, plural, and `[agent.claude]` is an error
+- **Environment:** none. A `PADDOCK_AGENTS_…` variable stops paddock with an error
 - **Command line:** none; pass one-off arguments [after `--`](#run-options)
 - **Allowlist path:** `agents`, which covers every agent's settings
 
@@ -696,13 +697,17 @@ The arguments follow the agent's command and come before anything after `--`. Wi
 
 ```toml
 [agents.claude]
-extra_args = ["--resume"]
+extra_args = ["--verbose"]
 ```
 
-`paddock -- "fix it"` runs `claude --resume "fix it"`. They never reach paddock's own
+`paddock -- "fix it"` runs `claude --verbose "fix it"`. They never reach paddock's own
 flags: `extra_args = ["--quiet"]` passes `--quiet` to the agent. A
 [command](#run-options) that replaces the agent's drops them, along with the agent's
 command.
+
+Because your arguments come first, don't end the list with an option whose value is
+optional, such as Claude Code's `--resume`: the agent would take the first thing after
+`--`, your prompt, as that option's value.
 
 Each string is one argument, passed as written: paddock expands no `~` and resolves no
 path, and a path names a location in the container. A relative one works because the
@@ -723,6 +728,9 @@ extra_args = []
 
 Nothing on the command line drops them for a single run, short of replacing the
 command: `paddock claude "fix it"`.
+
+Under [project-level config](project-config.md#the-allowlist), a project file granted
+`agents` can set arguments for any agent whose `extra_args` you have not set yourself.
 
 Settings for a name no installed agent has are ignored with a
 [warning](#troubleshooting), so a config shared between machines still works where an
@@ -918,7 +926,9 @@ Which keys each gated source may set. This is how you enable
 List entries are the allowlist paths named under each directive: `agent`, `agents`,
 `build`,
 `build.args`, `build.context`, `build.dockerfile`, `build.policy`, `image`, `network`
-and `volumes`. `build` covers all of `build.*`. paddock rejects any other entry when it
+and `volumes`. `build` covers all of `build.*`. `agent` and
+`agents` are different grants: the first lets a source choose the agent, the second
+set any agent's arguments. paddock rejects any other entry when it
 loads the user file.
 
 paddock drops a blocked key with a warning rather than an error. The user file and
@@ -1109,7 +1119,9 @@ Messages that point at the project file or the allowlist are covered under
 **`[user:<key>] …`**
 
 Your user file has invalid TOML or a bad value; `<key>` names the field. Common causes:
-a misspelt key (`imgae`), an allowlist source other than `cli`, `env` and
+a misspelt key (`imgae`), `[agent.<name>]` written for
+[`[agents.<name>]`](#agentsnameextra_args) (reported at `agent`, or as invalid TOML
+when the file also sets `agent`), an allowlist source other than `cli`, `env` and
 `project_toml`, or an allowlist value that isn't `true`, `false` or a list of
 [allowlist paths](#configallowlist).
 
