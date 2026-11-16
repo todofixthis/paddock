@@ -36,7 +36,8 @@ sources overwrite earlier ones:
 5. CLI flags
 
 Higher sources win per key, except that ``volumes`` and ``build.args`` add
-up across sources.  The project-level file is ignored until you
+up across sources, and ``agents`` merges per agent while each ``extra_args``
+list is replaced whole.  The project-level file is ignored until you
 enable it; see `Configuration`_.
 
 Requirements
@@ -83,7 +84,7 @@ Configuration
 -------------
 
 paddock reads ``config.toml`` from ``$XDG_CONFIG_HOME/paddock/`` (by default
-``~/.config/paddock/``).  Any setting can also come from a ``PADDOCK_*``
+``~/.config/paddock/``).  Most settings can also come from a ``PADDOCK_*``
 environment variable or a command-line flag:
 
 .. code-block:: toml
@@ -138,9 +139,18 @@ command:
    # runs: claude --resume
    paddock --agent=claude -- --resume
 
+Arguments you want on every run can live in config instead, under the agent's
+name; paddock places them before anything after ``--``.  See
+`agents.<name>.extra_args <https://phx-paddock.readthedocs.io/en/latest/usage/configuration.html#agents-name-extra-args>`__.
+
+.. code-block:: toml
+
+   [agents.claude]
+   extra_args = ["--verbose"]
+
 The first positional argument before ``--`` starts a command that replaces
 the agent's, running in a container still configured for that agent (its
-volumes and build args).  Everything after it — ``--`` and anything that looks
+volumes and build args, but not its ``extra_args``).  Everything after it — ``--`` and anything that looks
 like a paddock flag included — belongs to that command, so put paddock flags
 first:
 

@@ -7,7 +7,7 @@ paddock reads two config files, among [other sources](configuration.md#where-con
 - **User-level** (`$XDG_CONFIG_HOME/paddock/config.toml`, by default `~/.config/paddock/config.toml`) — your personal defaults, applied to every project.
 - **Project-level** (`.paddock/config.toml` in the project workdir) — settings committed alongside a project and shared with everyone who works on it. It takes the same [directives](configuration.md#directives), except `config` and `projects`.
 
-Because project-level config lives inside a project repository, paddock treats it as **untrusted by default**. A malicious or misconfigured project could otherwise redirect your Docker image, override your network settings, or mount sensitive paths. Even once enabled it carries the lowest [weight](#precedence) of any source, so it can't override a value you set — though it can add mounts and build arguments to yours. You must explicitly grant each project (or all projects) permission to contribute config before paddock will honour it.
+Because project-level config lives inside a project repository, paddock treats it as **untrusted by default**. A malicious or misconfigured project could otherwise redirect your Docker image, override your network settings, mount sensitive paths, or pass arguments to your agent. Even once enabled it carries the lowest [weight](#precedence) of any source, so it can't override a value you set — though it can add mounts and build arguments to yours, and arguments for an agent you have set none for. You must explicitly grant each project (or all projects) permission to contribute config before paddock will honour it.
 
 User-level config is trusted: it's yours.
 
@@ -31,11 +31,12 @@ Project-level config is **off by default (blocked)**. Grant it the narrowest set
 project_toml = ["volumes"]
 ```
 
-A grant directly under `[config.allowlist]` applies to every repository you run paddock from. The project file keeps the lowest [weight](#precedence), so it can't override a value you set, but `volumes` and `build.args` merge per entry, so a granted file adds to yours. Weigh what each key hands a committed file:
+A grant directly under `[config.allowlist]` applies to every repository you run paddock from. The project file keeps the lowest [weight](#precedence), so it can't override a value you set, but `volumes` and `build.args` merge per entry, so a granted file adds to yours, and `agents` merges per agent, so it can configure any agent you have not. Weigh what each key hands a committed file:
 
 - `build.dockerfile` / `build.context` — paddock runs `docker build` on the host, from the project's Dockerfile and context.
 - `volumes` — any existing host path, including `~`-relative ones expanded against *your* home (`~/.ssh`, say), mounted `rw` if the mapping says so.
 - `agent` — selecting `claude` mounts your `~/.claude` read-write, plus `~/.claude.json` if it exists.
+- `agents` — arguments for any agent you have set none for yourself; see the caution under [The allowlist](#the-allowlist).
 - `network` — including `host`.
 
 `project_toml = true` permits every key. Granted globally, it is the same decision as ticking "I trust this project" when an IDE or coding agent opens a repository, taken once for every repository at once. Reserve it for repositories you would run a script from.
@@ -82,7 +83,25 @@ Each gated source has an entry in `[config.allowlist]`. Valid values are:
 | `[]` (empty list) | Same as `false` — nothing is permitted. |
 | `["image", "build.dockerfile"]` | Only the listed keys are permitted; dotted paths descend into nested tables. |
 
-List entries are validated against the known config key paths. An unknown path (e.g. a typo like `"imgae"`) is rejected when the user config is loaded.
+`agents` is a single key: it covers every agent's settings, and no dotted path narrows it to one agent.
+
+> [!CAUTION]
+> **Allowlisting `agents` lets a project file pass arguments to your agents**
+>
+> An argument can switch off an agent's own safeguards (Claude Code's
+> `--dangerously-skip-permissions`, for one), and for the shell agent, `false`, the
+> arguments are a command: `["-c", "…"]` runs it. Allowlist `agents` only for a
+> project whose files you trust as much as your own config. `project_toml = true`
+> includes it; to grant everything else, list the other keys, named under
+> [`config.allowlist`](configuration.md#configallowlist).
+>
+> Your own `extra_args` for an agent, even `[]`, takes precedence over the project
+> file's, but only for that agent, and only if you set `extra_args` itself: a bare
+> `[agents.claude]` header protects nothing. A file also granted `agent` can choose
+> which agent runs, the shell included, so the agent you normally use is no guide to
+> which settings matter.
+
+List entries are validated against the known config key paths, listed under [`config.allowlist`](configuration.md#configallowlist). An unknown path (e.g. a typo like `"imgae"`) is rejected when the user config is loaded.
 
 **Validation runs before filtering.** An enabled source is validated as a whole, and only then does the allowlist project it down to the permitted keys. An invalid value in a key the rule would have dropped still aborts the run: under `project_toml = ["volumes"]`, a project file containing `image = ""` fails with `[project_toml:image] Non-empty value expected.` A malformed project file therefore aborts the run for every operator who has opted in, however narrow their grant.
 
@@ -158,7 +177,7 @@ A gated source (`project_toml`, `env`, or `cli`) contributed keys the rule does 
 <source>: dropped non-allowlisted keys <paths> — add them to [config.allowlist].<source> to keep them
 ```
 
-`<paths>` lists the dotted leaf paths dropped (`image`, `build.dockerfile`), with `volumes` and `build.args` reported as single paths rather than one entry per mapping.
+`<paths>` lists the dotted leaf paths dropped (`image`, `build.dockerfile`), with `agents`, `volumes` and `build.args` reported as single paths rather than one entry per mapping.
 
 A source that is disabled failed validation — malformed TOML, an unknown key, or a bad value. Its errors are discarded with it rather than aborting the run, and it contributes nothing, so no keys are dropped:
 

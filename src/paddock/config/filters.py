@@ -12,7 +12,8 @@ class Agent(BaseFilter):
     """Validates a coding agent value.
 
     Accepts a non-empty string agent name, or ``False`` to disable the agent.
-    Maps the string ``'false'`` to boolean ``False``. Rejects boolean ``True``.
+    Maps the string ``'false'`` to boolean ``False``. Rejects boolean ``True``
+    and any other non-string, such as a table.
     """
 
     CODE_INVALID = "invalid"
@@ -34,8 +35,9 @@ class Agent(BaseFilter):
         if isinstance(value, str) and value == "false":
             return False
 
-        # Non-empty string agent names are valid.
-        value = self._filter(value, f.Unicode | f.NotEmpty)
+        # Anything else that is not a string is invalid: f.Unicode would
+        # stringify a table such as a mistyped ``[agent.claude]``.
+        value = self._filter(value, f.Type(str) | f.Unicode | f.NotEmpty)
         if self._has_errors:
             return None
 

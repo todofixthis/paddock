@@ -35,7 +35,9 @@ describes.
 ### Precedence
 
 The project file has the lowest weight, so it can't override a value you set, but its
-[`volumes`](#volumes) and [`build.args`](#buildargs) still add to yours (see below).
+[`volumes`](#volumes) and [`build.args`](#buildargs) still add to yours, and its
+[`agents`](#agentsnameextra_args) settings apply to any agent you have set none for
+(see below).
 [Precedence](project-config.md#precedence) on the project-config page walks through an
 example.
 
@@ -43,14 +45,18 @@ Merging is per key, not per source:
 
 - **Single values** (`image`, `network`, `build.policy` …): the highest-weight source
   that sets one wins.
+- **`[agents]`**: merges per agent name, so sources can each configure a different
+  agent. An agent's `extra_args` list is replaced whole by the highest-weight source
+  that sets it, never joined.
 - **`[build]`**: each key merges separately, and `build.args` merges per argument
   name. A per-project `build.policy` keeps your user-level `build.dockerfile`.
 - **`[volumes]`**: merge per host path. Sources add mounts; a higher-weight source can
   change the container path or mode of a host path a lower one mounts, but not remove
   it.
 
-Higher sources cannot unset a value, with one exception: an empty
-[`network`](#network) falls back to Docker's default network.
+Higher sources cannot unset a value, with two exceptions: an empty
+[`network`](#network) falls back to Docker's default network, and an empty
+[`extra_args`](#agentsnameextra_args) clears the list.
 
 ### Validation
 
@@ -149,6 +155,47 @@ PADDOCK_AGENT=claude
 ```shell
 --agent=claude
 ```
+
+</td>
+</tr>
+<tr>
+<td>
+
+[`agents.<name>.extra_args`](#agentsnameextra_args)
+
+</td>
+<td>
+
+```toml
+[agents.claude]
+extra_args = ["--verbose"]
+```
+
+</td>
+<td>
+
+```toml
+[projects."<workdir>".agents.claude]
+extra_args = ["--verbose"]
+```
+
+</td>
+<td>
+
+```toml
+[agents.claude]
+extra_args = ["--verbose"]
+```
+
+</td>
+<td>
+
+🚫
+
+</td>
+<td>
+
+🚫
 
 </td>
 </tr>
@@ -580,7 +627,7 @@ source, takes no part in merging, and ignores the allowlist.
 
 | Option | Command line | Effect |
 |---|---|---|
-| Agent arguments | `paddock -- --continue` | Everything after `--` is appended to the agent's command: `claude --continue`. |
+| Agent arguments | `paddock -- --continue` | Everything after `--` is appended to the agent's command, after any [`extra_args`](#agentsnameextra_args): `claude --continue`. |
 | Command | `paddock /bin/bash` | The first positional argument, and everything after it, replaces the agent's command. Put paddock flags first. |
 | Dry run | `--dry-run` | Prints the `docker run` command and exits 0 without building, pulling or running anything. |
 | Help | `--help` | Prints usage and exits. |
@@ -628,6 +675,67 @@ Use `false` to explore an image or debug it. With [`build.dockerfile`](#builddoc
 set, though, a rebuild under `false` tags the same [`image`](#image) with `AGENT=none`,
 replacing an image that had the agent installed. To get a shell in your agent's image,
 pass a [command](#run-options) instead: `paddock /bin/bash`.
+
+### `agents.<name>.extra_args`
+
+Arguments paddock adds to an agent's command on every run, so you don't retype them
+after `--`.
+
+- **Type:** list of strings
+- **Default:** none
+- **TOML:** `extra_args = ["--verbose"]` under `[agents.claude]`; the table is
+  `agents`, plural, and `[agent.claude]` is an error
+- **Environment:** none. A `PADDOCK_AGENTS_…` variable stops paddock with an error
+- **Command line:** none; pass one-off arguments [after `--`](#run-options)
+- **Allowlist path:** `agents`, which covers every agent's settings
+
+`<name>` is the agent the arguments belong to, spelt as [`agent`](#agent) spells it;
+use `false`, in lower case, for the shell. Settings stay in place while another agent is chosen, so a
+per-project `agent`, or `--agent`, switches agents without passing one agent's flags
+to another.
+
+The arguments follow the agent's command and come before anything after `--`. With
+
+```toml
+[agents.claude]
+extra_args = ["--verbose"]
+```
+
+`paddock -- "fix it"` runs `claude --verbose "fix it"`. They never reach paddock's own
+flags: `extra_args = ["--quiet"]` passes `--quiet` to the agent. A
+[command](#run-options) that replaces the agent's drops them, along with the agent's
+command.
+
+Because your arguments come first, don't end the list with an option whose value is
+optional, such as Claude Code's `--resume`: the agent would take the first thing after
+`--`, your prompt, as that option's value.
+
+Each string is one argument, passed as written: paddock expands no `~` and resolves no
+path, and a path names a location in the container. A relative one works because the
+workdir is mounted at the same path:
+
+```toml
+[projects."/Users/alice/code/my-plugin".agents.claude]
+extra_args = ["--plugin-dir=./"]
+```
+
+A higher-weight source replaces the whole list. To add one argument for a project,
+repeat the ones you still want; to drop them all, set an empty list:
+
+```toml
+[projects."/Users/alice/code/widgets".agents.claude]
+extra_args = []
+```
+
+Nothing on the command line drops them for a single run, short of replacing the
+command: `paddock claude "fix it"`.
+
+Under [project-level config](project-config.md#the-allowlist), a project file granted
+`agents` can set arguments for any agent whose `extra_args` you have not set yourself.
+
+Settings for a name no installed agent has are ignored with a
+[warning](#troubleshooting), so a config shared between machines still works where an
+agent's package is missing. Check the spelling if you see it unexpectedly.
 
 ### `build.args`
 
@@ -816,9 +924,12 @@ Which keys each gated source may set. This is how you enable
 | `false` or `[]` | The source is blocked. |
 | A list, e.g. `["image", "build.dockerfile"]` | The source may set only the directives listed. |
 
-List entries are the allowlist paths named under each directive: `agent`, `build`,
+List entries are the allowlist paths named under each directive: `agent`, `agents`,
+`build`,
 `build.args`, `build.context`, `build.dockerfile`, `build.policy`, `image`, `network`
-and `volumes`. `build` covers all of `build.*`. paddock rejects any other entry when it
+and `volumes`. `build` covers all of `build.*`. `agent` and
+`agents` are different grants: the first lets a source choose the agent, the second
+set any agent's arguments. paddock rejects any other entry when it
 loads the user file.
 
 paddock drops a blocked key with a warning rather than an error. The user file and
@@ -1009,9 +1120,18 @@ Messages that point at the project file or the allowlist are covered under
 **`[user:<key>] …`**
 
 Your user file has invalid TOML or a bad value; `<key>` names the field. Common causes:
-a misspelt key (`imgae`), an allowlist source other than `cli`, `env` and
+a misspelt key (`imgae`), `[agent.<name>]` written for
+[`[agents.<name>]`](#agentsnameextra_args) (reported at `agent`; when the file also sets
+`agent`, as `[user] This value is not valid TOML.`, repeated for `[project_overrides]`), an allowlist source other than `cli`, `env` and
 `project_toml`, or an allowlist value that isn't `true`, `false` or a list of
 [allowlist paths](#configallowlist).
+
+**`[agents.<name>] No agent named "<name>" is installed, so its settings are ignored; installed agents: …`**
+
+A warning, not an error: the run goes ahead without those settings. Either `<name>` is
+misspelt under [`agents`](#agentsnameextra_args), in your user file or a granted
+project file, or it names an agent from a package this machine lacks. Only `--quiet`
+hides it, along with every other warning and the printed command.
 
 **`[env:PADDOCK_…] Unexpected key "PADDOCK_…".`**
 

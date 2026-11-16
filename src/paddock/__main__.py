@@ -7,7 +7,7 @@ from pathlib import Path
 
 from class_registry import RegistryKeyError
 
-from paddock.agents import BaseAgent, agent_registry
+from paddock.agents import BaseAgent, agent_registry, installed_agent_keys
 from paddock.cli import parse_args
 from paddock.config.errors import ConfigError, PaddockEnvironmentError
 from paddock.config.loader import ConfigLoader
@@ -59,26 +59,24 @@ def _resolve_workdir(raw: str | None) -> Path:
     return workdir
 
 
-def _resolve_agent(configured: str | bool) -> BaseAgent:
+def _resolve_agent(agent_key: str) -> BaseAgent:
     """Look up the configured agent, or exit 1 naming the installed agents.
 
     Resolved before the ``.paddock`` directory is created, so a typo in an
     agent key never leaves the filesystem to unwind.
 
     Args:
-        configured: The merged config's ``agent`` value — an agent key, or
-            ``False`` for the no-agent shell.
+        agent_key: The chosen agent's registry key, from the resolved config.
 
     Returns:
         The registered agent instance.
     """
-    agent_key = "false" if configured is False else str(configured)
     try:
         return agent_registry.get(agent_key)
     except RegistryKeyError:
-        installed = ", ".join(sorted(str(key) for key in agent_registry))
         print(
-            f'[agent] Unknown agent "{agent_key}"; installed agents: {installed}',
+            f'[agent] Unknown agent "{agent_key}"; '
+            f"installed agents: {', '.join(installed_agent_keys())}",
             file=sys.stderr,
         )
         sys.exit(1)
@@ -120,7 +118,7 @@ def run(argv: list[str] | None = None) -> None:
         sys.exit(1)
 
     config = resolved.config
-    agent = _resolve_agent(config["agent"])
+    agent = _resolve_agent(resolved.agent_key)
 
     try:
         with ProjectDirManager(
@@ -147,7 +145,8 @@ def run(argv: list[str] | None = None) -> None:
                 _prepare_image(config, agent)
 
             docker_argv = command_builder.build(
-                command=parsed.command, agent_args=parsed.agent_args
+                command=parsed.command,
+                agent_args=[*resolved.extra_args, *parsed.agent_args],
             )
 
             if not parsed.quiet:

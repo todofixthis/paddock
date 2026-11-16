@@ -1,3 +1,5 @@
+import logging
+import shlex
 import subprocess
 from pathlib import Path
 
@@ -447,3 +449,124 @@ def test_container_exit_status_survives_failed_paddock_dir_removal(
         run([])
     assert exc.value.code == 37
     rmdir.assert_called()
+
+
+_EXTRA_ARGS_CONFIG = (
+    'image = "ubuntu:22.04"\n'
+    "agent = {agent}\n"
+    '[agents.claude]\nextra_args = ["--resume"]\n'
+    '[agents.false]\nextra_args = ["-l"]\n'
+)
+
+
+def _dry_run_argv(capsys, mocker, argv: list[str]) -> list[str]:
+    """Run paddock with ``--dry-run`` and return the printed docker argv.
+
+    Args:
+        capsys: pytest's capture fixture.
+        mocker: pytest-mock's fixture, to stub the container-name lookup.
+        argv: Paddock arguments to follow ``--dry-run``.
+
+    Returns:
+        The printed ``docker run`` line, split as a shell would split it.
+    """
+    mocker.patch(
+        "paddock.docker.builder.DockerCommandBuilder._container_name_available",
+        return_value=True,
+    )
+    with pytest.raises(SystemExit) as exc:
+        run(["--dry-run", *argv])
+    assert exc.value.code == 0
+    return shlex.split(capsys.readouterr().out)
+
+
+def test_dry_run_applies_extra_args_from_config(
+    capsys, tmp_path: Path, mocker, monkeypatch
+):
+    """extra_args follow the agent's command and precede the tokens after --.
+
+    An argument holding a space and shell metacharacters stays one token,
+    and the printed line stays re-runnable.
+    """
+    _write_user_config(
+        tmp_path,
+        'image = "ubuntu:22.04"\nagent = "claude"\n[agents.claude]\n'
+        'extra_args = ["--append-system-prompt", "be brief; no $HOME"]\n',
+    )
+    monkeypatch.chdir(tmp_path)
+    argv = _dry_run_argv(capsys, mocker, ["--", "fix it"])
+    assert argv[-4:] == [
+        "claude",
+        "--append-system-prompt",
+        "be brief; no $HOME",
+        "fix it",
+    ]
+
+
+def test_replacement_command_ignores_extra_args(
+    capsys, tmp_path: Path, mocker, monkeypatch
+):
+    """A replacement command drops extra_args with the agent's command."""
+    _write_user_config(tmp_path, _EXTRA_ARGS_CONFIG.format(agent='"claude"'))
+    monkeypatch.chdir(tmp_path)
+    argv = _dry_run_argv(capsys, mocker, ["/bin/bash"])
+    assert argv[-2:] == ["ubuntu:22.04", "/bin/bash"]
+    assert "--resume" not in argv
+
+
+def test_shell_agent_uses_its_own_extra_args(
+    capsys, tmp_path: Path, mocker, monkeypatch
+):
+    """``agent = false`` finds the settings keyed by the string "false"."""
+    _write_user_config(tmp_path, _EXTRA_ARGS_CONFIG.format(agent="false"))
+    monkeypatch.chdir(tmp_path)
+    argv = _dry_run_argv(capsys, mocker, [])
+    assert argv[-3:] == ["ubuntu:22.04", "/bin/bash", "-l"]
+
+
+def test_cli_agent_switch_uses_that_agents_extra_args(
+    capsys, tmp_path: Path, mocker, monkeypatch
+):
+    """--agent switches which agent's extra_args apply."""
+    _write_user_config(tmp_path, _EXTRA_ARGS_CONFIG.format(agent='"claude"'))
+    monkeypatch.chdir(tmp_path)
+    argv = _dry_run_argv(capsys, mocker, ["--agent=false"])
+    assert argv[-3:] == ["ubuntu:22.04", "/bin/bash", "-l"]
+
+
+def test_no_agents_table_leaves_the_command_alone(
+    capsys, minimal_config: Path, mocker, monkeypatch
+):
+    """Without an agents table the agent's command is unchanged."""
+    monkeypatch.chdir(minimal_config)
+    argv = _dry_run_argv(capsys, mocker, [])
+    assert argv[-2:] == ["ubuntu:22.04", "claude"]
+
+
+def test_unknown_agent_settings_warn_and_run(
+    capsys, caplog, tmp_path: Path, mocker, monkeypatch
+):
+    """Settings for a name no agent has warn once and are ignored (ADR 017).
+
+    The installed ``false`` draws no warning. ``at_level`` re-enables
+    logging, which an earlier ``--quiet`` test disables process-wide.
+    """
+    _write_user_config(
+        tmp_path,
+        'image = "ubuntu:22.04"\nagent = "claude"\n'
+        '[agents.claud]\nextra_args = ["-x"]\n'
+        '[agents.false]\nextra_args = ["-l"]\n',
+    )
+    monkeypatch.chdir(tmp_path)
+    with caplog.at_level(logging.WARNING, logger="paddock"):
+        argv = _dry_run_argv(capsys, mocker, [])
+    assert argv[-2:] == ["ubuntu:22.04", "claude"]
+    warnings = [
+        record.getMessage()
+        for record in caplog.records
+        if record.levelno == logging.WARNING
+    ]
+    assert warnings == [
+        '[agents.claud] No agent named "claud" is installed, so its settings '
+        "are ignored; installed agents: claude, false"
+    ]
