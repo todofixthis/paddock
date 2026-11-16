@@ -4,6 +4,7 @@ import filters as f
 import pytest
 from filters.pytest import skip_value_check
 
+from paddock.config.agent_choice import UNNAMED_SERVER
 from paddock.config.fields import CONFIG_FIELDS, allowlist_directives
 from paddock.config.filters import VolumeSpec
 from paddock.config.schema import (
@@ -25,7 +26,7 @@ def test_valid_minimal():
     """Minimal valid config passes; absent optional fields are stripped by DropEmpty."""
     result = _validate({"image": "ubuntu:22.04", "agent": "claude"})
     assert result["image"] == "ubuntu:22.04"
-    assert result["agent"] == "claude"
+    assert result["agent"] == {"client": "claude", "server": UNNAMED_SERVER}
 
 
 def test_invalid_empty_image():
@@ -43,7 +44,7 @@ def test_invalid_missing_image():
 def test_agent_false():
     """agent = False (bool) enables shell mode."""
     result = _validate({"image": "ubuntu:22.04", "agent": False})
-    assert result["agent"] is False
+    assert result["agent"] == {"client": False, "server": UNNAMED_SERVER}
 
 
 def test_unknown_key_rejected():
@@ -451,4 +452,14 @@ def test_agents_normalises_extra_args_as_unicode(assert_filter_passes):
         _per_source_schema(),
         {"agents": {"claude": {"extra_args": ["café"]}}},
         {"agents": {"claude": {"extra_args": ["café"]}}},
+    )
+
+
+def test_agent_rejects_an_empty_table(assert_filter_errors):
+    """An agent table naming neither half is empty, and so missing."""
+    assert_filter_errors(
+        standard_config_schema(base_dir=Path.cwd(), merged=True),
+        {"image": "i", "agent": {}},
+        {"agent": [f.NotEmpty.CODE_EMPTY]},
+        skip_value_check,
     )

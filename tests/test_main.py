@@ -570,3 +570,12 @@ def test_unknown_agent_settings_warn_and_run(
         '[agents.claud] No agent named "claud" is installed, so its settings '
         "are ignored; installed agents: claude, false"
     ]
+
+
+def test_cli_client_override_runs_that_client(
+    capsys, minimal_config: Path, mocker, monkeypatch
+):
+    """--agent-client switches the client the container runs."""
+    monkeypatch.chdir(minimal_config)
+    argv = _dry_run_argv(capsys, mocker, ["--agent-client=false"])
+    assert argv[-2:] == ["ubuntu:22.04", "/bin/bash"]

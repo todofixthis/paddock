@@ -1,3 +1,4 @@
+from dataclasses import replace
 from pathlib import Path
 
 from paddock.cli import ParsedArgs
@@ -18,6 +19,8 @@ def _empty() -> ParsedArgs:
     return ParsedArgs(
         agent=None,
         agent_args=[],
+        agent_client=None,
+        agent_server=None,
         build_args={},
         build_context=None,
         build_dockerfile=None,
@@ -63,3 +66,28 @@ def test_build_args_extracted(tmp_path):
     p.build_args = {"FOO": "bar"}
     result = CliConfigSource().load(_ctx(tmp_path, p))
     assert result.instance.cleaned_data["build"]["args"] == {"FOO": "bar"}
+
+
+def _agent(tmp_path, **halves):
+    """Load the CLI source with the given agent flags and return its agent."""
+    result = CliConfigSource().load(_ctx(tmp_path, replace(_empty(), **halves)))
+    assert result.instance.is_valid(), result.instance.errors
+    return result.instance.cleaned_data["agent"]
+
+
+def test_agent_whole_then_half(tmp_path):
+    """--agent applies first, then --agent-server names its half."""
+    assert _agent(tmp_path, agent="claude", agent_server="srv") == {
+        "client": "claude",
+        "server": "srv",
+    }
+
+
+def test_agent_half_alone(tmp_path):
+    """--agent-client alone names only the client."""
+    assert _agent(tmp_path, agent_client="x") == {"client": "x"}
+
+
+def test_agent_server_false(tmp_path):
+    """--agent-server=false means no server."""
+    assert _agent(tmp_path, agent_server="false") == {"server": False}

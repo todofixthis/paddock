@@ -12,6 +12,8 @@ def _ctx(tmp_path: Path, environ: dict) -> ConfigContext:
     parsed = ParsedArgs(
         agent=None,
         agent_args=[],
+        agent_client=None,
+        agent_server=None,
         build_args={},
         build_context=None,
         build_dockerfile=None,
@@ -111,3 +113,29 @@ def test_unknown_name_rejected_when_empty(tmp_path):
     assert result.instance.error_codes == {
         "PADDOCK_BUILD_ARGS": [f.FilterMapper.CODE_EXTRA_KEY]
     }
+
+
+def _agent(tmp_path, environ: dict):
+    """Load the env source with the given variables and return its agent."""
+    result = EnvConfigSource().load(_ctx(tmp_path, environ))
+    assert result.instance.is_valid(), result.instance.errors
+    return result.instance.cleaned_data["agent"]
+
+
+def test_agent_whole_then_half(tmp_path):
+    """PADDOCK_AGENT applies first, then PADDOCK_AGENT_SERVER names its half.
+
+    Mapping names to paths by splitting on ``_`` would lose the first.
+    """
+    environ = {"PADDOCK_AGENT": "claude", "PADDOCK_AGENT_SERVER": "srv"}
+    assert _agent(tmp_path, environ) == {"client": "claude", "server": "srv"}
+
+
+def test_agent_half_alone(tmp_path):
+    """PADDOCK_AGENT_CLIENT alone names only the client."""
+    assert _agent(tmp_path, {"PADDOCK_AGENT_CLIENT": "x"}) == {"client": "x"}
+
+
+def test_agent_server_false(tmp_path):
+    """PADDOCK_AGENT_SERVER=false means no server."""
+    assert _agent(tmp_path, {"PADDOCK_AGENT_SERVER": "false"}) == {"server": False}

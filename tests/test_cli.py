@@ -195,3 +195,25 @@ def test_abbreviated_flag_is_error(capsys):
         parse_args(["--dry"])
     assert exc.value.code != 0
     assert "--dry" in capsys.readouterr().err
+
+
+def test_agent_half_flags_populate_parsed_args():
+    """--agent-client and --agent-server each set one half; both default off."""
+    result = parse_args(["--agent-client=x", "--agent-server=y"])
+    assert result.agent_client == "x"
+    assert result.agent_server == "y"
+    assert parse_args([]).agent_client is None
+    assert parse_args([]).agent_server is None
+
+
+def test_agent_half_flags_accept_the_space_form():
+    """A space-separated value belongs to the flag, not to a command."""
+    result = parse_args(["--agent-client", "x", "--agent-server", "y"])
+    assert result.agent_client == "x"
+    assert result.agent_server == "y"
+    assert result.command == []
+
+
+def test_agent_server_false_is_kept_as_written():
+    """The config source, not the parser, maps "false" to no server."""
+    assert parse_args(["--agent-server=false"]).agent_server == "false"

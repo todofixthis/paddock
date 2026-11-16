@@ -6,7 +6,11 @@ import filters as f
 import pytest
 from filters.pytest import skip_value_check
 
+from class_registry import ClassRegistry
+
+from paddock.agents import BaseAgent
 from paddock.cli import ParsedArgs
+from paddock.config.agent_choice import UNNAMED_SERVER
 from paddock.config.errors import ConfigError
 from paddock.config.loader import ConfigLoader, ResolvedConfig
 from paddock.config.sources.env import _env_schema
@@ -16,6 +20,8 @@ def _empty_parsed() -> ParsedArgs:
     return ParsedArgs(
         agent=None,
         agent_args=[],
+        agent_client=None,
+        agent_server=None,
         build_args={},
         build_context=None,
         build_dockerfile=None,
@@ -43,7 +49,7 @@ def test_apply_defaults(tmp_path: Path):
     """Default values are set when not supplied by any config source."""
     loader = ConfigLoader()
     result = loader._apply_defaults({})
-    assert result["agent"] == "claude"
+    assert result["agent"] == {"client": "claude", "server": UNNAMED_SERVER}
     assert result["volumes"] == {}
 
 
@@ -889,3 +895,181 @@ def test_resolve_warns_about_settings_for_an_uninstalled_agent(
         '[agents.claud] No agent named "claud" is installed, so its settings '
         "are ignored; installed agents: claude, false"
     ]
+
+
+class _FakeAgent(BaseAgent):
+    """A client that runs nothing, for registry-driven tests."""
+
+    def get_command(self) -> list[str]:
+        return [self.AGENT_KEY]
+
+    def get_volumes(self) -> dict:
+        return {}
+
+
+class _FakePaired(_FakeAgent):
+    AGENT_KEY = "paired"
+    DEFAULT_SERVER = "srv"
+
+
+class _FakePlain(_FakeAgent):
+    AGENT_KEY = "plain"
+
+
+class _FakeClaude(_FakeAgent):
+    AGENT_KEY = "claude"
+
+
+class _FakeShell(_FakeAgent):
+    AGENT_KEY = "false"
+
+
+def _fake_agents() -> ClassRegistry:
+    """A registry of fake clients: paired, plain, claude and false."""
+    registry: ClassRegistry = ClassRegistry(attr_name="AGENT_KEY")
+    for cls in (_FakePaired, _FakePlain, _FakeClaude, _FakeShell):
+        registry.register(cls)
+    return registry
+
+
+def _resolve_agent_config(tmp_path: Path, monkeypatch, config: str) -> ResolvedConfig:
+    """Resolve a user config against the fake clients.
+
+    Args:
+        tmp_path: The workdir and home.
+        monkeypatch: pytest's fixture, to point ``$HOME`` at ``tmp_path``.
+        config: TOML appended after an ``image`` line; ``{workdir}`` is
+            replaced by the resolved workdir, for a ``[projects]`` key.
+    """
+    _setup_home(
+        tmp_path,
+        monkeypatch,
+        'image = "i"\n' + config.replace("{workdir}", str(tmp_path.resolve())),
+    )
+    return ConfigLoader(agents=_fake_agents()).resolve(
+        _empty_parsed(), workdir=tmp_path, environ={}
+    )
+
+
+def test_string_takes_the_clients_default_server(tmp_path: Path, monkeypatch):
+    """A name brings that client's default server with it."""
+    r = _resolve_agent_config(tmp_path, monkeypatch, 'agent = "paired"\n')
+    assert r.agent_key == "paired"
+    assert r.server_key == "srv"
+    assert r.config["agent"] == {"client": "paired", "server": "srv"}
+
+
+def test_client_without_a_default_has_no_server(tmp_path: Path, monkeypatch):
+    """A client naming no default server resolves to none."""
+    r = _resolve_agent_config(tmp_path, monkeypatch, 'agent = "plain"\n')
+    assert r.server_key is None
+    assert r.config["agent"]["server"] is False
+
+
+def test_no_agent_defaults_to_claude(tmp_path: Path, monkeypatch):
+    """With no agent anywhere the client is claude, with its default server."""
+    r = _resolve_agent_config(tmp_path, monkeypatch, "")
+    assert r.agent_key == "claude"
+    assert r.server_key is None
+
+
+def test_table_overrides_only_the_server(tmp_path: Path, monkeypatch):
+    """A table in a higher source overrides only the half it names."""
+    r = _resolve_agent_config(
+        tmp_path,
+        monkeypatch,
+        'agent = "plain"\n[projects."{workdir}"]\nagent = { server = "srv" }\n',
+    )
+    assert r.agent_key == "plain"
+    assert r.server_key == "srv"
+
+
+def test_client_override_brings_its_default_server(tmp_path: Path, monkeypatch):
+    """A client-only override takes the new client's default server."""
+    r = _resolve_agent_config(
+        tmp_path,
+        monkeypatch,
+        'agent = "plain"\n[projects."{workdir}"]\nagent = { client = "paired" }\n',
+    )
+    assert r.agent_key == "paired"
+    assert r.server_key == "srv"
+
+
+def test_string_above_a_table_resets_the_server(tmp_path: Path, monkeypatch):
+    """A string in a higher source discards a server a lower source named."""
+    r = _resolve_agent_config(
+        tmp_path,
+        monkeypatch,
+        'agent = { server = "srv" }\n[projects."{workdir}"]\nagent = "plain"\n',
+    )
+    assert r.agent_key == "plain"
+    assert r.server_key is None
+
+
+def test_false_server_survives_a_default(tmp_path: Path, monkeypatch):
+    """``server = false`` means none, even for a client with a default."""
+    r = _resolve_agent_config(
+        tmp_path, monkeypatch, 'agent = { client = "paired", server = false }\n'
+    )
+    assert r.server_key is None
+
+
+def test_shell_resets_the_server(tmp_path: Path, monkeypatch):
+    """``agent = false`` resets the server as a string does."""
+    r = _resolve_agent_config(
+        tmp_path,
+        monkeypatch,
+        'agent = { server = "srv" }\n[projects."{workdir}"]\nagent = false\n',
+    )
+    assert r.agent_key == "false"
+    assert r.server_key is None
+
+
+def test_unknown_client_resolves_without_a_server(tmp_path: Path, monkeypatch):
+    """An uninstalled client is the entry point's to report, not the loader's."""
+    r = _resolve_agent_config(tmp_path, monkeypatch, 'agent = "nope"\n')
+    assert r.agent_key == "nope"
+    assert r.server_key is None
+
+
+def test_agent_typo_in_table_is_a_config_error(tmp_path: Path, monkeypatch):
+    """A misspelt half stops the run at its own key."""
+    with pytest.raises(ExceptionGroup) as exc:
+        _resolve_agent_config(tmp_path, monkeypatch, 'agent = { clinet = "x" }\n')
+    assert any("[user:agent.clinet]" in str(e) for e in exc.value.exceptions)
+
+
+def _project_file_naming_a_server(tmp_path: Path) -> None:
+    """Write a project file whose agent table names server ``srv``."""
+    pd = tmp_path / ".paddock"
+    pd.mkdir()
+    (pd / "config.toml").write_text('agent = { server = "srv" }\n')
+
+
+def test_project_toml_agent_dropped_whole_unless_allowlisted(
+    tmp_path: Path, monkeypatch, caplog
+):
+    """``agent`` is one directive: dropped whole and reported as one path."""
+    _project_file_naming_a_server(tmp_path)
+    with caplog.at_level(logging.WARNING, logger="paddock"):
+        r = _resolve_agent_config(
+            tmp_path,
+            monkeypatch,
+            'agent = "plain"\n[config.allowlist]\nproject_toml = ["volumes"]\n',
+        )
+    assert r.server_key is None
+    assert [rec.getMessage() for rec in caplog.records] == [
+        "project_toml: dropped non-allowlisted keys agent — add them to "
+        "[config.allowlist].project_toml to keep them"
+    ]
+
+
+def test_project_toml_agent_table_kept_when_allowlisted(tmp_path: Path, monkeypatch):
+    """A source granted ``agent`` can name a server."""
+    _project_file_naming_a_server(tmp_path)
+    r = _resolve_agent_config(
+        tmp_path,
+        monkeypatch,
+        '[config.allowlist]\nproject_toml = ["agent"]\n',
+    )
+    assert r.server_key == "srv"

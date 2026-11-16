@@ -133,7 +133,7 @@ def run(argv: list[str] | None = None) -> None:
                 project_dir_volume=project_dir_volume,
             )
             logger.info("Using image: %s", config["image"])
-            logger.info("Agent: %s", config["agent"])
+            logger.info("Agent: %s", resolved.agent_key)
             for host_or_name, container_spec in command_builder.volumes:
                 logger.info("Mounting %s -> %s", host_or_name, container_spec)
             if config.get("network"):

@@ -3,7 +3,9 @@ from pathlib import Path
 import filters as f
 import pytest
 
+from paddock.config.agent_choice import UNNAMED_SERVER
 from paddock.config.filters import (
+    AgentHalf,
     Agent,
     Filepath,
     HostPath,
@@ -62,23 +64,75 @@ def test_volume_fail_empty(assert_filter_errors):
 
 
 def test_agent_string():
-    """A non-empty string agent name is valid."""
-    assert f.FilterRunner(Agent, "claude").cleaned_data == "claude"
+    """A name is the client, and resets the server to unnamed."""
+    assert f.FilterRunner(Agent, "claude").cleaned_data == {
+        "client": "claude",
+        "server": UNNAMED_SERVER,
+    }
 
 
 def test_agent_false_string():
-    """The string 'false' is mapped to boolean False."""
-    assert f.FilterRunner(Agent, "false").cleaned_data is False
+    """The string 'false' is the shell client."""
+    assert f.FilterRunner(Agent, "false").cleaned_data == {
+        "client": False,
+        "server": UNNAMED_SERVER,
+    }
 
 
-def test_agent_true_rejected():
+def test_agent_true_rejected(assert_filter_errors):
     """Boolean True is not a valid agent value."""
-    assert not f.FilterRunner(Agent, True).is_valid()
+    assert_filter_errors(Agent, True, [Agent.CODE_INVALID])
 
 
 def test_agent_false_bool():
-    """Boolean False (already a bool) passes through."""
-    assert f.FilterRunner(Agent, False).cleaned_data is False
+    """Boolean False is the shell client."""
+    assert f.FilterRunner(Agent, False).cleaned_data == {
+        "client": False,
+        "server": UNNAMED_SERVER,
+    }
+
+
+def test_agent_table_names_only_its_halves(assert_filter_passes):
+    """A table names the halves it lists and no others."""
+    assert_filter_passes(Agent, {"client": "x"}, {"client": "x"})
+    assert_filter_passes(Agent, {"server": "false"}, {"server": False})
+    assert_filter_passes(Agent, {"client": "false"}, {"client": False})
+
+
+def test_agent_is_idempotent(assert_filter_passes):
+    """Cleaned values pass through unchanged, as a second schema pass needs."""
+    for cleaned in (
+        {"client": "claude", "server": UNNAMED_SERVER},
+        {"client": False, "server": UNNAMED_SERVER},
+        {"client": "x"},
+        {"server": False},
+        {"client": False},
+    ):
+        assert_filter_passes(Agent, cleaned, cleaned)
+
+
+def test_agent_rejects_an_unknown_half(assert_filter_errors):
+    """A misspelt half is an error, not a silent default."""
+    assert_filter_errors(
+        Agent, {"clinet": "x"}, {"clinet": [f.FilterMapper.CODE_EXTRA_KEY]}
+    )
+
+
+def test_agent_rejects_a_non_string_half(assert_filter_errors):
+    """A half is a name or False; nothing is converted to a name."""
+    assert_filter_errors(Agent, {"client": 1}, {"client": [f.Type.CODE_WRONG_TYPE]})
+    assert_filter_errors(Agent, {"client": ""}, {"client": [f.NotEmpty.CODE_EMPTY]})
+    assert_filter_errors(Agent, {"server": True}, {"server": [AgentHalf.CODE_INVALID]})
+
+
+def test_agent_rejects_a_list(assert_filter_errors):
+    """Anything but a name, False or a table is the wrong type."""
+    assert_filter_errors(Agent, ["claude"], [f.Type.CODE_WRONG_TYPE])
+
+
+def test_agent_half_pass_none(assert_filter_passes):
+    """``None`` always passes."""
+    assert_filter_passes(AgentHalf, None)
 
 
 # ---------------------------------------------------------------------------
@@ -637,9 +691,11 @@ def test_volume_map_host_base_dir(assert_filter_passes, tmp_path, monkeypatch):
 
 
 def test_agent_table_rejected(assert_filter_errors):
-    """A table is not an agent name.
+    """A table keyed by an agent name is not a choice of agent.
 
-    ``[agent.claude]`` written for ``[agents.claude]`` must fail here, not
-    be stringified into an "unknown agent" named after the whole table.
+    ``[agent.claude]`` written for ``[agents.claude]`` must fail at the
+    misplaced key.
     """
-    assert_filter_errors(Agent, {"claude": {}}, [f.Type.CODE_WRONG_TYPE])
+    assert_filter_errors(
+        Agent, {"claude": {}}, {"claude": [f.FilterMapper.CODE_EXTRA_KEY]}
+    )

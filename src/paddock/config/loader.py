@@ -4,8 +4,11 @@ from pathlib import Path
 
 import filters as f
 
-from paddock.agents import agent_registry, installed_agent_keys
+from class_registry.base import BaseRegistry
+
+from paddock.agents import agent_registry
 from paddock.cli import ParsedArgs
+from paddock.config.agent_choice import UNNAMED_SERVER
 from paddock.config.allowlist import Allowlist
 from paddock.config.context import ConfigContext
 from paddock.config.errors import ConfigError
@@ -21,9 +24,12 @@ class ResolvedConfig:
     """The result of a full config resolution.
 
     Attributes:
-        config: The validated merged config.
-        agent_key: The chosen agent's registry key; ``"false"`` for the
-            no-agent shell, whose ``agent`` value is the boolean ``False``.
+        config: The validated merged config. Its ``agent`` is a table with
+            both halves resolved: ``client`` a name or ``False``, ``server``
+            a name or ``False``.
+        agent_key: The chosen client's registry key; ``"false"`` for the
+            no-agent shell, whose client half is the boolean ``False``.
+        server_key: The chosen server's registry key, or ``None`` for none.
         extra_args: The chosen agent's configured ``extra_args`` (ADR 017);
             empty when it has none.
         project_toml_enabled: Whether the allowlist enables the project file.
@@ -32,6 +38,7 @@ class ResolvedConfig:
 
     config: dict
     agent_key: str
+    server_key: str | None
     extra_args: list[str]
     project_toml_enabled: bool
     project_dir_readonly: bool
@@ -45,15 +52,23 @@ class ConfigLoader:
     subclass with a ``SOURCE_KEY`` and ``WEIGHT``; ``AutoRegister`` does the rest.
     """
 
-    def __init__(self, user_config_path: Path | None = None) -> None:
+    def __init__(
+        self,
+        user_config_path: Path | None = None,
+        *,
+        agents: BaseRegistry = agent_registry,
+    ) -> None:
         """Initialises the loader with an optional user config path override.
 
         Args:
             user_config_path: If provided, overrides the default user config
                 path (``$XDG_CONFIG_HOME/paddock/config.toml``, defaulting to
                 ``~/.config/paddock/config.toml``). Useful for testing.
+            agents: The registry of clients, consulted for a client's default
+                server and for which ``agents`` entries are installed.
         """
         self._user_path_override = user_config_path
+        self._agents = agents
 
     def resolve(
         self,
@@ -90,12 +105,14 @@ class ConfigLoader:
             raise self._error_group([("final", final)])
 
         config = dict(final.cleaned_data)
-        agent_key = self._agent_key(config["agent"])
+        agent_key = self._agent_key(config["agent"]["client"])
+        server_key = self._resolve_server(config["agent"], agent_key)
         self._warn_unknown_agent_settings(config)
 
         return ResolvedConfig(
             config=config,
             agent_key=agent_key,
+            server_key=server_key,
             extra_args=self._extra_args(config, agent_key),
             project_toml_enabled=allowlist.is_enabled("project_toml"),
             project_dir_readonly=readonly,
@@ -111,6 +128,29 @@ class ConfigLoader:
             The key the agent is registered under; ``"false"`` for the shell.
         """
         return "false" if configured is False else str(configured)
+
+    def _resolve_server(self, agent: dict, agent_key: str) -> str | None:
+        """Resolve the server half of the merged ``agent``, in place.
+
+        An unnamed server becomes the merged client's ``DEFAULT_SERVER``
+        (ADR 018). A client that is not installed has no default; the entry
+        point reports it.
+
+        Args:
+            agent: The merged ``agent`` table; its ``server`` is replaced by
+                the resolved name, or ``False`` for none.
+            agent_key: The chosen client's registry key.
+
+        Returns:
+            The server's registry key, or ``None`` for no server.
+        """
+        server = agent["server"]
+        if server == UNNAMED_SERVER:
+            server = False
+            if agent_key in self._agents:
+                server = self._agents.get_class(agent_key).DEFAULT_SERVER or False
+        agent["server"] = server
+        return server or None
 
     def _extra_args(self, config: dict, agent_key: str) -> list[str]:
         """Return the configured ``extra_args`` for one agent (ADR 017).
@@ -135,13 +175,13 @@ class ConfigLoader:
             config: The merged config.
         """
         for name in sorted(config.get("agents", {})):
-            if name not in agent_registry:
+            if name not in self._agents:
                 logger.warning(
                     '[agents.%s] No agent named "%s" is installed, so its '
                     "settings are ignored; installed agents: %s",
                     name,
                     name,
-                    ", ".join(installed_agent_keys()),
+                    ", ".join(sorted(str(key) for key in self._agents)),
                 )
 
     def _build_context(
@@ -355,7 +395,9 @@ class ConfigLoader:
         Returns:
             The same dict with defaults applied.
         """
-        config.setdefault("agent", "claude")
+        agent = config.setdefault("agent", {})
+        agent.setdefault("client", "claude")
+        agent.setdefault("server", UNNAMED_SERVER)
         config.setdefault("volumes", {})
         if isinstance(config.get("build"), dict):
             config["build"].setdefault("args", {})

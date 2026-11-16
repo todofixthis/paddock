@@ -7,6 +7,8 @@ _KNOWN_BOOL_FLAGS = frozenset({"--dry-run", "--quiet", "--version"})
 _KNOWN_VALUE_FLAGS = frozenset(
     {
         "--agent",
+        "--agent-client",
+        "--agent-server",
         "--build-context",
         "--build-dockerfile",
         "--build-policy",
@@ -22,6 +24,8 @@ _KNOWN_VALUE_FLAGS = frozenset(
 class ParsedArgs:
     agent: str | bool | None
     agent_args: list[str]
+    agent_client: str | bool | None
+    agent_server: str | bool | None
     build_args: dict[str, str]
     build_context: str | None
     build_dockerfile: str | None
@@ -131,6 +135,8 @@ def parse_args(argv: list[str]) -> ParsedArgs:
         allow_abbrev=False,
     )
     parser.add_argument("--agent")
+    parser.add_argument("--agent-client")
+    parser.add_argument("--agent-server")
     parser.add_argument("--build-context")
     parser.add_argument("--build-dockerfile")
     parser.add_argument("--build-policy")
@@ -154,6 +160,8 @@ def parse_args(argv: list[str]) -> ParsedArgs:
     return ParsedArgs(
         agent=namespace.agent,
         agent_args=agent_args,
+        agent_client=namespace.agent_client,
+        agent_server=namespace.agent_server,
         build_args=build_args,
         build_context=namespace.build_context,
         build_dockerfile=namespace.build_dockerfile,

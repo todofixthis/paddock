@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from paddock.cli import ParsedArgs
+from paddock.config.agent_choice import UNNAMED_SERVER
 from paddock.config.context import ConfigContext
 from paddock.config.sources.project_toml import ProjectTomlSource
 
@@ -9,6 +10,8 @@ def _ctx(tmp_path) -> ConfigContext:
     parsed = ParsedArgs(
         agent=None,
         agent_args=[],
+        agent_client=None,
+        agent_server=None,
         build_args={},
         build_context=None,
         build_dockerfile=None,
@@ -53,7 +56,10 @@ def test_load_returns_validated_config(tmp_path: Path):
     (d / "config.toml").write_text('image = "p:2"\nagent = "claude"\n')
     result = ProjectTomlSource().load(_ctx(tmp_path))
     assert result.instance.is_valid()
-    assert result.instance.cleaned_data == {"image": "p:2", "agent": "claude"}
+    assert result.instance.cleaned_data == {
+        "image": "p:2",
+        "agent": {"client": "claude", "server": UNNAMED_SERVER},
+    }
 
 
 def test_load_invalid_toml(tmp_path: Path):
