@@ -62,11 +62,11 @@ def _build_schema(base_dir: Path, check_paths: bool):
 # Per-agent settings, keyed by agent registry key (ADR 017). The names are not
 # checked against the registry here: a name no installed agent has draws a
 # warning after the merge, so a shared config still loads where a plugin is
-# missing. ``f.Type(str)`` rather than ``f.Unicode``, which would coerce ``1``
-# to ``"1"``.
+# missing. ``f.Type(str)`` goes ahead of ``f.Unicode``, which alone would
+# coerce ``1`` to ``"1"``.
 _agents_schema = f.Type(dict) | f.FilterRepeater(
     f.FilterMapper(
-        {"extra_args": f.Array | f.FilterRepeater(f.Type(str))},
+        {"extra_args": f.Array | f.FilterRepeater(f.Type(str) | f.Unicode)},
         allow_extra_keys=False,
         allow_missing_keys=True,
     )

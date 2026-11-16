@@ -443,3 +443,12 @@ def test_project_entry_accepts_agents(assert_filter_passes, tmp_path):
         '[projects."/x".agents.claude]\nextra_args = ["--resume"]\n',
         skip_value_check,
     )
+
+
+def test_agents_normalises_extra_args_as_unicode(assert_filter_passes):
+    """Each argument passes through f.Unicode, as config strings do."""
+    assert_filter_passes(
+        _per_source_schema(),
+        {"agents": {"claude": {"extra_args": ["café"]}}},
+        {"agents": {"claude": {"extra_args": ["café"]}}},
+    )

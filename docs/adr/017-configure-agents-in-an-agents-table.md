@@ -85,7 +85,8 @@ another agent. `agent` already tolerates the same case.
 For `extra_args`:
 
 - **A list of strings.** A string would need quoting rules.
-- **Passed verbatim.** No `~` expansion and no path resolution: an argument names a
+- **Passed verbatim**, apart from the Unicode normalisation every config string
+  gets. No `~` expansion and no path resolution: an argument names a
   path in the container, so [ADR 012][] does not apply.
 - **Appended** after the agent's command and before the tokens after `--`, so a
   one-off argument can follow a standing one. It never reaches Paddock's own flags.
