@@ -103,6 +103,42 @@ before `FilterRepeater` for consistency with the `FilterMapper` convention:
 `f.Optional(dict)` works because `f.Optional` calls its argument when it is callable,
 producing `dict()` → `{}`.
 
+## String values go through `f.Unicode`
+
+Put `f.Unicode` in the chain of every free-form string value, including each entry of
+a list of strings. It applies Unicode normalisation, strips unprintable characters and
+normalises line endings, which keeps a config file portable between systems. Use it
+bare by default, as `image` and `network` do in `src/paddock/config/schema.py`.
+
+`f.Unicode` also coerces: `1` becomes `"1"`, `True` becomes `"1"`, `False` becomes
+`"0"`, and a table becomes its `repr`. Put `f.Type(str)` in front of it only where a
+coerced non-string would pass as a plausible value and hide a mistake, such as a
+table accepted as an agent name or an integer as a command-line argument. Never use
+`f.Type(str)` in place of `f.Unicode`.
+
+```python
+# The default
+f.Unicode | f.NotEmpty
+# A non-string here must be an error
+f.Type(str) | f.Unicode | f.NotEmpty
+# A list of strings whose entries must not be coerced; without f.Array a bare
+# string would be split into characters
+f.Array | f.FilterRepeater(f.Type(str) | f.Unicode)
+```
+
+Where the rule does not reach:
+
+- **A value that may be a string or something else** (`agent` is a name or `False`):
+  never put `f.Unicode` at the front of the chain, which would turn `False` into
+  `"0"`. Branch on type in a custom filter and filter the string branch only, as
+  `Agent` does in `src/paddock/config/filters.py`.
+- **`f.Choice` values:** leave `f.Choice` bare. It already rejects a non-member, and
+  `f.Unicode` in front would let `1` match a `"1"` choice.
+- **Dict keys:** `f.FilterRepeater` filters values only, so keys pass through as
+  written.
+- **Host paths:** keep `f.Unicode | Filepath(...)`; `f.Type(str)` in front would
+  reject a `Path`.
+
 ## `f.FilterMapper`
 
 Validates a dict against a schema. Each key maps to a filter chain.
