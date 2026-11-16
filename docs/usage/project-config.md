@@ -5,7 +5,7 @@
 paddock reads two config files, among [other sources](configuration.md#where-configuration-comes-from):
 
 - **User-level** (`$XDG_CONFIG_HOME/paddock/config.toml`, by default `~/.config/paddock/config.toml`) — your personal defaults, applied to every project.
-- **Project-level** (`.paddock/config.toml` in the project workdir) — settings committed alongside a project and shared with everyone who works on it. It takes the same [directives](configuration.md#directives), except `config` and `projects`.
+- **Project-level** (`.paddock/config.toml` in the project workdir) — settings committed alongside a project and shared with everyone who works on it. It takes the same [directives](configuration.md#directives), except `config` and `projects`, which paddock [ignores there](#warning-behaviour).
 
 Because project-level config lives inside a project repository, paddock treats it as **untrusted by default**. A malicious or misconfigured project could otherwise redirect your Docker image, override your network settings, mount sensitive paths, or pass arguments to your agent. Even once enabled it carries the lowest [weight](#precedence) of any source, so it can't override a value you set — though it can add mounts and build arguments to yours, and arguments for an agent you have set none for. You must explicitly grant each project (or all projects) permission to contribute config before paddock will honour it.
 
@@ -169,7 +169,7 @@ project_dir_readonly = false
 
 ## Warning behaviour
 
-The allowlist produces two warnings at `WARNING` level.
+paddock reports config it ignores with three warnings at `WARNING` level. The first two come from the allowlist.
 
 A gated source (`project_toml`, `env`, or `cli`) contributed keys the rule does not permit — whether the source is wholly or partly disabled:
 
@@ -185,7 +185,13 @@ A source that is disabled failed validation — malformed TOML, an unknown key, 
 <source> source had errors but is disabled by [config.allowlist] — ignored
 ```
 
-This is intentional: paddock loads every source unconditionally so it can warn you when config is being silently dropped, rather than hiding the fact that a project file was present.
+An enabled project file set a key that only your user config may set, `config` or `projects`. No grant can keep it, so paddock removes it before validating the file, and nothing under it can stop the run:
+
+```
+project_toml: ignored <key> — only your user config may set it
+```
+
+All three are intentional: paddock loads every source unconditionally so it can warn you when config is being silently dropped, rather than hiding the fact that a project file was present.
 
 `--quiet` disables all logging, these warnings included; fatal config errors still print.
 
@@ -198,9 +204,9 @@ For errors not specific to project config, see
 
 The project file (`<workdir>/.paddock/config.toml`) does not parse. It aborts the run for anyone who has opted in — see [The allowlist](#the-allowlist).
 
-**`[project_toml:config] Unexpected key "config".`**
+**`project_toml: ignored config — only your user config may set it`**
 
-The project file sets `[config]` (or `projects`), which only your user config may set. A committed file cannot grant itself access.
+The project file sets `[config]` (or `projects`), which only your user config may set. paddock ignores the section and carries on: a committed file cannot grant itself access, nor stop your run by trying. If the file is yours, move the section to your user config. If it is not, treat it as a reason to look at what else the file sets.
 
 **`[project_toml:volumes.<path>] Path '<path>' does not exist or cannot be resolved (checked …).`**
 

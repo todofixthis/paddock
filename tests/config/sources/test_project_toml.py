@@ -113,3 +113,43 @@ def test_scalar_server_setting_is_discarded_too(tmp_path: Path):
     result = _load_project_file(tmp_path, "[agents.y]\nserver = 1\n")
     assert result.instance.is_valid(), result.instance.errors
     assert result.discarded == [Discarded("agents.y.server", _SERVER_REASON)]
+
+
+_USER_ONLY_REASON = "only your user config may set it"
+
+
+def test_config_is_discarded_before_validation(tmp_path: Path):
+    """A project file cannot grant itself access, nor stop a run by trying."""
+    result = _load_project_file(
+        tmp_path, 'image = "p"\n[config.allowlist]\nproject_toml = true\n'
+    )
+    assert result.instance.is_valid(), result.instance.errors
+    assert "config" not in result.instance.cleaned_data
+    assert result.meta == {}
+    assert result.discarded == [Discarded("config", _USER_ONLY_REASON)]
+
+
+def test_projects_is_discarded_before_validation(tmp_path: Path):
+    """Per-project overrides belong to the user config alone."""
+    result = _load_project_file(tmp_path, '[projects."/x"]\nimage = "j"\n')
+    assert result.instance.is_valid(), result.instance.errors
+    assert "projects" not in result.instance.cleaned_data
+    assert result.discarded == [Discarded("projects", _USER_ONLY_REASON)]
+
+
+def test_malformed_user_only_keys_are_discarded_too(tmp_path: Path):
+    """Nothing under a discarded key is validated, so nothing there stops a run."""
+    result = _load_project_file(tmp_path, 'config = 1\nprojects = ["x"]\n')
+    assert result.instance.is_valid(), result.instance.errors
+    assert result.discarded == [
+        Discarded("config", _USER_ONLY_REASON),
+        Discarded("projects", _USER_ONLY_REASON),
+    ]
+
+
+def test_misspelt_key_is_still_an_error(tmp_path: Path):
+    """A key that is merely unknown is a typo, and stays a validation error."""
+    result = _load_project_file(tmp_path, "[confg]\nx = 1\n")
+    assert not result.instance.is_valid()
+    assert "confg" in result.instance.errors
+    assert result.discarded == []
