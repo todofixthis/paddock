@@ -642,4 +642,4 @@ def test_agent_table_rejected(assert_filter_errors):
     ``[agent.claude]`` written for ``[agents.claude]`` must fail here, not
     be stringified into an "unknown agent" named after the whole table.
     """
-    assert_filter_errors(Agent, {"claude": {}}, [Agent.CODE_INVALID])
+    assert_filter_errors(Agent, {"claude": {}}, [f.Type.CODE_WRONG_TYPE])

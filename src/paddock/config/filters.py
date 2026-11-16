@@ -37,11 +37,7 @@ class Agent(BaseFilter):
 
         # Anything else that is not a string is invalid: f.Unicode would
         # stringify a table such as a mistyped ``[agent.claude]``.
-        if not isinstance(value, str):
-            return self._invalid_value(value, self.CODE_INVALID)
-
-        # Non-empty string agent names are valid.
-        value = self._filter(value, f.Unicode | f.NotEmpty)
+        value = self._filter(value, f.Type(str) | f.Unicode | f.NotEmpty)
         if self._has_errors:
             return None
 
