@@ -837,3 +837,55 @@ def test_user_extra_args_beat_the_project_file(tmp_path: Path, monkeypatch):
     _project_file_with_agents(tmp_path)
     r = ConfigLoader().resolve(_empty_parsed(), workdir=tmp_path, environ={})
     assert r.config["agents"]["claude"]["extra_args"] == []
+
+
+def test_resolve_reports_the_chosen_agents_extra_args(tmp_path: Path, monkeypatch):
+    """The resolved config names the agent's registry key and its extra_args."""
+    _setup_home(
+        tmp_path,
+        monkeypatch,
+        'image = "i"\nagent = "claude"\n'
+        '[agents.claude]\nextra_args = ["--a"]\n'
+        '[agents.false]\nextra_args = ["-l"]\n',
+    )
+    r = ConfigLoader().resolve(_empty_parsed(), workdir=tmp_path, environ={})
+    assert r.agent_key == "claude"
+    assert r.extra_args == ["--a"]
+
+
+def test_resolve_keys_the_shell_agent_as_false(tmp_path: Path, monkeypatch):
+    """``agent = false`` resolves to the registry key "false" and its settings."""
+    _setup_home(
+        tmp_path,
+        monkeypatch,
+        'image = "i"\nagent = false\n[agents.false]\nextra_args = ["-l"]\n',
+    )
+    r = ConfigLoader().resolve(_empty_parsed(), workdir=tmp_path, environ={})
+    assert r.agent_key == "false"
+    assert r.extra_args == ["-l"]
+
+
+def test_resolve_has_no_extra_args_without_settings(tmp_path: Path, monkeypatch):
+    """An agent with no settings resolves to an empty extra_args."""
+    _setup_home(tmp_path, monkeypatch, 'image = "i"\nagent = "claude"\n')
+    r = ConfigLoader().resolve(_empty_parsed(), workdir=tmp_path, environ={})
+    assert r.extra_args == []
+
+
+def test_resolve_warns_about_settings_for_an_uninstalled_agent(
+    tmp_path: Path, monkeypatch, caplog
+):
+    """Settings for a name no agent has warn once; installed names do not."""
+    _setup_home(
+        tmp_path,
+        monkeypatch,
+        'image = "i"\nagent = "claude"\n'
+        '[agents.claud]\nextra_args = ["-x"]\n'
+        '[agents.false]\nextra_args = ["-l"]\n',
+    )
+    with caplog.at_level(logging.WARNING, logger="paddock"):
+        ConfigLoader().resolve(_empty_parsed(), workdir=tmp_path, environ={})
+    assert [rec.getMessage() for rec in caplog.records] == [
+        '[agents.claud] No agent named "claud" is installed, so its settings '
+        "are ignored; installed agents: claude, false"
+    ]

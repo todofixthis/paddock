@@ -8,6 +8,11 @@ from paddock.config.filters import VolumeSpec
 agent_registry: EntryPointClassRegistry = EntryPointClassRegistry("paddock.agents")
 
 
+def installed_agent_keys() -> list[str]:
+    """List the registry keys of the installed agents, sorted, for messages."""
+    return sorted(str(key) for key in agent_registry)
+
+
 class BaseAgent(ABC):
     AGENT_KEY: ClassVar[str]
 

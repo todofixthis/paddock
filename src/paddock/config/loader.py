@@ -4,6 +4,7 @@ from pathlib import Path
 
 import filters as f
 
+from paddock.agents import agent_registry, installed_agent_keys
 from paddock.cli import ParsedArgs
 from paddock.config.allowlist import Allowlist
 from paddock.config.context import ConfigContext
@@ -17,9 +18,21 @@ logger = logging.getLogger("paddock")
 
 @dataclass
 class ResolvedConfig:
-    """The result of a full config resolution."""
+    """The result of a full config resolution.
+
+    Attributes:
+        config: The validated merged config.
+        agent_key: The chosen agent's registry key; ``"false"`` for the
+            no-agent shell, whose ``agent`` value is the boolean ``False``.
+        extra_args: The chosen agent's configured ``extra_args`` (ADR 017);
+            empty when it has none.
+        project_toml_enabled: Whether the allowlist enables the project file.
+        project_dir_readonly: Whether ``.paddock`` mounts read-only.
+    """
 
     config: dict
+    agent_key: str
+    extra_args: list[str]
     project_toml_enabled: bool
     project_dir_readonly: bool
 
@@ -76,11 +89,60 @@ class ConfigLoader:
         if not final.is_valid():
             raise self._error_group([("final", final)])
 
+        config = dict(final.cleaned_data)
+        agent_key = self._agent_key(config["agent"])
+        self._warn_unknown_agent_settings(config)
+
         return ResolvedConfig(
-            config=final.cleaned_data,
+            config=config,
+            agent_key=agent_key,
+            extra_args=self._extra_args(config, agent_key),
             project_toml_enabled=allowlist.is_enabled("project_toml"),
             project_dir_readonly=readonly,
         )
+
+    def _agent_key(self, configured: str | bool) -> str:
+        """Return the registry key for the merged config's ``agent`` value.
+
+        Args:
+            configured: An agent key, or ``False`` for the no-agent shell.
+
+        Returns:
+            The key the agent is registered under; ``"false"`` for the shell.
+        """
+        return "false" if configured is False else str(configured)
+
+    def _extra_args(self, config: dict, agent_key: str) -> list[str]:
+        """Return the configured ``extra_args`` for one agent (ADR 017).
+
+        Args:
+            config: The merged config.
+            agent_key: The chosen agent's registry key.
+
+        Returns:
+            The arguments to place after the agent's command and before the
+            command line's own; empty when the agent has none configured.
+        """
+        return config.get("agents", {}).get(agent_key, {}).get("extra_args", [])
+
+    def _warn_unknown_agent_settings(self, config: dict) -> None:
+        """Warn about ``agents`` entries that name no installed agent.
+
+        A warning, not an error, so a config shared between machines still
+        loads where a plugin's agent is missing (ADR 017).
+
+        Args:
+            config: The merged config.
+        """
+        for name in sorted(config.get("agents", {})):
+            if name not in agent_registry:
+                logger.warning(
+                    '[agents.%s] No agent named "%s" is installed, so its '
+                    "settings are ignored; installed agents: %s",
+                    name,
+                    name,
+                    ", ".join(installed_agent_keys()),
+                )
 
     def _build_context(
         self,

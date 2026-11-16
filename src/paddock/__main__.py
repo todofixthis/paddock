@@ -7,7 +7,7 @@ from pathlib import Path
 
 from class_registry import RegistryKeyError
 
-from paddock.agents import BaseAgent, agent_registry
+from paddock.agents import BaseAgent, agent_registry, installed_agent_keys
 from paddock.cli import parse_args
 from paddock.config.errors import ConfigError, PaddockEnvironmentError
 from paddock.config.loader import ConfigLoader
@@ -59,77 +59,24 @@ def _resolve_workdir(raw: str | None) -> Path:
     return workdir
 
 
-def _agent_key(configured: str | bool) -> str:
-    """Return the registry key for the merged config's ``agent`` value.
-
-    Args:
-        configured: An agent key, or ``False`` for the no-agent shell.
-
-    Returns:
-        The key the agent is registered under; ``"false"`` for the shell.
-    """
-    return "false" if configured is False else str(configured)
-
-
-def _installed_agents() -> str:
-    """List the registered agent keys for a message, sorted and comma-joined."""
-    return ", ".join(sorted(str(key) for key in agent_registry))
-
-
-def _extra_args(config: dict, agent_key: str) -> list[str]:
-    """Return the configured ``extra_args`` for one agent (ADR 017).
-
-    Args:
-        config: The merged config.
-        agent_key: The chosen agent's registry key.
-
-    Returns:
-        The arguments to place after the agent's command and before the
-        command line's own; empty when the agent has none configured.
-    """
-    return config.get("agents", {}).get(agent_key, {}).get("extra_args", [])
-
-
-def _warn_unknown_agent_settings(config: dict) -> None:
-    """Warn about ``agents`` entries that name no installed agent.
-
-    A warning, not an error, so a config shared between machines still
-    loads where a plugin's agent is missing (ADR 017).
-
-    Args:
-        config: The merged config.
-    """
-    for name in sorted(config.get("agents", {})):
-        if name not in agent_registry:
-            logger.warning(
-                '[agents.%s] No agent named "%s" is installed, so its settings '
-                "are ignored; installed agents: %s",
-                name,
-                name,
-                _installed_agents(),
-            )
-
-
-def _resolve_agent(configured: str | bool) -> BaseAgent:
+def _resolve_agent(agent_key: str) -> BaseAgent:
     """Look up the configured agent, or exit 1 naming the installed agents.
 
     Resolved before the ``.paddock`` directory is created, so a typo in an
     agent key never leaves the filesystem to unwind.
 
     Args:
-        configured: The merged config's ``agent`` value — an agent key, or
-            ``False`` for the no-agent shell.
+        agent_key: The chosen agent's registry key, from the resolved config.
 
     Returns:
         The registered agent instance.
     """
-    agent_key = _agent_key(configured)
     try:
         return agent_registry.get(agent_key)
     except RegistryKeyError:
         print(
             f'[agent] Unknown agent "{agent_key}"; '
-            f"installed agents: {_installed_agents()}",
+            f"installed agents: {', '.join(installed_agent_keys())}",
             file=sys.stderr,
         )
         sys.exit(1)
@@ -171,8 +118,7 @@ def run(argv: list[str] | None = None) -> None:
         sys.exit(1)
 
     config = resolved.config
-    agent = _resolve_agent(config["agent"])
-    _warn_unknown_agent_settings(config)
+    agent = _resolve_agent(resolved.agent_key)
 
     try:
         with ProjectDirManager(
@@ -200,10 +146,7 @@ def run(argv: list[str] | None = None) -> None:
 
             docker_argv = command_builder.build(
                 command=parsed.command,
-                agent_args=[
-                    *_extra_args(config, _agent_key(config["agent"])),
-                    *parsed.agent_args,
-                ],
+                agent_args=[*resolved.extra_args, *parsed.agent_args],
             )
 
             if not parsed.quiet:
