@@ -12,7 +12,8 @@ class Agent(BaseFilter):
     """Validates a coding agent value.
 
     Accepts a non-empty string agent name, or ``False`` to disable the agent.
-    Maps the string ``'false'`` to boolean ``False``. Rejects boolean ``True``.
+    Maps the string ``'false'`` to boolean ``False``. Rejects boolean ``True``
+    and any other non-string, such as a table.
     """
 
     CODE_INVALID = "invalid"
