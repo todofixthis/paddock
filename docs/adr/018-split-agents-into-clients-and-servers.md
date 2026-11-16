@@ -2,7 +2,7 @@
 status: Accepted
 date: 2026-11-16
 scope: [README.rst, docs/usage/, pyproject.toml, src/paddock/__main__.py, src/paddock/agents/, src/paddock/cli.py, src/paddock/config/, src/paddock/docker/]
-summary: An agent is a client (BaseAgent, the existing paddock.agents registry) optionally paired with a server (BaseServer, a new paddock.servers registry, authored under src/paddock/agents/); a client names its default server and the protocol it speaks, with no registry of named pairings and no server hooks on the agent class; agent is a client name, false, or a table naming either half, and a half no source names takes its default after the merge (client claude, server the merged client's default); a client with a protocol needs a server speaking it, and one without may be chosen beside any server but is not connected to it; every client runs in a container, never on the host.
+summary: An agent is a client (BaseAgent, the existing paddock.agents registry) optionally paired with a server (BaseServer, a new paddock.servers registry, authored under src/paddock/agents/); a client names its default server and the protocol it speaks, with no registry of named pairings and no server hooks on the agent class; agent is a client name, false, or a table naming either half; a string or false names the client and resets the server half to unnamed, and an unnamed half takes its default after the merge (client claude, server the merged client's default); agent stays one allowlist directive; a client is paired with a server only when both name the same protocol: a client with a protocol needs such a server, and one without may be chosen beside any server but is not connected to it; servers are classes, not containers described in config; every client runs in a container, never on the host.
 revisit-when: A pairing needs a name of its own, distinct from its client's; a client or server needs to speak more than one protocol; a client is shown to load and run nothing from the workdir and needs the host's terminal or tools; a server needs its connection arguments placed after extra_args; a run needs two servers at once.
 ---
 
@@ -86,7 +86,7 @@ or mount requirements, which are what make a server usable.
 
 Option 2. It gives the two halves the maintainer asked for as separately registered
 classes, so adding a client or a server is one new class, and it leaves the existing
-entry-point group and ADR 017's keys alone. A registry of pairings can be added in
+entry-point group alone. A registry of pairings can be added in
 front of it later without undoing this; nothing needs one yet, since `extra_args`
 covers the case raised, choosing the harness an Omnigent client launches.
 
@@ -98,33 +98,44 @@ client overrides to receive the server's address and secret.
 tools, because it loads plugins from the workdir. Its container reaches the server
 over a Docker network.
 
-**The `agent` value.** A string names a client; `false` is the shell; a table names
-either half, and `server = false` means none. Sources merge half by half: a table
-overrides only the halves it names, and a string sets the client and clears any
-server a lower source named. After the merge, an unnamed client is `claude` and an
-unnamed server is the merged client's `DEFAULT_SERVER`. So `agent.client` alone
-brings that client's server with it, and no source needs the registry to be read.
-`--agent-client`, `--agent-server` and the matching `PADDOCK_AGENT_*` variables set
-one half; within one source a half overrides that source's own string, which the
-environment source must handle explicitly, its name-to-path mapping losing the string
-otherwise.
+**The `agent` value.** Each half is unnamed, named, or `false`: the shell for the
+client, none for the server. A string names the client and resets the server to
+unnamed; `false` does the same with the shell. A table names the halves it lists.
+Sources merge half by half, so a table overrides only what it names, while a string
+or `false` discards a server a lower source named. After the merge, an unnamed client
+is `claude` and an unnamed server is the merged client's `DEFAULT_SERVER`. So
+`agent.client` alone brings that client's server with it, and no source needs the
+registry to be read. `--agent-client`, `--agent-server` and the matching
+`PADDOCK_AGENT_*` variables name one half. Within one source the string applies
+first, reset included, and then that source's halves; the environment source must
+handle this explicitly, its name-to-path mapping losing the string otherwise.
 
-**Pairing.** A client with a `PROTOCOL` needs a server with the same one, and the run
-stops otherwise. A client without one may be chosen beside any server: the server is
-started, but the client neither joins its network nor receives its secret. So
+`agent` stays one allowlist directive ([ADR 004][]): a grant of half the value could
+not carry the reset.
+
+**Pairing.** A client is paired with a server when both name the same `PROTOCOL`. A
+client with a `PROTOCOL` must be paired, and the run stops otherwise. A client
+without one may be chosen beside any server: the server is started, but the client
+neither joins its network nor receives its secret, and ADR 019's checks on a paired
+run do not apply. So
 `{client = "claude", server = "omnigent"}` runs and does not route Claude through
 Omnigent. This is the "novel combinations" allowance.
 
 **Names.** A chosen client or server that is not installed stops the run, after the
-merge, as an unknown agent does today. An `agents.<name>` key is known if either
-registry has it.
+merge, as an unknown agent does today. This extends ADR 017's `agents.<name>` to
+servers' keys, judged per setting: `extra_args` needs a client of that name and
+`server` a server of that name, and either without one draws ADR 017's warning.
 
 ## Consequences
 
 - A third party adds a server by registering a `BaseServer` subclass under
   `paddock.servers`; no Paddock module changes.
 - An OpenCode run is two containers, the shared server and a client, and the client's
-  image needs OpenCode installed at a version the server accepts.
+  image needs OpenCode installed at a version the server accepts. An image without
+  it fails when the client starts, after the server is already up.
+- A source granted `agent` can now name a server, which starts a long-lived
+  container with the user's own server settings. The docs say so where they weigh
+  what each grant hands a project file.
 - `agent` may now be a table, so the filter that rejects one accepts a table whose
   keys are `client` and `server`.
 - Choosing a no-protocol client beside a server starts a container that client never
@@ -133,6 +144,7 @@ registry has it.
   as a proxy would be; that needs its own decision.
 
 [#53]: https://github.com/todofixthis/paddock/pull/53
+[ADR 004]: 004-gate-untrusted-config-sources-with-an-allowlist.md
 [ADR 017]: 017-configure-agents-in-an-agents-table.md
 [ADR 019]: 019-run-one-shared-container-per-agent-server.md
 [`BaseAgent`]: ../../src/paddock/agents/__init__.py

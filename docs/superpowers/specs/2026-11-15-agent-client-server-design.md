@@ -58,8 +58,8 @@ Sources: `anomalyco/opencode` v2.3.0 and `omnigent-ai/omnigent` 0.23.0.dev0, rea
 
 - `opencode serve --hostname H --port P` starts the server. A client connects with
   `--server <url>`; there is no environment variable for the URL.
-- A password is mandatory: `OPENCODE_PASSWORD` on both sides, HTTP Basic, username
-  `opencode`.
+- Every request needs the password: `OPENCODE_PASSWORD` on both sides, HTTP Basic,
+  username `opencode`. A server started without one mints its own (see below).
 - `GET /api/info` needs auth and returns 200 once ready, 503 while starting.
 - The client sends its cwd per request. The directory must exist **in the server** at
   the same absolute path. If it does not, the client silently falls back to the
@@ -314,7 +314,7 @@ as `-e NAME`, and the command `[*get_command(), *get_server_args(), *extra_args,
 
 Built after a throwaway spike. Intended shape:
 
-- **Client `omnigent`:** `DEFAULT_SERVER = "omnigent"`, command
+- **Client `omnigent`:** `DEFAULT_SERVER = "omnigent"`, `PROTOCOL = "omnigent"`, command
   `omnigent`. The harness is the first `extra_args` entry (`["claude"]`). It mounts
   what that harness needs to sign in.
 - **Server `omnigent`:** the published server image, pinned; SQLite in a named
@@ -340,10 +340,10 @@ If the spike shows the shape is wrong, it comes back as a design change, not a p
 
 - One page per agent under `docs/usage/agents/`, since their configuration diverges.
   `configuration.md` keeps the shared keys and links out.
-- ADRs before implementation (`phx:writing-adrs`): one for the `agent` / `agents`
-  config shape, one for the client/server split and managed containers.
-- `docs/future/squid-proxy-sidecar.md` gains a pointer to `ManagedContainer` and the
-  `paddock` network.
+- ADRs: 017 (the `agents` table), 018 (clients and servers) and 019 (the shared
+  server container).
+- `docs/future/squid-proxy-sidecar.md` gains a pointer to `ManagedContainer` and to
+  ADR 018's note that a server every client shares needs its own decision.
 
 ## Delivery
 
