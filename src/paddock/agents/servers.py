@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import ClassVar
 
 from class_registry.entry_points import EntryPointClassRegistry
@@ -22,8 +22,8 @@ class ServerConnection:
     network: str
     """The Docker network the server is on."""
 
-    secret: str
-    """The shared secret the server was started with."""
+    secret: str = field(repr=False)
+    """The shared secret the server was started with; kept out of ``repr``."""
 
 
 class BaseServer(ABC):
