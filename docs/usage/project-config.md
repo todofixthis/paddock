@@ -92,13 +92,16 @@ Each gated source has an entry in `[config.allowlist]`. Valid values are:
 > `--dangerously-skip-permissions`, for one), and for the shell agent, `false`, the
 > arguments are a command: `["-c", "…"]` runs it. Allowlist `agents` only for a
 > project whose files you trust as much as your own config. `project_toml = true`
-> includes it; to grant everything else, list the other keys.
+> includes it; to grant everything else, list the other keys, named under
+> [`config.allowlist`](configuration.md#configallowlist).
 >
 > Your own `extra_args` for an agent, even `[]`, takes precedence over the project
 > file's, but only for that agent, and only if you set `extra_args` itself: a bare
-> `[agents.claude]` header protects nothing.
+> `[agents.claude]` header protects nothing. A file also granted `agent` can choose
+> which agent runs, the shell included, so the agent you normally use is no guide to
+> which settings matter.
 
-List entries are validated against the known config key paths. An unknown path (e.g. a typo like `"imgae"`) is rejected when the user config is loaded.
+List entries are validated against the known config key paths, listed under [`config.allowlist`](configuration.md#configallowlist). An unknown path (e.g. a typo like `"imgae"`) is rejected when the user config is loaded.
 
 **Validation runs before filtering.** An enabled source is validated as a whole, and only then does the allowlist project it down to the permitted keys. An invalid value in a key the rule would have dropped still aborts the run: under `project_toml = ["volumes"]`, a project file containing `image = ""` fails with `[project_toml:image] Non-empty value expected.` A malformed project file therefore aborts the run for every operator who has opted in, however narrow their grant.
 

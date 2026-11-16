@@ -54,8 +54,9 @@ Merging is per key, not per source:
   change the container path or mode of a host path a lower one mounts, but not remove
   it.
 
-Higher sources cannot unset a value, with one exception: an empty
-[`network`](#network) falls back to Docker's default network.
+Higher sources cannot unset a value, with two exceptions: an empty
+[`network`](#network) falls back to Docker's default network, and an empty
+[`extra_args`](#agentsnameextra_args) clears the list.
 
 ### Validation
 
@@ -689,7 +690,7 @@ after `--`.
 - **Allowlist path:** `agents`, which covers every agent's settings
 
 `<name>` is the agent the arguments belong to, spelt as [`agent`](#agent) spells it;
-use `false` for the shell. Settings stay in place while another agent is chosen, so a
+use `false`, in lower case, for the shell. Settings stay in place while another agent is chosen, so a
 per-project `agent`, or `--agent`, switches agents without passing one agent's flags
 to another.
 
@@ -1120,16 +1121,17 @@ Messages that point at the project file or the allowlist are covered under
 
 Your user file has invalid TOML or a bad value; `<key>` names the field. Common causes:
 a misspelt key (`imgae`), `[agent.<name>]` written for
-[`[agents.<name>]`](#agentsnameextra_args) (reported at `agent`, or as invalid TOML
-when the file also sets `agent`), an allowlist source other than `cli`, `env` and
+[`[agents.<name>]`](#agentsnameextra_args) (reported at `agent`; when the file also sets
+`agent`, as `[user] This value is not valid TOML.`, repeated for `[project_overrides]`), an allowlist source other than `cli`, `env` and
 `project_toml`, or an allowlist value that isn't `true`, `false` or a list of
 [allowlist paths](#configallowlist).
 
 **`[agents.<name>] No agent named "<name>" is installed, so its settings are ignored; installed agents: …`**
 
 A warning, not an error: the run goes ahead without those settings. Either `<name>` is
-misspelt under [`agents`](#agentsnameextra_args), or it names an agent from a package
-this machine lacks. `--quiet` hides it.
+misspelt under [`agents`](#agentsnameextra_args), in your user file or a granted
+project file, or it names an agent from a package this machine lacks. Only `--quiet`
+hides it, along with every other warning and the printed command.
 
 **`[env:PADDOCK_…] Unexpected key "PADDOCK_…".`**
 
