@@ -285,6 +285,8 @@ class ConfigLoader:
         """Filter every source's cleaned data through the allowlist.
 
         Consolidates the dropped keys into a single warning per source.
+        An enabled source's own discards are reported first, each with the
+        reason the source gave.
 
         Args:
             results: The loaded results keyed by source key.
@@ -301,12 +303,12 @@ class ConfigLoader:
                 dict(result.instance.cleaned_data) if result.instance.is_valid() else {}
             )
             if allowlist.is_enabled(key):
-                for path in result.discarded:
+                for discarded in result.discarded:
                     logger.warning(
-                        "%s: ignored %s — server settings are read only from "
-                        "the global section of your user config",
+                        "%s: ignored %s — %s",
                         key,
-                        path,
+                        discarded.path,
+                        discarded.reason,
                     )
             kept, dropped = allowlist.filter_with_report(data, key)
             sanitised[key] = kept

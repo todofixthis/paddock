@@ -5,7 +5,7 @@ import filters as f
 from paddock.config.context import ConfigContext
 from paddock.config.project_dir import PROJECT_DIR_NAME
 from paddock.config.schema import standard_config_schema
-from paddock.config.sources.base import ConfigSource, LoadResult
+from paddock.config.sources.base import ConfigSource, Discarded, LoadResult
 
 _CONFIG_NAME = Path(PROJECT_DIR_NAME) / "config.toml"
 
@@ -21,6 +21,10 @@ class ProjectTomlSource(ConfigSource):
     SOURCE_KEY = "project_toml"
     WEIGHT = 10
     ALLOWLIST_DEFAULT = False
+
+    _SERVER_SETTINGS_REASON = (
+        "server settings are read only from the global section of your user config"
+    )
 
     def load(self, context: ConfigContext) -> LoadResult:
         """Load config from ``<workdir>/.paddock/config.toml``.
@@ -45,7 +49,7 @@ class ProjectTomlSource(ConfigSource):
         discarded = self._discard_server_settings(data)
         return LoadResult(f.FilterRunner(schema, data), {}, discarded)
 
-    def _discard_server_settings(self, data: dict) -> list[str]:
+    def _discard_server_settings(self, data: dict) -> list[Discarded]:
         """Remove every ``agents.<name>.server`` from decoded project config.
 
         A project file may never set a shared server's settings, whatever the
@@ -58,18 +62,20 @@ class ProjectTomlSource(ConfigSource):
                 without the server settings.
 
         Returns:
-            The dotted path of each table removed.
+            Each table removed, and why.
         """
         agents = data.get("agents")
         if not isinstance(agents, dict):
             return []
 
-        discarded: list[str] = []
+        discarded: list[Discarded] = []
         kept: dict = {}
         for name, settings in agents.items():
             if isinstance(settings, dict) and "server" in settings:
                 settings = {k: v for k, v in settings.items() if k != "server"}
-                discarded.append(f"agents.{name}.server")
+                discarded.append(
+                    Discarded(f"agents.{name}.server", self._SERVER_SETTINGS_REASON)
+                )
             kept[name] = settings
         data["agents"] = kept
         return discarded

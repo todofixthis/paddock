@@ -3,7 +3,12 @@ from pathlib import Path
 from paddock.cli import ParsedArgs
 from paddock.config.agent_choice import UNNAMED_SERVER
 from paddock.config.context import ConfigContext
+from paddock.config.sources.base import Discarded
 from paddock.config.sources.project_toml import ProjectTomlSource
+
+_SERVER_REASON = (
+    "server settings are read only from the global section of your user config"
+)
 
 
 def _ctx(tmp_path) -> ConfigContext:
@@ -87,7 +92,7 @@ def test_server_settings_are_discarded_before_validation(tmp_path: Path):
     )
     assert result.instance.is_valid(), result.instance.errors
     assert result.instance.cleaned_data["agents"] == {"y": {"extra_args": ["-a"]}}
-    assert result.discarded == ["agents.y.server"]
+    assert result.discarded == [Discarded("agents.y.server", _SERVER_REASON)]
 
 
 def test_nothing_discarded_without_server_settings(tmp_path: Path):
@@ -107,4 +112,4 @@ def test_scalar_server_setting_is_discarded_too(tmp_path: Path):
     """A ``server`` that is not even a table is discarded, not validated."""
     result = _load_project_file(tmp_path, "[agents.y]\nserver = 1\n")
     assert result.instance.is_valid(), result.instance.errors
-    assert result.discarded == ["agents.y.server"]
+    assert result.discarded == [Discarded("agents.y.server", _SERVER_REASON)]
