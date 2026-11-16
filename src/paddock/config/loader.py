@@ -14,6 +14,7 @@ from paddock.config.allowlist import Allowlist
 from paddock.config.context import ConfigContext
 from paddock.config.errors import ConfigError
 from paddock.config.schema import standard_config_schema
+from paddock.config.server_settings import ServerSettings
 from paddock.config.sources import source_registry
 from paddock.config.sources.base import LoadResult
 
@@ -35,6 +36,8 @@ class ResolvedConfig:
             empty when it has none.
         project_toml_enabled: Whether the allowlist enables the project file.
         project_dir_readonly: Whether ``.paddock`` mounts read-only.
+        server_settings: The chosen server's settings, checked on disk
+            (ADR 019); ``None`` with no server, or one that is not installed.
     """
 
     config: dict
@@ -43,6 +46,7 @@ class ResolvedConfig:
     extra_args: list[str]
     project_toml_enabled: bool
     project_dir_readonly: bool
+    server_settings: ServerSettings | None = None
 
 
 class ConfigLoader:
@@ -121,6 +125,35 @@ class ConfigLoader:
             extra_args=self._extra_args(config, agent_key),
             project_toml_enabled=allowlist.is_enabled("project_toml"),
             project_dir_readonly=readonly,
+            server_settings=self._server_settings(config, server_key),
+        )
+
+    def _server_settings(
+        self, config: dict, server_key: str | None
+    ) -> ServerSettings | None:
+        """Check the chosen server's settings on disk (ADR 019).
+
+        Only the chosen server's: a missing path under a server this run does
+        not use must not stop it.
+
+        Args:
+            config: The merged config.
+            server_key: The chosen server's registry key, or ``None``.
+
+        Returns:
+            The settings, or ``None`` with no server or one that is not
+            installed; the entry point reports the latter.
+
+        Raises:
+            ExceptionGroup: If a path the settings name does not exist, or no
+                image is set and the server has no default.
+        """
+        if server_key is None or server_key not in self._servers:
+            return None
+        return ServerSettings.from_config(
+            config.get("agents", {}).get(server_key, {}).get("server", {}),
+            key=server_key,
+            default_image=self._servers.get_class(server_key).DEFAULT_IMAGE,
         )
 
     def _agent_key(self, configured: str | bool) -> str:
