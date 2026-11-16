@@ -118,11 +118,12 @@ separate worktree exists.
   - `server_registry: EntryPointClassRegistry = EntryPointClassRegistry("paddock.servers")`.
   - `installed_server_keys() -> list[str]`, sorted, beside the registry, as
     `installed_agent_keys()` is.
-- `ServerConnection` lives in `servers.py`; `agents/__init__.py` must not import
-  `servers.py` at module level if that cycles. Use `TYPE_CHECKING` for the
-  annotation; a function-body import is banned by `AGENTS.md`.
+- `ServerConnection` lives in `servers.py`, and `agents/__init__.py` imports it
+  directly. `servers.py` must import nothing from `paddock.agents`, only
+  `VolumeSpec` from `paddock.config.filters`, so there is no cycle.
 
-- [ ] **Step 1: Write the failing tests**
+- [ ] **Step 1: Write the failing tests.** The first goes in `test_base.py`, the
+  other four in `test_servers.py`.
 
   - `test_agent_defaults_preserve_todays_behaviour`: `ClaudeAgent` and `ShellAgent`
     have `DEFAULT_SERVER is None` and `PROTOCOL is None`; with any
@@ -140,8 +141,8 @@ separate worktree exists.
 - [ ] **Step 2: Run them and confirm they fail**
 
   Run: `uv run pytest tests/agents -q --continue-on-collection-errors`
-  Expected: `test_servers.py` errors at collection (no such module) and the
-  attribute tests FAIL.
+  Expected: both test files error at collection, each importing a name this task
+  adds; nothing in them runs yet.
 
 - [ ] **Step 3: Implement** the interfaces above. Each method and class gets a
   docstring; `BaseServer`'s class docstring cites ADR 018.
@@ -239,7 +240,10 @@ separate worktree exists.
     `{"client": [f.NotEmpty.CODE_EMPTY]}`; `{"server": True}` gives
     `{"server": [AgentHalf.CODE_INVALID]}`.
   - `test_agent_rejects_a_list`: `["claude"]` gives `[f.Type.CODE_WRONG_TYPE]`.
-  - Keep `test_agent_true_rejected`.
+  - `test_agent_true_rejected`: tighten it to assert `[Agent.CODE_INVALID]`, the
+    code `True` gives today and keeps.
+  - `test_agent_rejects_an_empty_table` in `tests/config/test_schema.py`:
+    `{"agent": {}}` under `merged=True` gives `{"agent": [f.NotEmpty.CODE_EMPTY]}`.
   - `test_agent_half_pass_none`: `AgentHalf` passes `None` through, as the
     `phx-filters` skill requires of every custom filter's first test.
 
@@ -273,6 +277,9 @@ separate worktree exists.
   - `test_project_toml_agent_dropped_whole_unless_allowlisted`: with
     `project_toml = ["volumes"]` and a project file `agent = { server = "srv" }`,
     the warning names `agent` and `server_key is None`.
+  - `test_project_toml_agent_table_kept_when_allowlisted`: with
+    `project_toml = ["agent"]` and the same project file, `server_key == "srv"`:
+    a source granted `agent` can name a server.
   Update the existing loader tests that read `config["agent"]` to the table form.
 
   `tests/test_cli.py`:
@@ -302,9 +309,11 @@ separate worktree exists.
 - [ ] **Step 2: Run them and confirm they fail**
 
   Run: `uv run pytest tests/config tests/test_cli.py tests/test_main.py -q --continue-on-collection-errors`
-  Expected: `test_agent_choice.py` errors at collection and the new and rewritten
-  tests FAIL. Tests built on the `ParsedArgs` helpers fail too until Step 3 adds
-  the fields.
+  Expected: every test file that imports a name this task adds
+  (`test_agent_choice.py`, `test_filters.py`, and any other importing
+  `UNNAMED_SERVER` or `AgentHalf`) errors at collection; the rest of the new and
+  rewritten tests FAIL. Tests built on the `ParsedArgs` helpers fail too until
+  Step 3 adds the fields.
 
 - [ ] **Step 3: Implement**
 
@@ -312,7 +321,10 @@ separate worktree exists.
   - `Agent` filter: a table goes through
     `f.FilterMapper({"client": <half>, "server": <half>}, allow_extra_keys=False,
     allow_missing_keys=True)` with `None` values removed; a string or `False` goes
-    through `AgentChoice.from_parts` first; anything else is `f.Type`'s error. A
+    through `AgentChoice.from_parts` first; `True` stays `Agent.CODE_INVALID`;
+    anything else is `f.Type((bool, dict, str))`'s error. Update the
+    `CODE_INVALID` template and the class docstring, which describe a name or
+    `False` only. A
     half is `False`, or `"false"` mapped to `False`, or
     `f.Type(str) | f.Unicode | f.NotEmpty`; `True` is `CODE_INVALID`. Extract the
     half as its own filter class, `AgentHalf`, since the environment schema needs
@@ -388,12 +400,6 @@ separate worktree exists.
     `{"~bob/Dev": "/c:rw"}` is not, `~` meaning home only as a whole first segment,
     the rule `Filepath` applies.
 
-  `tests/config/test_filters.py`:
-  - `test_absolute_host_path_pass_none` and `test_server_volume_map_pass_none`.
-  - `test_absolute_host_path_keeps_the_value_as_written`: `"~/Dev"` and `"/abs"`
-    clean to themselves.
-  - `test_absolute_host_path_rejects_relative`: `"rel"` and `"~bob/x"` give
-    `[AbsoluteHostPath.CODE_NOT_ABSOLUTE]`.
   - `test_server_settings_reject_a_relative_build_path`: `dockerfile = "Dockerfile"`
     is invalid at `agents.x.server.build.dockerfile`; likewise `context`.
   - `test_server_settings_reject_a_bad_port`: `0`, `65536`, `"4096"` and `True` are
@@ -402,14 +408,22 @@ separate worktree exists.
     `{"agents.x.server.imge": [f.FilterMapper.CODE_EXTRA_KEY]}`.
   - `test_server_settings_do_not_touch_disk`: a volume key and build paths that do
     not exist are valid.
-  - `test_server_settings_rejected_by_default`: without `server_settings`, a
-    `server` key is `CODE_EXTRA_KEY` (the existing
-    `test_agents_rejects_an_unknown_setting` already pins this; keep it).
+  - Write no new test for the default: the existing
+    `test_agents_rejects_an_unknown_setting` already pins that a `server` key is
+    `CODE_EXTRA_KEY` without `server_settings`. Reword its docstring, "Only
+    extra_args is a setting" no longer being true of every schema.
   - `test_projects_entry_rejects_server_settings`: a user config TOML with
     `[projects."/x".agents.y.server]` and `image = "i"` fails `user_config_schema`
     at a key ending `agents.y.server`.
   - `test_user_global_section_accepts_server_settings`: the same table at the top
     level passes `user_config_schema`.
+
+  `tests/config/test_filters.py`:
+  - `test_absolute_host_path_pass_none` and `test_server_volume_map_pass_none`.
+  - `test_absolute_host_path_keeps_the_value_as_written`: `"~/Dev"` and `"/abs"`
+    clean to themselves.
+  - `test_absolute_host_path_rejects_relative`: `"rel"` and `"~bob/x"` give
+    `[AbsoluteHostPath.CODE_NOT_ABSOLUTE]`.
 
   `tests/config/sources/test_project_toml.py`:
   - `test_server_settings_are_discarded_before_validation`: a project file with
@@ -452,9 +466,9 @@ separate worktree exists.
 
 - [ ] **Step 2: Run them and confirm they fail**
 
-  Run: `uv run pytest tests/config -q`
-  Expected: the new tests FAIL, except
-  `test_server_settings_rejected_by_default`, which pins existing behaviour.
+  Run: `uv run pytest tests/config -q --continue-on-collection-errors`
+  Expected: `test_filters.py` errors at collection (it imports `AbsoluteHostPath`
+  and `ServerVolumeMap`); the new schema, source and loader tests FAIL.
 
 - [ ] **Step 3: Implement**
 
@@ -473,8 +487,9 @@ separate worktree exists.
     (`f.Type(int, allow_subclass=False) | f.Min(1) | f.Max(65535)`) and `volumes`
     (`ServerVolumeMap`); `allow_extra_keys=False`, `allow_missing_keys=True`.
   - `_agents_schema` becomes a function of `server_settings`; thread the flag
-    through `_standard_fields`, `standard_config_schema` and `user_config_schema`
-    as the Interfaces block says.
+    through `_standard_fields` and `standard_config_schema`. `user_config_schema`
+    takes no new parameter: it passes `server_settings=True` to `_standard_fields`
+    for the global section and leaves `project_entry_schema` at the default.
   - `ProjectTomlSource.load`: decode the TOML first; remove each
     `agents.<name>.server` and record its dotted path in `discarded`, skipping
     wherever `agents` or `agents.<name>` is not a table so validation reports it as
@@ -499,8 +514,8 @@ separate worktree exists.
 ### Task 4: Pair the client and the server
 
 **Files:**
-- Create: `src/paddock/agents/pairing.py`
-- Modify: `src/paddock/agents/errors.py` (create), `src/paddock/__main__.py`
+- Create: `src/paddock/agents/pairing.py`, `src/paddock/agents/errors.py`
+- Modify: `src/paddock/__main__.py`
 - Test: `tests/agents/test_pairing.py`, `tests/test_main.py`
 
 **Interfaces:**
@@ -513,7 +528,7 @@ separate worktree exists.
   `server: BaseServer | None`, property `is_paired -> bool` (a server is present
   and both `PROTOCOL`s are the same non-`None` value), and
   `@classmethod resolve(cls, client_key: str, server_key: str | None, *, agents=agent_registry, servers=server_registry) -> AgentPairing`,
-  which raises `AgentError` with exactly these messages:
+  which raises `AgentError` with exactly these messages, checked in this order:
   - unknown client: `[agent] Unknown agent "<key>"; installed agents: <list>`
     (today's text, unchanged).
   - unknown server: `[agent.server] Unknown server "<key>"; installed servers:
@@ -543,35 +558,40 @@ separate worktree exists.
 
   `tests/test_main.py`:
   - Keep `test_unknown_agent_exits_one` passing unchanged.
-  - `test_unknown_server_exits_one`: user `agent = { server = "nope" }`;
-    `run(["--dry-run"])` exits 1, stderr is exactly
+  - `test_unknown_server_exits_one`: its own user config, `image = "ubuntu:22.04"`,
+    `agent = { server = "nope" }` and `[config.allowlist] project_toml = true`,
+    as `test_unknown_agent_exits_one` does: `.paddock` is only ever created with
+    the project file enabled, so without that grant the last assertion could not
+    fail. `run(["--dry-run"])` exits 1, stderr is exactly
     `[agent.server] Unknown server "nope"; installed servers: none`, and
     `.paddock` does not exist.
   - `test_cli_server_override_is_checked`: `run(["--dry-run",
     "--agent-server=nope"])` exits 1 with the same line.
   - `test_server_false_runs_without_one`: `agent = { client = "claude", server =
     false }`; `run(["--dry-run"])` exits 0.
-  - `test_installed_server_cannot_start_yet`: call the helper directly with fake
-    registries holding a plain client and a server `srv`; it exits 1 and stderr is
+  - `test_installed_server_cannot_start_yet`: call `_resolve_pairing` directly with
+    fake registries holding a plain client and a server `srv`; it exits 1 and stderr is
     exactly `[agent.server] Server "srv" cannot be started by this version of
     paddock`.
-  The three `run` tests use the `minimal_config` fixture or set an image, so a
-  missing image is not what stops them.
+  The other two `run` tests use the `minimal_config` fixture, so a missing image is
+  not what stops them.
 
 - [ ] **Step 2: Run them and confirm they fail**
 
   Run: `uv run pytest tests/agents/test_pairing.py tests/test_main.py -q --continue-on-collection-errors`
-  Expected: `test_pairing.py` errors at collection and the new `test_main` tests
+  Expected: `test_pairing.py` errors at collection, as does `test_main.py` if it
+  imports `_resolve_pairing` at module level; otherwise the new `test_main` tests
   FAIL, except `test_server_false_runs_without_one`, which may pass already, as
   `test_unknown_agent_exits_one` does.
 
 - [ ] **Step 3: Implement**
 
   - `errors.py` and `pairing.py` as specified.
-  - `__main__.py`: replace `_resolve_agent` with a helper that calls
-    `AgentPairing.resolve(resolved.agent_key, resolved.server_key)`, prints an
-    `AgentError` to stderr and exits 1, before `ProjectDirManager` is entered.
-    Pass `pairing.client` wherever the agent instance was used.
+  - `__main__.py`: replace `_resolve_agent` with
+    `_resolve_pairing(agent_key: str, server_key: str | None, *, agents=agent_registry, servers=server_registry) -> AgentPairing`,
+    which calls `AgentPairing.resolve`, prints an `AgentError` to stderr and exits
+    1. `run` calls it before `ProjectDirManager` is entered and passes
+    `pairing.client` wherever the agent instance was used.
   - Until the second half of this pull request lands there is nothing to start a
     server with. In the same helper, where `pairing.server` is not `None`, print
     `[agent.server] Server "<key>" cannot be started by this version of paddock`
