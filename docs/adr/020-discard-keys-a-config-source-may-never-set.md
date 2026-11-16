@@ -2,7 +2,7 @@
 status: Accepted
 date: 2026-11-16
 scope: [docs/usage/, src/paddock/config/loader.py, src/paddock/config/schema.py, src/paddock/config/sources/]
-summary: A source of committed config removes any key that is valid config elsewhere but never that source's to set, before validation and whatever its value, and reports it with a reason, as a warning when that source is enabled, so the key is ignored without stopping the run (not a validation error, and not the allowlist's dropped-keys warning, whose remedy does not apply); the project file's config, projects and agents.<name>.server are such keys; a key that is merely unknown stays a validation error, as does any key in the user's own file, the environment or the command line.
+summary: A source of committed config removes any key that is valid config elsewhere but never that source's to set, before validation and whatever its value, and reports it with a reason, as a warning when that source is enabled, so the key is ignored without stopping the run (not a validation error, and not the allowlist's dropped-keys warning, whose remedy does not apply); the project file's config, projects and agents.<name>.server are such keys; a key that is merely unknown stays a validation error, and the user's own file, the environment and the command line discard nothing, keeping their validation errors.
 revisit-when: An enabled project file's validation errors stop being fatal; users report believing a discarded key applied because they missed the warning; a run needs discards to be fatal, as a strict or CI mode might; the environment or command line comes to be treated as untrusted by default; discards need reporting for a disabled source; a discarded key gains a meaning the project file may legitimately carry.
 ---
 
@@ -26,9 +26,9 @@ file anything at all:
 ADR 019 decided that server settings in the project file are removed before
 validation instead, with a warning. That left two rules for one situation.
 
-The allowlist already reports keys it drops, with a remedy: "add them to
-[config.allowlist].<source> to keep them" ([ADR 004][]). No grant can keep these
-keys.
+The allowlist ([ADR 004][]) already reports keys it drops, and the loader's warning
+gives a remedy: "add them to [config.allowlist].<source> to keep them". No grant can
+keep these keys.
 
 ## Options
 
@@ -79,11 +79,11 @@ what remains of it runs a container on half a configuration.
 
 ## Decision
 
-Option 2. A key the project file may never set is ignored under every option but the
-fifth; what differs is whether writing it stops the run, and a stop for a key that is
-ignored anyway serves nobody. Option 5 would go further, but it trades a visible stop
-for a silently partial configuration on keys the file *is* allowed to set, which is a
-different and larger decision.
+Option 2. A key the project file may never set is ignored under every option; what
+differs is whether writing it stops the run, and a stop for a key that is ignored
+anyway serves nobody. Option 5 would also let the run go on, but for every error in
+the file: it trades a visible stop for a silently partial configuration on keys the
+file *is* allowed to set, which is a different and larger decision.
 
 - **What counts.** Both must hold: the key is valid config somewhere, and the source
   is committed content that may never set it, whatever the allowlist grants. Only the
@@ -113,8 +113,11 @@ different and larger decision.
 - A disabled project file holding only such keys is now silent. It used to draw the
   "had errors but is disabled" warning, so a user who has not opted in no longer
   learns that the file tried.
-- Each new key that only the user config may hold must join the project file's
-  discard set, or it becomes an unexpected-key stop there again.
+- The project file's discard set must keep pace with what only the user config may
+  hold. A new top-level section joins by being added to the set of user-only
+  sections the sources share, which also decides what the user source strips; a
+  user-only key nested in an ordinary section, as `agents.<name>.server` is, needs
+  its own discard. Either one missed becomes an unexpected-key stop again.
 - Discards join the allowlist's drops as things a user must read warnings to learn;
   a future check of config, such as the planned `doctor` command, should report
   both.

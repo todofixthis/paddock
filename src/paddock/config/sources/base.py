@@ -87,7 +87,8 @@ class ConfigSource(AutoRegister(source_registry), ABC):  # type: ignore[misc]
     ALLOWLIST_DEFAULT: ClassVar[bool | list[str]] = False
 
     # Sections valid in a user-shaped TOML file but not part of a source's
-    # standard-config output. Sources that read user-shaped files strip these
+    # standard-config output. The project file discards these with a warning
+    # (ADR 020), so adding one here also changes what that file may hold. Sources that read user-shaped files strip these
     # before returning. Hoisted to the base so the set is defined once and is
     # easy to extend.
     _META_SECTION_KEYS: ClassVar[frozenset[str]] = frozenset({"config", "projects"})

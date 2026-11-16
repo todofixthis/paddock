@@ -191,7 +191,7 @@ An enabled project file set a key that only your user config may set, `config` o
 project_toml: ignored <key> — only your user config may set it
 ```
 
-All three are intentional: paddock loads every source unconditionally so it can warn you when config is being silently dropped, rather than hiding the fact that a project file was present.
+All three are intentional: paddock loads every source unconditionally so it can warn you when config is being silently dropped. A disabled project file that holds nothing but `config` or `projects` is the one case that draws no warning: paddock ignores a disabled file whole.
 
 `--quiet` disables all logging, these warnings included; fatal config errors still print.
 
