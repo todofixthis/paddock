@@ -42,8 +42,11 @@ Docker facts below were checked against Docker 29.9.2 on 2026-11-16.
   means another Paddock got there first and is not an error.
 - **Starting is not stopped.** `docker run` creates, then starts. A container whose
   `.State.Status` is `created` with an empty `.State.Error` is starting: it is
-  waited for inside the readiness window and never removed. A `created` container
-  with an error, or one still `created` when the window closes, counts as stopped.
+  waited for inside the readiness window, and never removed while the window is
+  open. A `created` container with an error counts as stopped. One still starting
+  when the window closes was abandoned between create and start: it is removed by
+  its observed ID without `-f`, which fails harmlessly if it has started since, and
+  the run stops saying so.
 - **Races.** A concurrent Paddock that loses the race for the container's name, or
   for the network's, re-reads and carries on, waiting for readiness like any other.
 - **Mounts.** A server's mounts are, in this order: `BaseServer.get_volumes()`, the
@@ -88,8 +91,8 @@ Docker facts below were checked against Docker 29.9.2 on 2026-11-16.
   arguments from it, and the log says the two are not connected.
 - **`--dry-run`** runs every check, the foreign-network one included, prints the
   server's `docker run` line where the container would be created, and creates,
-  builds, pulls, removes and mints nothing. An unassigned host port prints as
-  `<port>`.
+  builds, pulls, removes and mints nothing. Where Docker has not yet assigned a
+  host port, the connection's host URL carries `<port>` in its place.
 - Everything that consults a registry takes it as a keyword argument. Tests stub
   `subprocess.run` per module, as `tests/docker/test_pull.py` does; no test starts a
   container.
@@ -280,7 +283,7 @@ Docker facts below were checked against Docker 29.9.2 on 2026-11-16.
       def __init__(self, spec: ContainerSpec) -> None: ...
       def status(self) -> ContainerStatus: ...
       def check_network(self) -> None: ...
-      def start(self) -> None: ...
+      def start(self) -> bool: ...
       def remove_stopped(self, container_id: str) -> None: ...
       def published_port(self) -> int | None: ...
       @staticmethod
@@ -307,10 +310,11 @@ Docker facts below were checked against Docker 29.9.2 on 2026-11-16.
   `PaddockEnvironmentError` if a network of that name exists without the label. It
   creates nothing.
 - `start()` calls `check_network()`, creates the network if it is missing, then
-  runs `run_argv()` with `env` merged into the subprocess environment. Losing a
-  race is not an error: if `docker network create` fails and the network now exists
-  with the label, carry on; if `docker run` fails with `is already in use` in its
-  stderr, return normally. Any other `docker run` failure raises
+  runs `run_argv()` with `env` merged over `os.environ` for that subprocess. It
+  returns `True` when it created the container. Losing a race is not an error: if
+  `docker network create` fails and the network now exists with the label, carry
+  on; if `docker run` fails with `Conflict. The container name` in its stderr,
+  return `False`. A port conflict also says "already in use" and must not match. Any other `docker run` failure raises
   `PaddockEnvironmentError` carrying the first non-empty line of Docker's stderr.
 - `remove_stopped()` runs `docker rm <container_id>` with no `-f` and ignores
   failure.
@@ -361,7 +365,11 @@ Docker facts below were checked against Docker 29.9.2 on 2026-11-16.
     `docker run` holds `TOKEN=s3cr3t`.
   - `test_start_tolerates_a_name_conflict`: stubbed `docker run` exits 125 with
     stderr `docker: Error response from daemon: Conflict. The container name
-    "/n" is already in use by container "abc".`; `start()` returns.
+    "/n" is already in use by container "abc".`; `start()` returns `False`.
+  - `test_start_returns_true_when_it_created_the_container`.
+  - `test_a_port_conflict_is_not_a_name_conflict`: stderr `docker: Error response
+    from daemon: failed to bind host port for 127.0.0.1:4096: address already in
+    use` raises the could-not-start text.
   - `test_start_reports_other_failures`: stderr of two lines, `docker: Error
     response from daemon: no such image` then `Run 'docker run --help' for more
     information`, raises with the exact text ending in the first line only.
@@ -437,13 +445,15 @@ Docker facts below were checked against Docker 29.9.2 on 2026-11-16.
     docker logs N`.
   - stopped: `[agent.server] Server "<key>" stopped while starting; see: docker logs
     N`.
+  - never started: `[agent.server] Server "<key>" was created but never started; it
+    has been removed, so run again`.
   - image: `[agent.server] Could not build or pull the image for server "<key>":
     docker exited <status>`.
   - workdir not covered: `[agent.server] Server "<key>" does not have <workdir>
     mounted read-write at the same path; its mounts: <host or name:spec,
     comma-separated, or none>. Add a mount under [agents.<key>.server.volumes] in
     your user config`, followed by `, then recreate the server: docker rm -f N` only
-    where a container exists.
+    where the server is running or starting. The mounts are listed sorted.
 - The drift warning is the caller's to log (Task 4); `launch` only reports
   `drifted`.
 
@@ -461,13 +471,14 @@ Docker facts below were checked against Docker 29.9.2 on 2026-11-16.
     `-v` flags of `run_argv`, in that order.
   - `test_secret_is_minted_and_exported`: the `docker run` environment holds
     `PADDOCK_SERVER_SECRET` and the server's own variable, both equal to
-    `connection.secret`, which is at least 32 characters.
+    `connection.secret`, which is at least 32 characters. The stub serves the
+    created container's `Config.Env` from the environment `docker run` was given.
   - `test_secret_never_appears_in_argv_logs_or_repr`: `connection.secret` is in no
     element of `run_argv`, in no `caplog` record at any level, and not in
     `repr(result)`.
   - `test_running_server_is_reused`: no `docker run`; `created is False`;
-    `run_argv is None`; the secret is the one in the stubbed inspect environment;
-    `is_ready` is called.
+    `run_argv is None`; `drifted is False`; the secret is the one in the stubbed
+    inspect environment; `is_ready` is called.
   - `test_running_server_without_a_secret_is_an_error`: exact text.
   - `test_drift_is_reported_not_acted_on`: a running server whose
     `paddock.spec-hash` differs gives `drifted is True`, and no `docker rm` or
@@ -478,12 +489,17 @@ Docker facts below were checked against Docker 29.9.2 on 2026-11-16.
   - `test_a_starting_container_is_waited_for_not_removed`: inspect answers
     `created` twice, then running; no `docker rm` and no `docker run` is recorded,
     and the launch succeeds.
-  - `test_a_container_stuck_starting_times_out`: always `created` raises the
-    not-ready text; no `docker rm` is recorded.
+  - `test_a_container_stuck_starting_is_removed`: always `created` with an empty
+    error raises the never-started text after 60 polls, `is_ready` is never called,
+    and `["docker", "rm", "<observed id>"]` is recorded.
   - `test_foreign_container_is_refused`: exact text; nothing is removed or run.
+  - `test_name_lost_to_a_foreign_container_is_refused`: `docker run` reports the
+    name in use and the next inspect shows a container without the label; the
+    foreign-container text is raised.
   - `test_name_conflict_is_another_paddocks_server`: `docker run` reports the name
     in use; the next inspect shows it running with a secret; `connection.secret`
-    is that secret, not the one this run minted.
+    is that secret, not the one this run minted; `created is False` and
+    `run_argv is None`.
   - `test_readiness_is_polled`: `is_ready` returning `[False, False, True]` sleeps
     twice at 0.5 and succeeds.
   - `test_readiness_times_out`: always `False` raises the not-ready text after 60
@@ -504,7 +520,7 @@ Docker facts below were checked against Docker 29.9.2 on 2026-11-16.
   - `test_workdir_under_a_rw_identity_mount_passes`.
   - `test_workdir_equal_to_a_mount_point_passes`.
   - `test_workdir_outside_every_mount_is_refused`: exact text, listing the mounts,
-    without the recreate clause when no container exists and with it when one does.
+    without the recreate clause when no container is running and with it when one is.
   - `test_workdir_under_a_readonly_mount_is_refused`.
   - `test_workdir_shadowed_by_a_more_specific_mount_is_refused`: mounts
     `/a` → `/a:rw` and `/other` → `/a/b:rw`, workdir `/a/b/c`.
@@ -526,24 +542,48 @@ Docker facts below were checked against Docker 29.9.2 on 2026-11-16.
     `refresh` are never called.
   - `test_dry_run_refuses_a_foreign_network`.
   - `test_dry_run_with_a_configured_port_shows_it`.
-  - `test_dry_run_against_a_running_server_reads_it`: the real port and secret.
+  - `test_dry_run_against_a_running_server_reads_it`: the real port and secret,
+    `run_argv is None`, and neither `is_ready` nor `sleep` is called.
+  - `test_dry_run_against_a_stopped_server_removes_nothing`: `run_argv` is set and
+    no `docker rm` is recorded.
+  - `test_dry_run_against_a_starting_server_uses_placeholders`: `run_argv is None`,
+    `secret == "<secret>"`.
 
 - [ ] **Step 2: Run them and confirm they fail**
 
   Run: `uv run pytest tests/docker/test_server.py -q --continue-on-collection-errors`
   Expected: a collection error (no such module).
 
-- [ ] **Step 3: Implement.** Order inside `launch`: read the container's status;
-  refuse a foreign one; build the spec (its `env` needs a secret only when a
-  container will be created); run the workdir check against the label's mounts
-  where a container is running or starting, else the spec's; check the network;
-  return early under `dry_run`; remove a stopped container; prepare the image;
-  start. Then one loop of up to 60 polls does the waiting for every path: read the
-  status; a stopped or missing container raises the stopped text; a starting one
-  sleeps; a running one has its secret and port read (no secret raises; no port
-  re-reads the status on the next poll) and `is_ready` called, returning on `True`
-  and sleeping otherwise. The mount that covers a path is the one with the longest
-  container path that is the path itself or one of its parents.
+- [ ] **Step 3: Implement.** Order inside `launch`:
+
+  1. Read the container's status; refuse a foreign one.
+  2. Build the spec. Its environment variable *names* must be the same whether or
+     not a container will be created, or every reuse would read as drift: use the
+     minted secret when creating, and `get_env("<secret>")` plus `SECRET_ENV`
+     otherwise.
+  3. Run the workdir check, against the label's mounts where the container is
+     running or starting, else the spec's.
+  4. Check the network.
+  5. Under `dry_run`, return now: a running server has its secret and published
+     port read once; a starting one, or none, gets the placeholders; `run_argv` is
+     set only where the container is missing or stopped. Nothing is removed.
+  6. Where the container is missing or stopped: remove a stopped one, prepare the
+     image, then start. Running and starting containers skip all three.
+  7. One loop of up to 60 polls does the waiting for every path. Each poll reads
+     the status. Foreign raises the foreign-container text; stopped or missing
+     raises the stopped text; starting sleeps. Running has its secret read (none
+     raises) and its port read (none sleeps, and the next poll re-reads the
+     status), then `is_ready` is called, returning on `True` and sleeping
+     otherwise.
+  8. When the polls run out: if the last status was starting, remove it by its
+     observed ID and raise the never-started text; otherwise raise the not-ready
+     text.
+
+  `created` is `True` only where this run's `start()` created the container, and
+  `drifted` is computed from the label only where it did not. The mount that covers
+  a path is the one with the longest container path that is the path itself or one
+  of its parents. Do not assert exact counts of inspect calls in the tests:
+  `start()` checks the network again.
 
 - [ ] **Step 4: Run the checks**
 
