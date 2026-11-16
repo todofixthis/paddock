@@ -2,8 +2,8 @@
 status: Accepted
 date: 2026-11-16
 scope: [docs/usage/, images/Dockerfile, src/paddock/__main__.py, src/paddock/agents/, src/paddock/cli.py, src/paddock/config/, src/paddock/docker/]
-summary: Paddock starts one long-lived container per server key (paddock-server-<key>, identified by label) on demand and never stops or restarts it, with no flag to manage it (not one per run or per project, not stopped when the last client exits, and not left to the user to run); it runs without --rm and without a restart policy, a stopped one being removed and recreated on the next run; it has a Paddock-owned network of its own, publishes its port on loopback only, carries its run spec in labels so drift warns rather than restarts, and holds its minted secret only in its environment, read back with docker inspect; agents.<name>.server settings are read only from the user config's global section, with absolute host paths checked only when that server is chosen; a project file's server settings are discarded before validation with a warning, and a [projects] entry's are a validation error; a server that runs tools in the project stops a paired client's run unless the workdir lies under a read-write mount at its own path; the project file is still honoured under a server's mounts, as the allowlist grants.
-revisit-when: Paddock gains a command to manage servers; users need more than one instance of a server; idle servers' resource use draws complaints; recreating a server to add a mount proves too disruptive; Docker gains a way to add a mount to a running container; a secret readable through docker inspect stops being acceptable; a server needs settings that vary by project; a companion container needs a per-run lifetime, as a proxy sidecar might; users need to connect to a server Paddock did not start; the Docker daemon is not on the local machine; an agent is found to have rewritten a project file or the user config through a server's mounts.
+summary: Paddock starts one long-lived container per server key (paddock-server-<key>, identified by label) on demand and never stops or restarts it, with no flag to manage it (not one per run or per project, not stopped when the last client exits, and not left to the user to run); it runs without --rm and without a restart policy, a stopped one being removed and recreated on the next run; it has a Paddock-owned network of its own, publishes its port on loopback only, carries its run spec in labels so drift warns rather than restarts, and holds its minted secret only in its environment, read back with docker inspect; agents.<name>.server settings are read only from the user config's global section, with absolute host paths checked only when that server is chosen; a project file's server settings are discarded before validation with a warning, and a [projects] entry's are a validation error; a server that runs tools in the project stops a paired client's run unless the workdir lies under a read-write mount at its own path; a run that chooses a server needs Docker Engine 25.0, for a client container on two networks; the project file is still honoured under a server's mounts, as the allowlist grants.
+revisit-when: Paddock gains a command to manage servers; users need more than one instance of a server; idle servers' resource use draws complaints; recreating a server to add a mount proves too disruptive; Docker gains a way to add a mount to a running container; a secret readable through docker inspect stops being acceptable; a server needs settings that vary by project; a companion container needs a per-run lifetime, as a proxy sidecar might; users need to connect to a server Paddock did not start; users on a Docker older than 25.0 need a server; the Docker daemon is not on the local machine; an agent is found to have rewritten a project file or the user config through a server's mounts.
 ---
 
 # 019: Run One Shared Container per Agent Server
@@ -95,8 +95,22 @@ but never interrupts a session, where Option 3's guess could.
   label, which a paired client's container joins alongside any configured `network`.
   One network for all servers would let a sandbox paired with one reach another. A
   configured `network` that cannot be combined with a second (`host`, `none`,
-  `container:`) stops a paired run. The port is also published on `127.0.0.1` only,
+  `bridge`, `default`, `container:`) stops a paired run. The port is also published on `127.0.0.1` only,
   for Paddock's readiness probe and a server's own web interface.
+- **Minimum Docker.** A run that chooses a server stops unless the Docker client
+  and daemon both speak API 1.44 (Docker Engine 25.0), or if the version cannot be
+  read. That API is the first whose daemon accepts a container created on two
+  networks (read in moby v25.0.0's source, not run against an older daemon), and
+  the daemon judges a request by the API version it arrives in, the lower of the
+  client's and its own, so an old client fails as an old daemon does. The check
+  runs before the server is looked at, so an older Docker cannot start a server
+  and then refuse its client. An unpaired client beside a server is held to the
+  same rule, to keep it one rule; a run with no server is not checked. The rule
+  belongs to whatever creates a container on two networks: the lifecycle class
+  does not enforce it, so a later companion container whose client joins a second
+  network owes the same check. Attaching the second network afterwards with
+  `docker network connect` would lift the requirement, but does not fit a
+  foreground `docker run --rm -it`.
 - **Secret.** Always minted at start and held only in the container's environment;
   later runs read it back with `docker inspect`. The running container is the single
   source of truth, so there is no state file to lose and two racing first runs agree.

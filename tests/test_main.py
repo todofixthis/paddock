@@ -6,10 +6,13 @@ from pathlib import Path
 import pytest
 from class_registry import ClassRegistry
 
-from paddock.__main__ import _resolve_pairing, run
+from paddock.__main__ import run
+from paddock.agents import BaseAgent
 from paddock.agents.servers import BaseServer, ServerConnection
-from paddock.agents.shell import ShellAgent
+from paddock.config.errors import PaddockEnvironmentError
 from paddock.config.project_dir import ProjectDirManager
+from paddock.docker.server import LaunchResult, ServerLauncher
+from paddock.docker.version import DockerVersion
 
 
 def _write_user_config(home: Path, contents: str) -> None:
@@ -636,27 +639,287 @@ def test_server_false_runs_without_one(capsys, tmp_path: Path, mocker, monkeypat
     assert argv[-2:] == ["ubuntu:22.04", "claude"]
 
 
-def test_installed_server_cannot_start_yet(capsys):
-    """Until servers can be started, choosing an installed one stops the run."""
+class _Client(BaseAgent):
+    """A client whose command is ``paired`` and which can address a server."""
 
-    class Srv(BaseServer):
-        SERVER_KEY = "srv"
-        PROTOCOL = "p"
-        CONTAINER_PORT = 1
+    def get_command(self) -> list[str]:
+        return ["paired"]
 
-        def get_command(self) -> list[str]:
-            return ["srv"]
+    def get_volumes(self) -> dict:
+        return {}
 
-        def is_ready(self, connection: ServerConnection) -> bool:
-            return True
+    def get_server_args(self, connection: ServerConnection) -> list[str]:
+        return ["--server", connection.container_url]
 
-    agents: ClassRegistry = ClassRegistry(attr_name="AGENT_KEY")
-    agents.register(ShellAgent)
-    servers: ClassRegistry = ClassRegistry(attr_name="SERVER_KEY")
-    servers.register(Srv)
-    with pytest.raises(SystemExit) as exc:
-        _resolve_pairing("false", "srv", agents=agents, servers=servers)
-    assert exc.value.code == 1
-    assert capsys.readouterr().err.strip() == (
-        '[agent.server] Server "srv" cannot be started by this version of paddock'
+    def get_server_env(self, connection: ServerConnection) -> dict[str, str]:
+        return {"SRV_PASSWORD": connection.secret}
+
+
+class _Paired(_Client):
+    """A client that speaks protocol ``p`` and defaults to server ``srv``."""
+
+    AGENT_KEY = "paired"
+    DEFAULT_SERVER = "srv"
+    PROTOCOL = "p"
+
+
+class _Plain(_Client):
+    """A client that speaks no server protocol."""
+
+    AGENT_KEY = "plain"
+
+
+class _Srv(BaseServer):
+    """A server that needs no workdir mount."""
+
+    SERVER_KEY = "srv"
+    PROTOCOL = "p"
+    CONTAINER_PORT = 1234
+    DEFAULT_IMAGE = "srv-img"
+
+    def get_command(self) -> list[str]:
+        return ["serve"]
+
+    def is_ready(self, connection: ServerConnection) -> bool:
+        return True
+
+
+class _ToolSrv(_Srv):
+    """A server that runs tools in the project."""
+
+    REQUIRES_WORKDIR_MOUNT = True
+
+
+_SECRET = "s3cr3t-never-shown"
+_CONNECTION = ServerConnection(
+    container_url="http://paddock-server-srv:1234",
+    host_url="http://127.0.0.1:32768",
+    network="paddock-server-srv",
+    secret=_SECRET,
+)
+_SERVER_ARGV = ["docker", "run", "-d", "--name", "paddock-server-srv", "srv-img"]
+
+
+class _ServerRun:
+    """A run against fake registries, with Docker and the launcher stubbed."""
+
+    def __init__(
+        self,
+        mocker,
+        tmp_path: Path,
+        monkeypatch,
+        *,
+        config: str = 'agent = "paired"\n',
+        server: type[BaseServer] = _Srv,
+        result: LaunchResult | None = None,
+    ) -> None:
+        _write_user_config(tmp_path, 'image = "img"\n' + config)
+        monkeypatch.chdir(tmp_path)
+        self.agents: ClassRegistry = ClassRegistry(attr_name="AGENT_KEY")
+        self.agents.register(_Paired)
+        self.agents.register(_Plain)
+        self.servers: ClassRegistry = ClassRegistry(attr_name="SERVER_KEY")
+        self.servers.register(server)
+        self.workdir = tmp_path.resolve()
+        self.docker = mocker.patch("paddock.__main__.subprocess.run")
+        self.docker.return_value.returncode = 0
+        self.version = mocker.patch.object(DockerVersion, "require_minimum")
+        self.launch = mocker.patch.object(
+            ServerLauncher,
+            "launch",
+            return_value=result or LaunchResult(_CONNECTION, False, False, None),
+        )
+        mocker.patch(
+            "paddock.docker.builder.DockerCommandBuilder._container_name_available",
+            return_value=True,
+        )
+
+    def run(self, *argv: str) -> int:
+        """Run paddock and return its exit status."""
+        with pytest.raises(SystemExit) as exc:
+            run(list(argv), agents=self.agents, servers=self.servers)
+        assert isinstance(exc.value.code, int)
+        return exc.value.code
+
+
+def test_paired_run_starts_the_server_then_the_client(mocker, tmp_path, monkeypatch):
+    paired = _ServerRun(mocker, tmp_path, monkeypatch)
+    assert paired.run() == 0
+    paired.launch.assert_called_once()
+    argv = paired.docker.call_args.args[0]
+    assert argv[argv.index("--network") + 1] == "paddock-server-srv"
+    assert argv[-4:] == ["img", "paired", "--server", "http://paddock-server-srv:1234"]
+    assert argv[argv.index("-e") + 1] == "SRV_PASSWORD"
+    env = paired.docker.call_args.kwargs["env"]
+    assert env["SRV_PASSWORD"] == _SECRET
+    assert env["HOME"] == str(tmp_path)
+
+
+def test_server_line_is_printed_before_the_client_line(
+    capsys, mocker, tmp_path, monkeypatch
+):
+    result = LaunchResult(_CONNECTION, True, False, _SERVER_ARGV)
+    assert _ServerRun(mocker, tmp_path, monkeypatch, result=result).run() == 0
+    lines = capsys.readouterr().out.splitlines()
+    assert len(lines) == 2
+    assert lines[0] == shlex.join(_SERVER_ARGV)
+    assert lines[1].startswith("docker run --rm -it ")
+
+
+def test_a_reused_server_prints_only_the_client_line(
+    capsys, mocker, tmp_path, monkeypatch
+):
+    assert _ServerRun(mocker, tmp_path, monkeypatch).run() == 0
+    lines = capsys.readouterr().out.splitlines()
+    assert len(lines) == 1
+    assert lines[0].startswith("docker run --rm -it ")
+
+
+def test_quiet_prints_no_server_line(capsys, mocker, tmp_path, monkeypatch):
+    result = LaunchResult(_CONNECTION, True, False, _SERVER_ARGV)
+    assert _ServerRun(mocker, tmp_path, monkeypatch, result=result).run("--quiet") == 0
+    assert capsys.readouterr().out == ""
+
+
+def test_secret_is_never_printed_or_logged(
+    capsys, caplog, mocker, tmp_path, monkeypatch
+):
+    result = LaunchResult(_CONNECTION, True, True, _SERVER_ARGV)
+    with caplog.at_level(logging.DEBUG):
+        assert _ServerRun(mocker, tmp_path, monkeypatch, result=result).run() == 0
+    captured = capsys.readouterr()
+    assert _SECRET not in captured.out
+    assert _SECRET not in captured.err
+    assert not any(_SECRET in record.getMessage() for record in caplog.records)
+
+
+def test_drift_warns_with_the_recreate_command(caplog, mocker, tmp_path, monkeypatch):
+    result = LaunchResult(_CONNECTION, False, True, None)
+    with caplog.at_level(logging.WARNING, logger="paddock"):
+        assert _ServerRun(mocker, tmp_path, monkeypatch, result=result).run() == 0
+    assert [r.getMessage() for r in caplog.records] == [
+        'Server "srv" is running with settings that differ from your config; '
+        "they apply when it is recreated: docker rm -f paddock-server-srv"
+    ]
+
+
+def test_no_drift_no_warning(caplog, mocker, tmp_path, monkeypatch):
+    with caplog.at_level(logging.WARNING, logger="paddock"):
+        assert _ServerRun(mocker, tmp_path, monkeypatch).run() == 0
+    assert caplog.records == []
+
+
+_UNPAIRED = 'agent = { client = "plain", server = "srv" }\n'
+
+
+def test_unpaired_client_beside_a_server_is_not_connected(
+    caplog, mocker, tmp_path, monkeypatch
+):
+    unpaired = _ServerRun(
+        mocker, tmp_path, monkeypatch, config=_UNPAIRED, server=_ToolSrv
     )
+    with caplog.at_level(logging.INFO, logger="paddock"):
+        assert unpaired.run() == 0
+    assert unpaired.launch.call_args.kwargs == {"workdir": None, "dry_run": False}
+    argv = unpaired.docker.call_args.args[0]
+    assert "--network" not in argv
+    assert "-e" not in argv
+    assert argv[-2:] == ["img", "paired"]
+    assert "SRV_PASSWORD" not in unpaired.docker.call_args.kwargs["env"]
+    assert 'Server: srv (not connected: agent "plain" speaks no server protocol)' in [
+        r.getMessage() for r in caplog.records
+    ]
+
+
+def test_paired_run_logs_the_server_address(caplog, mocker, tmp_path, monkeypatch):
+    with caplog.at_level(logging.INFO, logger="paddock"):
+        assert _ServerRun(mocker, tmp_path, monkeypatch).run() == 0
+    assert "Server: srv (http://127.0.0.1:32768)" in [
+        r.getMessage() for r in caplog.records
+    ]
+
+
+def test_workdir_is_passed_when_the_server_needs_it(mocker, tmp_path, monkeypatch):
+    paired = _ServerRun(mocker, tmp_path, monkeypatch, server=_ToolSrv)
+    assert paired.run() == 0
+    assert paired.launch.call_args.kwargs == {
+        "workdir": paired.workdir,
+        "dry_run": False,
+    }
+
+
+def test_workdir_is_not_passed_when_the_server_does_not_need_it(
+    mocker, tmp_path, monkeypatch
+):
+    paired = _ServerRun(mocker, tmp_path, monkeypatch)
+    assert paired.run() == 0
+    assert paired.launch.call_args.kwargs == {"workdir": None, "dry_run": False}
+
+
+def test_uncombinable_network_stops_before_the_server_starts(
+    capsys, mocker, tmp_path, monkeypatch
+):
+    paired = _ServerRun(
+        mocker, tmp_path, monkeypatch, config='agent = "paired"\nnetwork = "host"\n'
+    )
+    assert paired.run() == 1
+    assert capsys.readouterr().err.strip() == (
+        '[network] "host" cannot be combined with a server\'s network; agent '
+        '"paired" is paired with server "srv"'
+    )
+    paired.launch.assert_not_called()
+
+
+def test_unpaired_client_may_use_the_host_network(mocker, tmp_path, monkeypatch):
+    unpaired = _ServerRun(
+        mocker, tmp_path, monkeypatch, config=_UNPAIRED + 'network = "host"\n'
+    )
+    mocker.patch("paddock.__main__._log_network_peers")
+    assert unpaired.run() == 0
+
+
+def test_launch_failure_exits_one_before_paddock_dir(
+    capsys, mocker, tmp_path, monkeypatch
+):
+    entered = mocker.spy(ProjectDirManager, "__enter__")
+    paired = _ServerRun(mocker, tmp_path, monkeypatch)
+    paired.launch.side_effect = PaddockEnvironmentError("[agent.server] nope")
+    assert paired.run() == 1
+    assert capsys.readouterr().err.strip() == "[agent.server] nope"
+    entered.assert_not_called()
+    paired.docker.assert_not_called()
+
+
+def test_old_docker_stops_a_paired_run_before_launch(
+    capsys, mocker, tmp_path, monkeypatch
+):
+    paired = _ServerRun(mocker, tmp_path, monkeypatch)
+    paired.version.side_effect = PaddockEnvironmentError("[docker] too old")
+    assert paired.run() == 1
+    assert capsys.readouterr().err.strip() == "[docker] too old"
+    paired.launch.assert_not_called()
+
+
+def test_old_docker_stops_an_unpaired_server_run_too(mocker, tmp_path, monkeypatch):
+    unpaired = _ServerRun(mocker, tmp_path, monkeypatch, config=_UNPAIRED)
+    unpaired.version.side_effect = PaddockEnvironmentError("[docker] too old")
+    assert unpaired.run() == 1
+    unpaired.launch.assert_not_called()
+
+
+def test_a_run_without_a_server_skips_the_version_check(mocker, tmp_path, monkeypatch):
+    plain = _ServerRun(mocker, tmp_path, monkeypatch, config='agent = "plain"\n')
+    assert plain.run() == 0
+    plain.version.assert_not_called()
+    plain.launch.assert_not_called()
+    assert plain.docker.call_args.args[0][-2:] == ["img", "paired"]
+
+
+def test_dry_run_launches_with_dry_run(capsys, mocker, tmp_path, monkeypatch):
+    result = LaunchResult(_CONNECTION, False, False, _SERVER_ARGV)
+    paired = _ServerRun(mocker, tmp_path, monkeypatch, result=result)
+    assert paired.run("--dry-run") == 0
+    assert paired.launch.call_args.kwargs == {"workdir": None, "dry_run": True}
+    paired.version.assert_called_once()
+    paired.docker.assert_not_called()
+    assert len(capsys.readouterr().out.splitlines()) == 2

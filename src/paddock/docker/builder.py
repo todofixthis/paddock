@@ -5,7 +5,12 @@ from functools import cached_property
 from pathlib import Path
 
 from paddock.agents import BaseAgent
+from paddock.agents.servers import ServerConnection
+from paddock.config.errors import PaddockEnvironmentError
 from paddock.config.filters import VolumeSpec
+
+# Network modes Docker cannot combine with a second network.
+_UNCOMBINABLE_NETWORKS = frozenset({"bridge", "default", "host", "none"})
 
 
 def sanitise_volume_name(image: str, agent_key: str) -> str:
@@ -22,6 +27,7 @@ class DockerCommandBuilder:
         agent: BaseAgent,
         workdir: Path,
         project_dir_volume: tuple[str, VolumeSpec] | None = None,
+        connection: ServerConnection | None = None,
     ) -> None:
         """Initialises the builder with config, agent, workdir, and optional project dir.
 
@@ -31,11 +37,14 @@ class DockerCommandBuilder:
             workdir: The project working directory to mount.
             project_dir_volume: Optional ``(host_path, VolumeSpec)`` pair for
                 the ``.paddock`` bind-mount. Emitted after the workdir volume.
+            connection: The server the client is paired with, or ``None``.
+                A client merely chosen beside a server gets none.
         """
         self._config = config
         self._agent = agent
         self._workdir = workdir
         self._project_dir_volume = project_dir_volume
+        self._connection = connection
 
     def build(self, *, command: list[str], agent_args: Sequence[str] = ()) -> list[str]:
         """Assemble the full 'docker run' argv list.
@@ -50,11 +59,68 @@ class DockerCommandBuilder:
         argv += [f"--workdir={self._workdir}"]
         for host_or_name, container_spec in self.volumes:
             argv += self._volume_flag(host_or_name, container_spec)
-        if self._config.get("network"):
-            argv += ["--network", self._config["network"]]
+        for network in self._networks():
+            argv += ["--network", network]
+        # By name only: the values, which include the server's secret, travel
+        # in the subprocess environment and never in the printed command.
+        for name in sorted(self.environment):
+            argv += ["-e", name]
         argv.append(self._config["image"])
-        argv += command if command else [*self._agent.get_command(), *agent_args]
+        argv += command if command else [*self._agent_command(), *agent_args]
         return argv
+
+    @cached_property
+    def environment(self) -> dict[str, str]:
+        """Environment variables to run ``docker run`` with.
+
+        The container receives each by name (``-e NAME``). Empty for a client
+        that is not paired with a server.
+        """
+        if self._connection is None:
+            return {}
+        return dict(self._agent.get_server_env(self._connection))
+
+    @staticmethod
+    def check_paired_network(
+        network: str | None, *, agent_key: str, server_key: str
+    ) -> None:
+        """Refuse a configured network a paired client cannot keep.
+
+        A paired client joins its server's network as well as its own, and
+        Docker cannot combine these modes with a second network.
+
+        Args:
+            network: The configured ``network``, or ``None``.
+            agent_key: The paired client's registry key.
+            server_key: The server's registry key.
+
+        Raises:
+            PaddockEnvironmentError: If the network cannot be combined.
+        """
+        if network is None:
+            return
+        if network in _UNCOMBINABLE_NETWORKS or network.startswith("container:"):
+            raise PaddockEnvironmentError(
+                f'[network] "{network}" cannot be combined with a server\'s '
+                f'network; agent "{agent_key}" is paired with server '
+                f'"{server_key}"'
+            )
+
+    def _networks(self) -> list[str]:
+        """The networks the container joins: configured, then the server's."""
+        networks = []
+        if self._config.get("network"):
+            networks.append(self._config["network"])
+        if self._connection is not None and self._connection.network not in networks:
+            networks.append(self._connection.network)
+        return networks
+
+    def _agent_command(self) -> list[str]:
+        """The agent's command, pointed at its server where it has one."""
+        command = list(self._agent.get_command())
+        if self._connection is not None:
+            command += self._agent.get_server_args(self._connection)
+        return command
 
     @cached_property
     def volumes(self) -> list[tuple[str, VolumeSpec]]:
