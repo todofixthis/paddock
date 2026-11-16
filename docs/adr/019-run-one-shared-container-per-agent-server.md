@@ -97,19 +97,19 @@ but never interrupts a session, where Option 3's guess could.
   configured `network` that cannot be combined with a second (`host`, `none`,
   `bridge`, `default`, `container:`) stops a paired run. The port is also published on `127.0.0.1` only,
   for Paddock's readiness probe and a server's own web interface.
-- **Minimum Docker.** A run that chooses a server stops unless the Docker client
-  and daemon both speak API 1.44 (Docker Engine 25.0), or if the version cannot be
-  read. That API is the first whose daemon accepts a container created on two
-  networks (read in moby v25.0.0's source, not run against an older daemon), and
-  the daemon judges a request by the API version it arrives in, the lower of the
-  client's and its own, so an old client fails as an old daemon does. The check
+- **Minimum Docker.** A run that chooses a server stops if the Docker client or
+  daemon speaks an API older than 1.44 (Docker Engine 25.0), or if the version
+  cannot be read. That API is the first whose daemon accepts a container created on
+  two networks (read in moby v25.0.0's source, not run against an older daemon),
+  and the daemon judges a request by the API version it arrives in, the lower of
+  the client's and its own, so an old client fails as an old daemon does. The check
   runs before the server is looked at, so an older Docker cannot start a server
-  and then refuse its client. An unpaired client beside a server is held to the
-  same rule, to keep it one rule; a run with no server is not checked. The rule
-  belongs to whatever creates a container on two networks: the lifecycle class
-  does not enforce it, so a later companion container whose client joins a second
-  network owes the same check. Attaching the second network afterwards with
-  `docker network connect` would lift the requirement, but does not fit a
+  and then refuse its client. An unpaired client beside a server joins one network
+  and is held to the rule all the same, deliberately, so that "uses a server" has
+  one requirement; a run with no server is not checked. The lifecycle class does
+  not enforce any of this: a later companion container whose client joins a second
+  network must make the same check itself. Attaching the second network afterwards
+  with `docker network connect` would lift the requirement, but does not fit a
   foreground `docker run --rm -it`.
 - **Secret.** Always minted at start and held only in the container's environment;
   later runs read it back with `docker inspect`. The running container is the single
