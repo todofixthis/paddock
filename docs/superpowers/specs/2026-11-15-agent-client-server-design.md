@@ -72,6 +72,25 @@ Sources: `anomalyco/opencode` v2.3.0 and `omnigent-ai/omnigent` 0.23.0.dev0, rea
 - Install: `npm install -g @opencode/cli`. Official image:
   `ghcr.io/anomalyco/opencode:<version>` (Alpine, versioned tags only).
 
+**Checked against a running server** (2.3.0, in a container, 2026-11-16):
+
+- With `OPENCODE_PASSWORD` set, `GET /api/info` returned 200 within two seconds of
+  start; no credentials or a wrong password returned 401.
+- **Without `OPENCODE_PASSWORD` the server still starts**: it mints a password and
+  prints it to its log. Paddock must therefore always set one, or it cannot connect.
+- A request naming a mounted directory (`x-opencode-directory`) returned that
+  project; an unmounted one returned 404 `LocationNotFoundError`; no header fell back
+  to the server's cwd.
+- A second container reached the server by container name over a user-defined
+  network, with `opencode session list --server http://<name>:4096`. Without the
+  password the client stopped with "requires a password; set OPENCODE_PASSWORD".
+- The password is readable from `docker inspect` (`.Config.Env`).
+- The `@opencode/cli-linux-x64` npm package is a single glibc binary that runs on the
+  e2e base image as copied in.
+
+Not checked: the interactive client's silent fallback when its directory is missing,
+and anything needing a model.
+
 ### Omnigent
 
 - The server coordinates only; it relays no inference. `omnigent server`, default port
