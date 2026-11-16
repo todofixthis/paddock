@@ -12,6 +12,9 @@ command (ADR 007), so there is nowhere to put one.
   prints today.
 - `paddock setup`: a guided wizard that writes the user config.
 - `paddock doctor`: check config and the environment, and fix common faults.
+  It should flag `project_toml = true` and recommend a narrower grant, above all
+  for a project under a tool-running server's mounts, where the agent can write the
+  project file (ADR 019).
 
 ## Open questions
 

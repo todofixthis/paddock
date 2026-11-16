@@ -29,7 +29,10 @@ class UserConfigSource(ConfigSource):
             valid and ``meta == {}``.
         """
         path = context.user_config_path
-        schema = standard_config_schema(base_dir=context.workdir, merged=False)
+        # Only this source's global section may hold server settings (ADR 019).
+        schema = standard_config_schema(
+            base_dir=context.workdir, merged=False, server_settings=True
+        )
         if not path.exists():
             return LoadResult(f.FilterRunner(schema, {}), {})
 

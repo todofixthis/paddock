@@ -103,6 +103,33 @@ before `FilterRepeater` for consistency with the `FilterMapper` convention:
 `f.Optional(dict)` works because `f.Optional` calls its argument when it is callable,
 producing `dict()` → `{}`.
 
+## String values go through `f.Unicode`
+
+Put `f.Unicode` in the chain of every free-form string value, including each entry of
+a list of strings. It applies Unicode normalisation, strips unprintable characters and
+normalises line endings, which keeps a config file portable between systems.
+
+`f.Unicode` also coerces: `1` becomes `"1"`, `True` becomes `"1"`, `False` becomes
+`"0"`, and a table becomes its `repr`. Where converting a non-string to a string is
+not appropriate, put `f.Type(str)` in front of it, as `agent` and
+`agents.<name>.extra_args` do; otherwise use it bare. `f.Type(str)` augments
+`f.Unicode` and never replaces it.
+
+```python
+# The default
+f.Unicode | f.NotEmpty
+# Converting a non-string is not appropriate
+f.Type(str) | f.Unicode | f.NotEmpty
+# A list of strings whose entries must not be coerced; without f.Array a bare
+# string would be split into characters
+f.Array | f.FilterRepeater(f.Type(str) | f.Unicode)
+```
+
+A value that may be a string or something else (`agent` is a name or `False`) must
+not have `f.Unicode` at the front of its chain, which would turn `False` into `"0"`.
+Branch on type in a custom filter and filter the string branch only, as `Agent` does
+in `src/paddock/config/filters.py`.
+
 ## `f.FilterMapper`
 
 Validates a dict against a schema. Each key maps to a filter chain.

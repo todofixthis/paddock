@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, ClassVar
 
 import filters as f
@@ -7,6 +7,24 @@ from class_registry.base import AutoRegister
 from class_registry.registry import SortedClassRegistry
 
 from paddock.config.context import ConfigContext
+
+
+@dataclass(frozen=True)
+class Discarded:
+    """Something a source removed from its own config before validation.
+
+    For a key that source may never set, whatever the allowlist grants: it is
+    removed rather than rejected, so the source can neither set it nor stop a
+    run by getting it wrong. The source knows why; the loader only reports it.
+
+    Attributes:
+        path: Dotted path of what was removed, e.g. ``agents.x.server``.
+        reason: Why this source may not set it, completing the sentence
+            "ignored <path> — <reason>".
+    """
+
+    path: str
+    reason: str
 
 
 @dataclass
@@ -21,10 +39,13 @@ class LoadResult:
             ever populated from an already-valid full runner, since a
             malformed ``[config]`` invalidates the instance runner first, so
             it needs no separate validity check.
+        discarded: What the source itself removed before validation, because
+            that source may never set it. The loader reports each one.
     """
 
     instance: "f.FilterRunner"
     meta: dict
+    discarded: list[Discarded] = field(default_factory=list)
 
 
 # Iterated in ascending WEIGHT order; the loader uses this directly as the

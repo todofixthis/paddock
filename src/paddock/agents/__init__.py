@@ -3,18 +3,23 @@ from typing import ClassVar
 
 from class_registry.entry_points import EntryPointClassRegistry
 
+from paddock.agents.servers import ServerConnection
 from paddock.config.filters import VolumeSpec
 
 agent_registry: EntryPointClassRegistry = EntryPointClassRegistry("paddock.agents")
 
 
-def installed_agent_keys() -> list[str]:
-    """List the registry keys of the installed agents, sorted, for messages."""
-    return sorted(str(key) for key in agent_registry)
-
-
 class BaseAgent(ABC):
+    """The client half of an agent: what runs in the per-run container (ADR 018)."""
+
     AGENT_KEY: ClassVar[str]
+
+    # The server ``agent = "<key>"`` brings with it; ``None`` for no server.
+    DEFAULT_SERVER: ClassVar[str | None] = None
+
+    # The server protocol this client speaks; ``None`` for a client that
+    # needs no server. A client is paired with a server naming the same one.
+    PROTOCOL: ClassVar[str | None] = None
 
     @abstractmethod
     def get_command(self) -> list[str]:
@@ -50,5 +55,25 @@ class BaseAgent(ABC):
 
         Used when the built-in Dockerfile is referenced in the build config.
         Example: {'AGENT': 'claude'}
+        """
+        return {}
+
+    def get_server_args(self, connection: ServerConnection) -> list[str]:
+        """
+        Arguments that point this client at its paired server.
+
+        Placed after the command and before any configured ``extra_args``.
+
+        Args:
+            connection: The paired server's address and secret.
+        """
+        return []
+
+    def get_server_env(self, connection: ServerConnection) -> dict[str, str]:
+        """
+        Environment variables that connect this client to its paired server.
+
+        Args:
+            connection: The paired server's address and secret.
         """
         return {}

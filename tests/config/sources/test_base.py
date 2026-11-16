@@ -5,13 +5,20 @@ import pytest
 
 from paddock.cli import ParsedArgs
 from paddock.config.context import ConfigContext
-from paddock.config.sources.base import ConfigSource, LoadResult, source_registry
+from paddock.config.sources.base import (
+    ConfigSource,
+    Discarded,
+    LoadResult,
+    source_registry,
+)
 
 
 def _ctx(tmp_path: Path) -> ConfigContext:
     parsed = ParsedArgs(
         agent=None,
         agent_args=[],
+        agent_client=None,
+        agent_server=None,
         build_args={},
         build_context=None,
         build_dockerfile=None,
@@ -74,3 +81,9 @@ def test_abstract_load_cannot_be_omitted():
             WEIGHT = 99
 
         _Bad()  # noqa: F841
+
+
+def test_discarded_names_a_path_and_why():
+    """A source says what it removed and why; the loader only reports it."""
+    discarded = Discarded("agents.y.server", "not yours to set")
+    assert (discarded.path, discarded.reason) == ("agents.y.server", "not yours to set")

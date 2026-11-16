@@ -26,7 +26,7 @@ container Paddock keeps running, is what the HTTP proxy sidecar
   override either half.
 - One server container per server type, shared by every project.
 - Per-agent settings, including `extra_args` appended to the agent's command.
-- OpenCode works end to end: server in a container, client on the host.
+- OpenCode works end to end: a shared server container and a sandboxed client.
 - Omnigent works end to end, after a spike settles the unknowns below.
 - Third-party packages add clients and servers through entry points, with no edits to
   Paddock.
@@ -46,7 +46,7 @@ container Paddock keeps running, is what the HTTP proxy sidecar
 - Two server processes sharing one state directory, under any configuration.
 - An agent silently working in a directory other than the workdir.
 - A project-level or untrusted config source changing what the shared server mounts.
-- A file the agent can write choosing, or passing arguments to, a process on the host.
+- Any agent process running on the host. Every client is sandboxed.
 - Secrets in a printed command line.
 
 ## What the research found
@@ -58,8 +58,8 @@ Sources: `anomalyco/opencode` v2.3.0 and `omnigent-ai/omnigent` 0.23.0.dev0, rea
 
 - `opencode serve --hostname H --port P` starts the server. A client connects with
   `--server <url>`; there is no environment variable for the URL.
-- A password is mandatory: `OPENCODE_PASSWORD` on both sides, HTTP Basic, username
-  `opencode`.
+- Every request needs the password: `OPENCODE_PASSWORD` on both sides, HTTP Basic,
+  username `opencode`. A server started without one mints its own (see below).
 - `GET /api/info` needs auth and returns 200 once ready, 503 while starting.
 - The client sends its cwd per request. The directory must exist **in the server** at
   the same absolute path. If it does not, the client silently falls back to the
@@ -71,6 +71,25 @@ Sources: `anomalyco/opencode` v2.3.0 and `omnigent-ai/omnigent` 0.23.0.dev0, rea
   host's data directory.
 - Install: `npm install -g @opencode/cli`. Official image:
   `ghcr.io/anomalyco/opencode:<version>` (Alpine, versioned tags only).
+
+**Checked against a running server** (2.3.0, in a container, 2026-11-16):
+
+- With `OPENCODE_PASSWORD` set, `GET /api/info` returned 200 within two seconds of
+  start; no credentials or a wrong password returned 401.
+- **Without `OPENCODE_PASSWORD` the server still starts**: it mints a password and
+  prints it to its log. Paddock must therefore always set one, or it cannot connect.
+- A request naming a mounted directory (`x-opencode-directory`) returned that
+  project; an unmounted one returned 404 `LocationNotFoundError`; no header fell back
+  to the server's cwd.
+- A second container reached the server by container name over a user-defined
+  network, with `opencode session list --server http://<name>:4096`. Without the
+  password the client stopped with "requires a password; set OPENCODE_PASSWORD".
+- The password is readable from `docker inspect` (`.Config.Env`).
+- The `@opencode/cli-linux-x64` npm package is a single glibc binary that runs on the
+  e2e base image as copied in.
+
+Not checked: the interactive client's silent fallback when its directory is missing,
+and anything needing a model.
 
 ### Omnigent
 
@@ -112,6 +131,10 @@ only case raised so far.
 
 ## Design
 
+ADRs 017, 018 and 019 are the binding record. This section was revised on 2026-11-16
+to match 018 and 019, after their review and a source check showed that OpenCode's
+client loads plugins from the workdir, so it cannot run on the host.
+
 ### Configuration
 
 Choosing and configuring are separate keys, because TOML cannot hold `agent = "x"`
@@ -138,24 +161,26 @@ extra_args = ["--plugin-dir=./"]
 
 #### `agent`
 
-- A string names a client and takes that client's `DEFAULT_SERVER` (possibly none).
-  `false` is the shell client with no server, as today.
-- A table sets only the halves it names. `server = false` means no server.
-- Merging: each source's value is normalised to `{client, server}` first (a string
-  expands to both halves; a table stays partial), then sources deep-merge in weight
-  order. So user-level `agent = "claude"` with project-level `agent.server =
-  "omnigent"` gives client `claude`, server `omnigent`; a higher source's string
-  replaces both halves. "No server" must be stored as `false`, not `None`:
-  `DropEmpty` strips `None`, and a lower source's server would survive the merge.
-- After merging, Paddock checks the pair (see Pairing) and stops on a mismatch.
-- **(call)** `--agent-client` / `--agent-server` and `PADDOCK_AGENT_CLIENT` /
-  `PADDOCK_AGENT_SERVER` exist for parity with `--agent` / `PADDOCK_AGENT`. Within one
-  source, a half overrides the same source's string.
+- A string names a client; `false` is the shell; a table names either half, and
+  `server = false` means none.
+- Sources merge half by half: a table overrides only the halves it names, and a
+  string sets the client and clears any server a lower source named. After the
+  merge, an unnamed client is `claude` and an unnamed server is the merged client's
+  `DEFAULT_SERVER`. So `agent.client` alone brings that client's server with it,
+  and no source reads the registry.
+- "Server cleared" and "no server" must both survive `DropEmpty`, which strips
+  `None`; they need distinct stored values.
+- `--agent-client` / `--agent-server` and `PADDOCK_AGENT_CLIENT` /
+  `PADDOCK_AGENT_SERVER` set one half. Within one source, a half overrides that
+  source's own string; the environment source needs explicit handling for this,
+  since its name-to-path mapping otherwise loses the string.
+- After merging, Paddock checks the pair (see Pairing).
 
 #### `agents.<name>`
 
-`<name>` is a client's or server's registry key. A name nothing installed has draws a
-warning after the merge and its settings are ignored (ADR 017): a validation error
+`<name>` is a client's or server's registry key, known if either registry has it. A
+name nothing installed has draws a warning after the merge and its settings are
+ignored (ADR 017): a validation error
 would stop every run on a machine missing a plugin that a shared config names.
 
 - `extra_args`: list of strings, for client `<name>`. Appended after the client's
@@ -176,34 +201,22 @@ would stop every run on a machine missing a plugin that a shared config names.
   only when that server is chosen, in the spirit of ADR 014, so a stale server mount
   cannot break a Claude run. The config ADR records both as exceptions.
 
-**(call)** `agents.<name>.server` is read only from the global section of the user
-config. In a `[projects]` entry, the project file, the environment or the CLI it is a
-validation error. A shared server has no per-project configuration, and an untrusted
-source must not widen its mounts.
+`agents.<name>.server` is read only from the global section of the user config. In a
+`[projects]` entry it is a validation error; in the project file it is dropped with a
+warning (ADR 019). It has no environment or CLI form.
 
-`agents` joins `CONFIG_FIELDS` as an allowlist directive, so an untrusted source needs
-`agents` allowlisted to set `extra_args`.
-
-**(call)** The project file can never choose a client that runs on the host, nor set
-`extra_args` for one, whatever the allowlist says; either is a validation error. An
-OpenCode server mounts its roots read-write, so the agent can write any project's
-`.paddock/config.toml`, and those values would become a host process and its
-arguments. For the same reason `config.project_dir_readonly` protects nothing under
-a server's mounts; the OpenCode page says so in a `CAUTION` alert.
-
-#### `image`
-
-Top-level `image` stays required only when the chosen client runs in a container.
+`agents` is an allowlist directive, so an untrusted source needs it allowlisted to
+set `extra_args`.
 
 ### Clients
 
 `BaseAgent` keeps its name, its registry (`agent_registry`, entry-point group
-`paddock.agents`) and its current methods. It is the client half. It gains:
+`paddock.agents`) and its current methods. It is the client half. Every client runs
+in a container. It gains:
 
-- `DEFAULT_SERVER: ClassVar[str | None] = None`. The server `agent = "<key>"` selects.
+- `DEFAULT_SERVER: ClassVar[str | None] = None`.
 - `PROTOCOL: ClassVar[str | None] = None`. The server protocol it speaks; `None` for
   a client that needs no server.
-- `SANDBOXED: ClassVar[bool] = True`. `False` runs the client on the host.
 - `get_server_args(connection) -> list[str]`, default `[]`. Inserted after the
   command and before `extra_args`.
 - `get_server_env(connection) -> dict[str, str]`, default `{}`.
@@ -212,8 +225,9 @@ Existing subclasses need no change.
 
 ### Servers
 
-A new `BaseServer` in a new `EntryPointClassRegistry`, group `paddock.servers`, from
-`phx-class-registry`, with instantiation through the registry as for agents.
+A new `BaseServer`, authored under `src/paddock/agents/`, in a new
+`EntryPointClassRegistry` (group `paddock.servers`) from `phx-class-registry`, with
+instantiation through the registry as for agents.
 
 - `SERVER_KEY`, `PROTOCOL`.
 - `DEFAULT_IMAGE: ClassVar[str | None]`. `None` makes
@@ -226,101 +240,81 @@ A new `BaseServer` in a new `EntryPointClassRegistry`, group `paddock.servers`, 
 - `get_env(secret) -> dict[str, str]`.
 - `is_ready(connection) -> bool`. An HTTP probe from the host through the published
   port.
-- `GENERATES_SECRET: ClassVar[bool]`. Whether Paddock mints a shared secret.
 
-`ServerConnection` is what a server hands a client: the URL from the host
-(`http://127.0.0.1:<published port>`), the URL from a container
-(`http://paddock-server-<key>:<container port>`), the secret or `None`, and the
-network name.
+`ServerConnection` is what a server hands a client: the URL from a container on the
+server's network (`http://paddock-server-<key>:<container port>`), the URL from the
+host (`http://127.0.0.1:<published port>`), the secret, and the network name.
 
 ### Pairing
 
-Checked once, before anything is created:
+Checked once, before anything is created (ADR 018):
 
 - `client.PROTOCOL` set: a server must be chosen and its `PROTOCOL` must match.
-- `client.PROTOCOL` is `None`: any server, or none, is allowed. The server still
-  starts and a sandboxed client still joins its network, but the client does not
-  connect to it; Paddock logs that. Phoenix asked that novel combinations be allowed.
-  This also fits the proxy sidecar, a server every client uses without speaking a
-  protocol.
-- `REQUIRES_WORKDIR_MOUNT` and the server is **already running**: the workdir must lie
-  under a mount of the running container (read with `docker inspect`, not from
-  config) whose container path equals its host path. Otherwise stop, naming the
-  mounted roots and the `docker rm -f` line that recreates the server. Not yet
-  running: check the configured volumes the same way.
-
-Each failure names both halves and what to change.
-
-So `agent = { client = "claude", server = "omnigent" }` runs, but does **not** route
-Claude through Omnigent: `claude` has no protocol. `agent = "omnigent"` with
-`extra_args = ["claude"]` does. Among the built-in classes the useful mixed pair is
-the shell client with a server, for debugging.
+- `client.PROTOCOL` is `None`: any server, or none. A chosen server is started, but
+  the client neither joins its network nor gets its secret, and the workdir check
+  below is skipped. Paddock logs that the two are not connected.
+- A paired client and a server with `REQUIRES_WORKDIR_MOUNT`: the most specific
+  server mount covering the workdir must be read-write and map to the same path.
+  Otherwise stop, naming the mounted roots and the `docker rm -f` line that
+  recreates the server.
 
 ### Server lifecycle
 
 `ManagedContainer` (under `src/paddock/docker/`) owns "make sure this container is
-running" and knows nothing about agents, so the proxy sidecar can reuse it.
+running" and knows nothing about agents. ADR 019 states the rules; in outline:
 
-- **Name:** `paddock-server-<SERVER_KEY>`. One per Docker daemon.
-- **Start on demand.** Not running: prepare the image under the server's `build`
-  policy, then `docker run -d`. A name conflict from a concurrent Paddock counts
-  as started. Then poll `is_ready` for up to 30 seconds; on timeout, or if the container
-  exits first, stop with a pointer to `docker logs` and leave the container.
-- **No `--rm`**, so a server that dies on start keeps its logs. A stopped container
-  of that name is removed and recreated on the next run; state lives in volumes, so
-  nothing is lost.
-- **Never stopped by Paddock.**
-- **Drift.** The container carries a label holding a hash of its run spec (image,
-  command, volumes, environment names, port). Running with a different hash: warn,
-  print `docker rm -f paddock-server-<key>`, and carry on with the running server.
-- **Network.** A Paddock-owned bridge network, `paddock`, created on demand. The
-  server joins it. A sandboxed client paired with a server joins it too, in addition
-  to any configured `network`.
-- **Port.** `CONTAINER_PORT` is published on `127.0.0.1` only, read back with
-  `docker port`. Paddock logs the URL on each run.
-- **Secret (call).** Minted when the server starts and held nowhere but the
-  container's environment. Later runs read it back with `docker inspect`. The running
-  container is then the only source of truth: no state file to lose, and two racing
-  first runs both read the winner's secret. Passed as `-e NAME` with the value in the
-  subprocess environment, never in argv.
-- **`--dry-run`** prints the server's `docker run` line when the server is not
-  running, starts nothing and mints nothing. Where the client's command needs a port
-  Docker has not yet assigned, it prints `<port>` in its place.
+- **Identity:** `paddock-server-<SERVER_KEY>`, confirmed by a label.
+- **Start on demand:** prepare the image under the server's `build` policy, create
+  the server's network, `docker run -d`, then poll `is_ready` for up to 30 seconds.
+  On timeout, or if the container exits first, stop with a pointer to
+  `docker logs` and leave the container.
+- **No `--rm`, no restart policy.** A stopped server is removed by ID, without
+  force, and recreated on the next run.
+- **Never stopped by Paddock.** Labels hold the run spec, mounts included. Drift
+  warns and prints `docker rm -f paddock-server-<key>`.
+- **Network:** one Paddock-owned, labelled bridge network per server. A paired
+  client joins it alongside any configured `network`; `host`, `none` and
+  `container:` stop a paired run.
+- **Port:** `CONTAINER_PORT` is published on `127.0.0.1` only (Docker-assigned
+  unless `port` is set), for the readiness probe and the server's web interface.
+- **Secret:** always minted at start, held only in the container's environment, read
+  back with `docker inspect`, passed as `-e NAME`.
+- **`--dry-run`** prints the server's `docker run` line where one is needed and
+  creates, builds and removes nothing; an unassigned port prints as `<port>`.
 
 ### Running the client
 
-- **Sandboxed:** as today, plus the `paddock` network, `get_server_env` passed as
-  `-e NAME`, and the command `[*get_command(), *get_server_args(), *extra_args,
-  *agent_args]`.
-- **On the host:** Paddock runs the same command directly, with cwd at the workdir.
-  No image, volumes, network or `.paddock` directory are involved. A missing binary
-  stops the run with an install hint. A replacement command is an error **(call)**:
-  there is no sandbox to run it in.
+As today, plus, for a paired client: the server's network, `get_server_env` passed
+as `-e NAME`, and the command `[*get_command(), *get_server_args(), *extra_args,
+*agent_args]`. A replacement command works as it does for any client.
 
 ### OpenCode
 
-- **Client `opencode`:** `SANDBOXED = False`, `DEFAULT_SERVER = "opencode"`, command
-  `opencode`, server args `--server <host URL>`, server env `OPENCODE_PASSWORD`.
+- **Client `opencode`:** `DEFAULT_SERVER = "opencode"`, `PROTOCOL = "opencode"`,
+  command `opencode`, server args `--server <container URL>`, server env
+  `OPENCODE_PASSWORD`, build arg `AGENT=opencode`.
 - **Server `opencode`:** command `opencode serve --hostname 0.0.0.0 --port 4096`;
-  `REQUIRES_WORKDIR_MOUNT = True`; `GENERATES_SECRET = True`; ready when
-  `GET /api/info` with Basic auth returns 200; build arg `AGENT=opencode`;
-  `OPENCODE_DISABLE_AUTOUPDATE=1`.
-- **Image (call):** `DEFAULT_IMAGE = None`. Tools run in the server, so its image is
-  the user's development environment and the official Alpine image would mislead.
-  The docs show the bundled Dockerfile with `AGENT=opencode`.
-- **State (call):** data and state directories are named Docker volumes, never the
-  host's `~/.local/share/opencode`. A host `opencode` run without Paddock starts its
-  own service there, which would again put two processes on one database. Sign-in
-  happens through the Paddock-launched client. The host's
-  `$XDG_CONFIG_HOME/opencode` is mounted read-only when it exists.
+  `REQUIRES_WORKDIR_MOUNT = True`; ready when `GET /api/info` with Basic auth
+  returns 200; build arg `AGENT=opencode`; `OPENCODE_DISABLE_AUTOUPDATE=1`.
+- **Server image (call):** `DEFAULT_IMAGE = None`. Tools run in the server, so its
+  image is the user's development environment. The client's image (top-level
+  `image`) needs OpenCode too; the docs recommend one image for both, since a
+  version mismatch only warns.
+- **State (call):** the server's data and state directories are named Docker
+  volumes, never the host's `~/.local/share/opencode`: a host `opencode` run
+  without Paddock starts its own service there, which would again put two processes
+  on one database. Sign-in happens through the Paddock-launched client.
 - **Bundled Dockerfile:** an `opencode` case installing `@opencode/cli` at a
   Renovate-pinned version, with its README row and CI smoke test (ADR 016).
+- **Docs:** a `CAUTION` that everything under the server's read-write mounts is
+  writable by the agent, project files included, so a `project_toml` grant there is
+  a grant to the agent (ADR 019).
 
 ### Omnigent (provisional)
 
 Built after a throwaway spike. Intended shape:
 
-- **Client `omnigent`:** sandboxed, `DEFAULT_SERVER = "omnigent"`, command
+- **Client `omnigent`:** `DEFAULT_SERVER = "omnigent"`, `PROTOCOL = "omnigent"`, command
   `omnigent`. The harness is the first `extra_args` entry (`["claude"]`). It mounts
   what that harness needs to sign in.
 - **Server `omnigent`:** the published server image, pinned; SQLite in a named
@@ -328,13 +322,11 @@ Built after a throwaway spike. Intended shape:
 
 The spike must answer:
 
-1. **Auth.** With auth off, any container on the `paddock` network can drive the
-   server, and the server can launch runners in other projects' sandboxes. That
-   breaks isolation between projects, so auth-off is acceptable only if the spike
-   shows the server unreachable from other sandboxes. OpenCode differs: its user
-   opts in to shared reach by naming the roots, which Phoenix accepted; a sandboxed
-   Omnigent client still promises one project per container. Otherwise: how does a client
-   container get a token without an interactive login each run?
+1. **Auth.** Each server has its own network, so only Omnigent's own clients can
+   reach it. But every project's client is on that network, and the server can
+   launch runners in any of them. With auth off, one project's sandbox could
+   therefore drive another's. Can a client container get a token without an
+   interactive login each run?
 2. **`bwrap`.** Does Omnigent's Linux sandbox run in an unprivileged container, or
    can it be disabled by config?
 3. **Terminal.** Does `omnigent claude` attach correctly under `docker run -it`?
@@ -348,18 +340,23 @@ If the spike shows the shape is wrong, it comes back as a design change, not a p
 
 - One page per agent under `docs/usage/agents/`, since their configuration diverges.
   `configuration.md` keeps the shared keys and links out.
-- ADRs before implementation (`phx:writing-adrs`): one for the `agent` / `agents`
-  config shape, one for the client/server split and managed containers.
-- `docs/future/squid-proxy-sidecar.md` gains a pointer to `ManagedContainer` and the
-  `paddock` network.
+- ADRs: 017 (the `agents` table), 018 (clients and servers) and 019 (the shared
+  server container).
+- `docs/future/squid-proxy-sidecar.md` gains a pointer to `ManagedContainer` and to
+  ADR 018's note that a server every client shares needs its own decision.
 
 ## Delivery
 
-Three pull requests, each with its own plan:
+Four pull requests, each with its own plan. The second was split in two once its
+size was clear, to keep the config rules apart from the Docker lifecycle:
 
-1. **`agents.<name>` and `extra_args`.** No server concepts.
-2. **Client/server architecture and OpenCode.**
-3. **Omnigent**, after the spike.
+1. **`agents.<name>` and `extra_args`.** No server concepts. Merged.
+2. **Agent halves and pairing.** `agent` as a client and a server half, the server
+   registry, server settings and the pairing check. No Docker changes; a run that
+   chooses a server stops until the next one lands.
+3. **The server container and OpenCode.** `ManagedContainer`, the OpenCode client
+   and server, the bundled Dockerfile case and the user docs.
+4. **Omnigent**, after the spike.
 
 End-to-end checks use the `e2e-testing` skill. In a cloud session only
 `mcr.microsoft.com` images pull, so the OpenCode check builds its server image from
@@ -371,4 +368,5 @@ the skill's base image with the `@opencode/cli` binary copied in.
 - The exact run-spec fields hashed for drift.
 - Two `--network` flags on `docker run` work on Docker 29 (checked 2026-11-15). On an
   older Docker that rejects them, `docker network connect` after start.
-- Container paths for OpenCode's volumes.
+- Container paths for OpenCode's volumes, and what, if anything, the client
+  container persists (prompt history, preferences).

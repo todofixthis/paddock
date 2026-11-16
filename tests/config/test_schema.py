@@ -4,8 +4,9 @@ import filters as f
 import pytest
 from filters.pytest import skip_value_check
 
+from paddock.config.agent_choice import UNNAMED_SERVER
 from paddock.config.fields import CONFIG_FIELDS, allowlist_directives
-from paddock.config.filters import VolumeSpec
+from paddock.config.filters import AbsoluteHostPath, VolumeSpec
 from paddock.config.schema import (
     BUILD_POLICIES,
     ConfigSchema,
@@ -25,7 +26,7 @@ def test_valid_minimal():
     """Minimal valid config passes; absent optional fields are stripped by DropEmpty."""
     result = _validate({"image": "ubuntu:22.04", "agent": "claude"})
     assert result["image"] == "ubuntu:22.04"
-    assert result["agent"] == "claude"
+    assert result["agent"] == {"client": "claude", "server": UNNAMED_SERVER}
 
 
 def test_invalid_empty_image():
@@ -43,7 +44,7 @@ def test_invalid_missing_image():
 def test_agent_false():
     """agent = False (bool) enables shell mode."""
     result = _validate({"image": "ubuntu:22.04", "agent": False})
-    assert result["agent"] is False
+    assert result["agent"] == {"client": False, "server": UNNAMED_SERVER}
 
 
 def test_unknown_key_rejected():
@@ -417,7 +418,7 @@ def test_agents_rejects_a_non_string_entry(assert_filter_errors):
 
 
 def test_agents_rejects_an_unknown_setting(assert_filter_errors):
-    """Only extra_args is a setting."""
+    """Without server_settings, extra_args is the only setting."""
     assert_filter_errors(
         _per_source_schema(),
         {"agents": {"claude": {"server": {}}}},
@@ -451,4 +452,151 @@ def test_agents_normalises_extra_args_as_unicode(assert_filter_passes):
         _per_source_schema(),
         {"agents": {"claude": {"extra_args": ["café"]}}},
         {"agents": {"claude": {"extra_args": ["café"]}}},
+    )
+
+
+def test_agent_rejects_an_empty_table(assert_filter_errors):
+    """An agent table naming neither half is empty, and so missing."""
+    assert_filter_errors(
+        standard_config_schema(base_dir=Path.cwd(), merged=True),
+        {"image": "i", "agent": {}},
+        {"agent": [f.NotEmpty.CODE_EMPTY]},
+        skip_value_check,
+    )
+
+
+def _server_schema():
+    """The per-source schema as the user config's global section sees it."""
+    return standard_config_schema(
+        base_dir=Path.cwd(), merged=False, server_settings=True
+    )
+
+
+def _server(settings: dict) -> dict:
+    """Wrap server settings as config for a server named ``x``."""
+    return {"agents": {"x": {"server": settings}}}
+
+
+def test_server_settings_accept_every_key(assert_filter_passes):
+    """image, port, volumes and build are the server settings."""
+    assert_filter_passes(
+        _server_schema(),
+        _server(
+            {
+                "build": {"dockerfile": "/abs/Dockerfile", "policy": "daily"},
+                "image": "img",
+                "port": 4096,
+                "volumes": {"/abs": "/abs:rw"},
+            }
+        ),
+        _server(
+            {
+                "build": {"dockerfile": "/abs/Dockerfile", "policy": "daily"},
+                "image": "img",
+                "port": 4096,
+                "volumes": {"/abs": VolumeSpec("/abs", "rw")},
+            }
+        ),
+    )
+
+
+def test_server_settings_reject_a_relative_volume(assert_filter_errors):
+    """A shared server's mounts cannot depend on the workdir (ADR 019)."""
+    assert_filter_errors(
+        _server_schema(),
+        _server({"volumes": {"rel/dir": "/c:rw"}}),
+        {"agents.x.server.volumes.rel/dir": [AbsoluteHostPath.CODE_NOT_ABSOLUTE]},
+        skip_value_check,
+    )
+
+
+def test_server_settings_accept_a_tilde_volume(assert_filter_passes):
+    """A leading ``~`` is home, so the path is absolute once expanded."""
+    assert_filter_passes(
+        _server_schema(), _server({"volumes": {"~/Dev": "~/Dev:rw"}}), skip_value_check
+    )
+
+
+def test_server_settings_reject_another_users_home(assert_filter_errors):
+    """``~`` means home only as a whole first segment, as Filepath has it."""
+    assert_filter_errors(
+        _server_schema(),
+        _server({"volumes": {"~bob/Dev": "/c:rw"}}),
+        {"agents.x.server.volumes.~bob/Dev": [AbsoluteHostPath.CODE_NOT_ABSOLUTE]},
+        skip_value_check,
+    )
+
+
+def test_server_settings_reject_a_relative_build_path(assert_filter_errors):
+    """The build's dockerfile and context must be absolute too."""
+    assert_filter_errors(
+        _server_schema(),
+        _server({"build": {"dockerfile": "Dockerfile"}}),
+        {"agents.x.server.build.dockerfile": [AbsoluteHostPath.CODE_NOT_ABSOLUTE]},
+        skip_value_check,
+    )
+    assert_filter_errors(
+        _server_schema(),
+        _server({"build": {"context": "ctx"}}),
+        {"agents.x.server.build.context": [AbsoluteHostPath.CODE_NOT_ABSOLUTE]},
+        skip_value_check,
+    )
+
+
+def test_server_settings_reject_a_bad_port(assert_filter_errors):
+    """A port is an integer from 1 to 65535, and nothing is converted to one."""
+    for port, code in (
+        (0, f.Min.CODE_TOO_SMALL),
+        (65536, f.Max.CODE_TOO_BIG),
+        ("4096", f.Type.CODE_WRONG_TYPE),
+        (True, f.Type.CODE_WRONG_TYPE),
+    ):
+        assert_filter_errors(
+            _server_schema(),
+            _server({"port": port}),
+            {"agents.x.server.port": [code]},
+            skip_value_check,
+        )
+
+
+def test_server_settings_reject_an_unknown_key(assert_filter_errors):
+    """A misspelt server setting is an error."""
+    assert_filter_errors(
+        _server_schema(),
+        _server({"imge": "i"}),
+        {"agents.x.server.imge": [f.FilterMapper.CODE_EXTRA_KEY]},
+        skip_value_check,
+    )
+
+
+def test_server_settings_do_not_touch_disk(assert_filter_passes):
+    """Paths are checked on disk only when that server is chosen (ADR 019)."""
+    assert_filter_passes(
+        _server_schema(),
+        _server(
+            {
+                "build": {"context": "/no/such", "dockerfile": "/no/such/Dockerfile"},
+                "volumes": {"/no/such/dir": "/no/such/dir:rw"},
+            }
+        ),
+        skip_value_check,
+    )
+
+
+def test_projects_entry_rejects_server_settings(tmp_path):
+    """A shared server has no per-project settings (ADR 019)."""
+    runner = f.FilterRunner(
+        user_config_schema(base_dir=tmp_path),
+        '[projects."/x".agents.y.server]\nimage = "i"\n',
+    )
+    assert not runner.is_valid()
+    assert [key for key in runner.errors if key.endswith("agents.y.server")]
+
+
+def test_user_global_section_accepts_server_settings(assert_filter_passes, tmp_path):
+    """Server settings belong in the user config's global section."""
+    assert_filter_passes(
+        user_config_schema(base_dir=tmp_path),
+        '[agents.y.server]\nimage = "i"\n',
+        skip_value_check,
     )

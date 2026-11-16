@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from paddock.cli import ParsedArgs
+from paddock.config.agent_choice import UNNAMED_SERVER
 from paddock.config.context import ConfigContext
 from paddock.config.sources.base import LoadResult
 from paddock.config.sources.user import UserConfigSource
@@ -10,6 +11,8 @@ def _ctx(tmp_path, user_path) -> ConfigContext:
     parsed = ParsedArgs(
         agent=None,
         agent_args=[],
+        agent_client=None,
+        agent_server=None,
         build_args={},
         build_context=None,
         build_dockerfile=None,
@@ -59,7 +62,10 @@ def test_load_strips_projects_and_config(tmp_path: Path):
     )
     result = UserConfigSource().load(_ctx(tmp_path, cfg))
     assert result.instance.is_valid()
-    assert result.instance.cleaned_data == {"image": "u:1.0", "agent": "claude"}
+    assert result.instance.cleaned_data == {
+        "image": "u:1.0",
+        "agent": {"client": "claude", "server": UNNAMED_SERVER},
+    }
 
 
 def test_load_invalid_toml(tmp_path: Path):

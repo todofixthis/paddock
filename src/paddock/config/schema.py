@@ -7,7 +7,15 @@ import filters as f
 from filters.base import BaseFilter
 from filters.macros import filter_macro
 
-from paddock.config.filters import Agent, AllowlistEntry, HostPath, Volume, VolumeMap
+from paddock.config.filters import (
+    AbsoluteHostPath,
+    Agent,
+    AllowlistEntry,
+    HostPath,
+    ServerVolumeMap,
+    Volume,
+    VolumeMap,
+)
 
 BUILD_POLICIES = ("always", "daily", "if-missing", "weekly")
 CONTAINER_HOME = "/root"
@@ -59,18 +67,50 @@ def _build_schema(base_dir: Path, check_paths: bool):
     )
 
 
-# Per-agent settings, keyed by agent registry key (ADR 017). The names are not
-# checked against the registry here: a name no installed agent has draws a
-# warning after the merge, so a shared config still loads where a plugin is
-# missing. ``f.Type(str)`` goes ahead of ``f.Unicode``, which alone would
-# coerce ``1`` to ``"1"``.
-_agents_schema = f.Type(dict) | f.FilterRepeater(
-    f.FilterMapper(
-        {"extra_args": f.Array | f.FilterRepeater(f.Type(str) | f.Unicode)},
-        allow_extra_keys=False,
-        allow_missing_keys=True,
-    )
+# A server's own settings (ADR 019). Host paths must be absolute and are kept as
+# written: nothing here is looked up on disk, since a server's paths are checked
+# only when that server is chosen.
+_server_settings_schema = f.FilterMapper(
+    {
+        "build": f.FilterMapper(
+            {
+                "args": f.FilterRepeater(f.Unicode),
+                "context": f.Unicode | AbsoluteHostPath,
+                "dockerfile": (
+                    f.NotEmpty(allow_none=True) | f.Unicode | AbsoluteHostPath
+                ),
+                "policy": f.Choice(BUILD_POLICIES),
+            },
+            allow_extra_keys=False,
+            allow_missing_keys=True,
+        ),
+        "image": f.Unicode | f.NotEmpty,
+        "port": f.Type(int, allow_subclass=False) | f.Min(1) | f.Max(65535),
+        "volumes": ServerVolumeMap(container_home_dir=CONTAINER_HOME),
+    },
+    allow_extra_keys=False,
+    allow_missing_keys=True,
 )
+
+
+def _agents_schema(server_settings: bool):
+    """Per-agent settings, keyed by registry key (ADR 017).
+
+    The names are not checked against a registry here: a name nothing
+    installed has draws a warning after the merge, so a shared config still
+    loads where a plugin is missing.
+
+    Args:
+        server_settings: Whether each entry may hold a ``server`` table. Only
+            the user config's global section may (ADR 019).
+    """
+    # f.Type(str) goes ahead of f.Unicode, which alone would coerce 1 to "1".
+    settings: dict = {"extra_args": f.Array | f.FilterRepeater(f.Type(str) | f.Unicode)}
+    if server_settings:
+        settings["server"] = _server_settings_schema
+    return f.Type(dict) | f.FilterRepeater(
+        f.FilterMapper(settings, allow_extra_keys=False, allow_missing_keys=True)
+    )
 
 
 def _volumes_schema(base_dir: Path, check_paths: bool):
@@ -83,21 +123,25 @@ def _volumes_schema(base_dir: Path, check_paths: bool):
 
 
 def _standard_fields(
-    merged: bool, base_dir: Path, check_paths: bool = True
+    merged: bool,
+    base_dir: Path,
+    check_paths: bool = True,
+    server_settings: bool = False,
 ) -> dict[str, object]:
     """Top-level standard config fields. Mode-aware.
 
     In merged mode required fields disallow ``None``; in per-source mode they
     allow ``None`` so sources can be incomplete without false errors.
-    ``base_dir`` and ``check_paths`` govern host paths (see
-    ``standard_config_schema``).
+    ``base_dir`` and ``check_paths`` govern host paths, and
+    ``server_settings`` whether ``agents`` entries may hold a ``server`` table
+    (see ``standard_config_schema``).
     """
     # Gate every host-path check on check_paths, as HostPath and
     # _volumes_schema do, so shape-only validation never touches disk
     # (ADR 014).
     return {
         "agent": f.NotEmpty(allow_none=not merged) | Agent,
-        "agents": _agents_schema,
+        "agents": _agents_schema(server_settings or merged),
         "build": _build_schema(base_dir, check_paths),
         "image": f.NotEmpty(allow_none=not merged) | f.Unicode,
         "network": f.Unicode,
@@ -114,6 +158,7 @@ def standard_config_schema(
     check_paths: bool = True,
     extra_keys: dict | None = None,
     merged: bool = False,
+    server_settings: bool = False,
 ):
     """Macro returning the standard-config filter chain.
 
@@ -131,12 +176,15 @@ def standard_config_schema(
             field allows ``None``/missing, every optional field defaults to
             ``None``. ``True`` is the final merged pass: required fields reject
             ``None``/empty, optional fields use their conventional defaults.
+        server_settings: ``True`` lets each ``agents`` entry hold a ``server``
+            table, as only the user config's global section may (ADR 019).
+            The merged pass always allows it.
 
     Returns:
         A filter chain ``FilterMapper(...) | DropEmpty``. ``DropEmpty`` strips
         ``None``/empty-dict leaves so per-source results merge cleanly.
     """
-    fields = _standard_fields(merged, base_dir, check_paths)
+    fields = _standard_fields(merged, base_dir, check_paths, server_settings)
     if extra_keys:
         fields.update(extra_keys)
     return (
@@ -240,7 +288,7 @@ def user_config_schema(base_dir: Path):
     """
     return f.TomlDecode | f.FilterMapper(
         {
-            **_standard_fields(merged=False, base_dir=base_dir),
+            **_standard_fields(merged=False, base_dir=base_dir, server_settings=True),
             "config": config_meta_schema,
             "projects": (
                 f.Optional(dict)

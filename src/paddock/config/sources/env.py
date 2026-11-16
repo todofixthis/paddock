@@ -4,8 +4,9 @@ from typing import Any, ClassVar
 import filters as f
 from filters.macros import filter_macro
 
+from paddock.config.agent_choice import AgentChoice
 from paddock.config.context import ConfigContext
-from paddock.config.filters import Agent, Filepath
+from paddock.config.filters import AgentHalf, Filepath
 from paddock.config.schema import BUILD_POLICIES, standard_config_schema
 from paddock.config.sources.base import ConfigSource, LoadResult
 
@@ -26,7 +27,9 @@ def _env_schema(base_dir: Path):
     """
     return f.FilterMapper(
         {
-            "PADDOCK_AGENT": Agent,
+            "PADDOCK_AGENT": AgentHalf,
+            "PADDOCK_AGENT_CLIENT": AgentHalf,
+            "PADDOCK_AGENT_SERVER": AgentHalf,
             "PADDOCK_BUILD_CONTEXT": (
                 f.Unicode | f.NotEmpty | Filepath(base_dir=base_dir, is_dir=True)
             ),
@@ -84,7 +87,18 @@ class EnvConfigSource(ConfigSource):
             if v is not None and v != ""
         }
 
+        # The three agent variables are combined here, not mapped by name:
+        # splitting PADDOCK_AGENT_SERVER on ``_`` would overwrite the value
+        # PADDOCK_AGENT set (ADR 018).
+        agent = AgentChoice.from_parts(
+            cleaned_env.pop("PADDOCK_AGENT", None),
+            client=cleaned_env.pop("PADDOCK_AGENT_CLIENT", None),
+            server=cleaned_env.pop("PADDOCK_AGENT_SERVER", None),
+        )
+
         shaped: dict[str, Any] = {}
+        if agent is not None:
+            shaped["agent"] = agent
         for key, value in cleaned_env.items():
             parts = key[len(self.PREFIX) :].lower().split("_")
             self._deep_set(shaped, parts, value)

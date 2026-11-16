@@ -5,21 +5,22 @@ import filters as f
 from filters.base import BaseFilter
 from filters.macros import filter_macro
 
+from paddock.config.agent_choice import AgentChoice
 from paddock.config.fields import allowlist_directives
 
 
-class Agent(BaseFilter):
-    """Validates a coding agent value.
+class AgentHalf(BaseFilter):
+    """Validates one half of an ``agent`` value: a name, or ``False``.
 
-    Accepts a non-empty string agent name, or ``False`` to disable the agent.
-    Maps the string ``'false'`` to boolean ``False``. Rejects boolean ``True``
-    and any other non-string, such as a table.
+    ``False`` is the shell for the client half and no server for the server
+    half. Maps the string ``'false'`` to boolean ``False``. Rejects boolean
+    ``True`` and any other non-string.
     """
 
     CODE_INVALID = "invalid"
 
     templates = {
-        CODE_INVALID: "Expected a non-empty agent name string, or False.",
+        CODE_INVALID: "Expected a non-empty name string, or False.",
     }
 
     def _apply(self, value):
@@ -27,21 +28,58 @@ class Agent(BaseFilter):
         if value is True:
             return self._invalid_value(value, self.CODE_INVALID)
 
-        # Boolean False passes through directly.
-        if value is False:
+        # False, as a boolean or the string 'false', passes as False.
+        if value is False or value == "false":
             return False
 
-        # Map the string 'false' to boolean False.
-        if isinstance(value, str) and value == "false":
-            return False
+        # Anything else must already be a string: f.Unicode would stringify
+        # a table or a number into a name.
+        return self._filter(value, f.Type(str) | f.Unicode | f.NotEmpty)
 
-        # Anything else that is not a string is invalid: f.Unicode would
-        # stringify a table such as a mistyped ``[agent.claude]``.
-        value = self._filter(value, f.Type(str) | f.Unicode | f.NotEmpty)
+
+class Agent(BaseFilter):
+    """Validates an ``agent`` value into its client and server halves.
+
+    Accepts a client name, ``False`` for the shell, or a table naming either
+    half (``client``, ``server``). A name or ``False`` names the client and
+    resets the server to unnamed; a table names only the halves it lists
+    (ADR 018). The cleaned value is always a table, and cleaning it again
+    returns it unchanged. Rejects boolean ``True``.
+    """
+
+    CODE_INVALID = "invalid"
+
+    templates = {
+        CODE_INVALID: (
+            "Expected an agent name, False, or a table naming client or server."
+        ),
+    }
+
+    def _apply(self, value):
+        # Boolean True is always invalid.
+        if value is True:
+            return self._invalid_value(value, self.CODE_INVALID)
+
+        value = self._filter(value, f.Type((bool, dict, str)))
         if self._has_errors:
             return None
 
-        return value
+        if not isinstance(value, dict):
+            value = AgentChoice.from_parts(value)
+
+        halves = self._filter(
+            value,
+            f.FilterMapper(
+                {"client": AgentHalf, "server": AgentHalf},
+                allow_extra_keys=False,
+                allow_missing_keys=True,
+            ),
+        )
+        if self._has_errors:
+            return None
+
+        # A half the table did not name stays unnamed, not None.
+        return {key: half for key, half in halves.items() if half is not None}
 
 
 class Filepath(BaseFilter):
@@ -300,6 +338,78 @@ class VolumeMap(BaseFilter):
             if host_path is not None and container_spec is not None:
                 result[str(host_path)] = container_spec
 
+        return result if not self._has_errors else None
+
+
+class AbsoluteHostPath(BaseFilter):
+    """Requires a host path to be absolute, without looking it up.
+
+    For a shared server's paths, which cannot depend on the workdir (ADR 019).
+    A first segment of exactly ``~`` counts as home, the rule ``Filepath``
+    applies. The value is returned as written; nothing is expanded, resolved
+    or checked on disk. Place after ``f.Unicode``.
+    """
+
+    CODE_NOT_ABSOLUTE = "not_absolute"
+
+    templates = {
+        CODE_NOT_ABSOLUTE: (
+            "Path {value!r} must be absolute: a shared server's paths cannot "
+            "depend on the workdir."
+        ),
+    }
+
+    def _apply(self, value):
+        value = self._filter(value, f.Type(str))
+        if self._has_errors:
+            return None
+
+        path = Path(value)
+        if path.parts and path.parts[0] == "~":
+            path = Path.home().joinpath(*path.parts[1:])
+        if not path.is_absolute():
+            return self._invalid_value(value, self.CODE_NOT_ABSOLUTE)
+        return value
+
+
+class ServerVolumeMap(BaseFilter):
+    """Validates a server's volumes mapping, for shape only.
+
+    Keys (host paths) must be absolute and are kept as written; values
+    (container path specs) are validated through ``Volume``. Nothing is looked
+    up on disk: a server's paths are checked only when that server is chosen
+    (ADR 019).
+
+    Returns a ``dict[str, VolumeSpec]`` keyed by the host path as written.
+
+    Args:
+        container_home_dir:
+            Home directory to use for tilde expansion in container path
+            specs. When ``None`` (default), ``Path.home()`` is used.
+    """
+
+    def __init__(self, container_home_dir: str | Path | None = None):
+        super().__init__()
+        self._container_home_dir = container_home_dir
+
+    def _apply(self, value):
+        value = cast(dict, self._filter(value, f.Type(dict)))
+        if self._has_errors:
+            return None
+
+        result = {}
+        for raw_host, raw_container in value.items():
+            sub_key = str(raw_host)
+            host_path = self._filter(
+                raw_host, f.Unicode | AbsoluteHostPath, sub_key=sub_key
+            )
+            container_spec = self._filter(
+                raw_container,
+                Volume(home_dir=self._container_home_dir),
+                sub_key=sub_key,
+            )
+            if host_path is not None and container_spec is not None:
+                result[host_path] = container_spec
         return result if not self._has_errors else None
 
 

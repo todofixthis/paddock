@@ -2,6 +2,7 @@ from typing import Any
 
 import filters as f
 
+from paddock.config.agent_choice import AgentChoice
 from paddock.config.context import ConfigContext
 from paddock.config.schema import standard_config_schema
 from paddock.config.sources.base import ConfigSource, LoadResult
@@ -28,8 +29,11 @@ class CliConfigSource(ConfigSource):
 
         if parsed.image is not None:
             raw["image"] = parsed.image
-        if parsed.agent is not None:
-            raw["agent"] = parsed.agent
+        agent = AgentChoice.from_parts(
+            parsed.agent, client=parsed.agent_client, server=parsed.agent_server
+        )
+        if agent is not None:
+            raw["agent"] = agent
         if parsed.network is not None:
             raw["network"] = parsed.network
         if parsed.build_dockerfile is not None:
