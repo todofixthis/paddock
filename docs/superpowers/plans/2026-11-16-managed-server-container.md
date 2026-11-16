@@ -90,6 +90,12 @@ Docker facts below were checked against Docker 29.9.2 on 2026-11-16.
   before the server is started. A configured network equal to the server's own is
   passed once. An unpaired client beside a server gets no network, environment or
   arguments from it, and the log says the two are not connected.
+- **Minimum Docker.** A run that chooses a server needs Docker Engine 25.0 or
+  newer, client and daemon: API 1.44 is the first whose daemon accepts a container
+  created on two networks (read in moby v25.0.0's `container_routes.go`; 24.0's
+  API is 1.43). It is checked once, before the server is looked at, for an
+  unpaired client and under `--dry-run` too. A run without a server is not
+  checked.
 - **`--dry-run`** runs every check, the foreign-network one included, prints the
   server's `docker run` line where the container would be created, and creates,
   builds, pulls, removes and mints nothing. Where Docker has not yet assigned a
@@ -126,7 +132,8 @@ Docker facts below were checked against Docker 29.9.2 on 2026-11-16.
 ## File Map
 
 - `src/paddock/config/`: `loader.py`, new `server_settings.py`.
-- `src/paddock/docker/`: new `managed.py`, new `server.py`, `builder.py`.
+- `src/paddock/docker/`: new `managed.py`, new `server.py`, new `version.py`,
+  `builder.py`.
 - `src/paddock/__main__.py`.
 - `tests/config/`, `tests/docker/`, `tests/test_main.py`.
 
@@ -613,9 +620,11 @@ Docker facts below were checked against Docker 29.9.2 on 2026-11-16.
 ### Task 4: Connect the client
 
 **Files:**
+- Create: `src/paddock/docker/version.py`
 - Modify: `src/paddock/docker/builder.py`, `src/paddock/__main__.py`,
   `docs/adr/019-run-one-shared-container-per-agent-server.md`
-- Test: `tests/docker/test_builder.py`, `tests/test_main.py`
+- Test: `tests/docker/test_builder.py`, `tests/docker/test_version.py`,
+  `tests/test_main.py`
 
 **Interfaces:**
 - Consumes: `LaunchResult` (Task 3), `AgentPairing.is_paired`,
@@ -635,6 +644,22 @@ Docker facts below were checked against Docker 29.9.2 on 2026-11-16.
   a value starting `container:`, with exactly: `[network] "<value>" cannot be
   combined with a server's network; agent "<agent_key>" is paired with server
   "<server_key>"`.
+- Produces, in `paddock.docker.version`:
+  ```python
+  class DockerVersion:
+      MIN_API_VERSION: ClassVar[tuple[int, int]] = (1, 44)
+      MIN_ENGINE_VERSION: ClassVar[str] = "25.0"
+
+      @classmethod
+      def require_minimum(cls) -> None: ...
+  ```
+  `require_minimum()` runs `docker version --format '{{json .}}'` once and compares
+  `Client.ApiVersion` and `Server.ApiVersion`, each parsed as a tuple of ints, with
+  `MIN_API_VERSION`. It raises `PaddockEnvironmentError`, exact texts:
+  - either too old: `[docker] Agent servers need Docker Engine 25.0 or newer (API
+    1.44); found API <lower of the two>`.
+  - no daemon answer, or a version that cannot be read: `[docker] Could not read
+    the Docker version: <first non-empty line of stderr, or "unexpected output">`.
 - Produces: `run(argv: list[str] | None = None, *, agents=agent_registry,
   servers=server_registry)`, handing both on to the loader and `_resolve_pairing`.
 - `__main__._resolve_pairing` loses its temporary "cannot be started" stop.
@@ -659,7 +684,17 @@ Docker facts below were checked against Docker 29.9.2 on 2026-11-16.
     text.
   - `test_paired_network_check_allows_a_user_network_or_none`.
 
+  `tests/docker/test_version.py`, stubbing `subprocess.run`:
+  - `test_current_docker_passes`: client and server both `1.44`.
+  - `test_newer_docker_passes`: `1.52` and `1.100` (compared as numbers, not text).
+  - `test_old_daemon_is_refused` and `test_old_client_is_refused`: `1.43` on one
+    side, exact text naming `1.43`.
+  - `test_unreachable_daemon_is_reported`: exit 1 with stderr `Cannot connect to
+    the Docker daemon` and output whose `Server` is null; exact text.
+  - `test_unreadable_version_is_reported`: exit 0 with `not json`.
+
   `tests/test_main.py`, with fake registries passed to `run`,
+  `DockerVersion.require_minimum` patched,
   `ServerLauncher.launch` patched to return a `LaunchResult`, and
   `DockerCommandBuilder._container_name_available` patched as the existing dry-run
   tests do:
@@ -686,6 +721,11 @@ Docker facts below were checked against Docker 29.9.2 on 2026-11-16.
     `PaddockEnvironmentError` from `launch` exits 1 with its text on stderr, and
     `ProjectDirManager.__enter__` is never called (spy, as the unknown-server test
     does).
+  - `test_old_docker_stops_a_server_run_before_launch`: `require_minimum` raising
+    exits 1 with its text, and `launch` is never called; an unpaired client beside
+    a server is stopped the same way.
+  - `test_a_run_without_a_server_skips_the_version_check`: `require_minimum` is
+    never called.
   - `test_dry_run_launches_with_dry_run`: `launch` receives `dry_run=True` and the
     client's `docker run` is never executed.
   - Delete `test_installed_server_cannot_start_yet`.
@@ -698,14 +738,16 @@ Docker facts below were checked against Docker 29.9.2 on 2026-11-16.
 - [ ] **Step 3: Implement.** In `run`, after `_resolve_pairing` and before
   `ProjectDirManager`, inside the existing `try`/`except PaddockEnvironmentError`:
   where the pairing is paired, call `check_paired_network`; where `pairing.server`
-  is set, build a `ServerLauncher` from it and `resolved.server_settings` (narrow
+  is set, call `DockerVersion.require_minimum()`, then build a `ServerLauncher` from it and `resolved.server_settings` (narrow
   the `None` for mypy) and call `launch`. Print the server's `run_argv` with
   `shlex.join` unless `--quiet`. Pass the connection to the builder only when
   `pairing.is_paired`. Run the client with
   `subprocess.run(docker_argv, env={**os.environ, **command_builder.environment})`.
   In ADR 019's Network bullet, change "(`host`, `none`, `container:`)" to
-  "(`host`, `none`, `bridge`, `default`, `container:`)" and regenerate nothing: the
-  index does not carry the body.
+  "(`host`, `none`, `bridge`, `default`, `container:`)", and add a Decision bullet
+  stating the minimum Docker and why. Regenerate nothing: the index does not carry
+  the body. Have a subagent read the whole ADR from disk as its reader before the
+  commit.
 
 - [ ] **Step 4: Run the checks**
 
@@ -749,7 +791,9 @@ Docker facts below were checked against Docker 29.9.2 on 2026-11-16.
   - a container of that name created by hand, without the label, is refused and
     still exists afterwards;
   - two launches started at once from two processes both succeed with one
-    container and the same secret.
+    container and the same secret;
+  - `DockerVersion.require_minimum()` passes on this daemon, and a client
+    container started on two networks reaches both.
   Prove the script can fail: break one assertion's expectation and confirm a
   non-zero exit.
 
@@ -789,9 +833,12 @@ Docker facts below were checked against Docker 29.9.2 on 2026-11-16.
   reused server too; the mount order.
 - The `paddock.volumes` label is bounded by the kernel's 128 KiB limit on one
   argument. No server's mounts approach it, so nothing guards against it.
-- Two `--network` flags need a recent Docker (checked on 29.9.2). The design's
-  fallback of `docker network connect` is dropped: it does not fit a foreground
-  `docker run --rm -it`. An older Docker fails with its own message.
+- Two `--network` flags need Docker Engine 25.0 (API 1.44), so a run that chooses
+  a server requires it (maintainer decision, 2026-11-16). The design's fallback of
+  `docker network connect` is dropped: it does not fit a foreground
+  `docker run --rm -it`. The check covers an unpaired client beside a server too,
+  which needs only one network: one rule for "uses a server" is easier to explain
+  than one that depends on pairing.
 - With no `build` settings and a missing image, `docker run -d` pulls quietly; a
   first run can pause without output. Left as it is.
 - The server's `docker run` line is printed after `launch` returns, so a failed
