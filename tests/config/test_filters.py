@@ -5,6 +5,8 @@ import pytest
 
 from paddock.config.agent_choice import UNNAMED_SERVER
 from paddock.config.filters import (
+    AbsoluteHostPath,
+    ServerVolumeMap,
     AgentHalf,
     Agent,
     Filepath,
@@ -698,4 +700,28 @@ def test_agent_table_rejected(assert_filter_errors):
     """
     assert_filter_errors(
         Agent, {"claude": {}}, {"claude": [f.FilterMapper.CODE_EXTRA_KEY]}
+    )
+
+
+def test_absolute_host_path_pass_none(assert_filter_passes):
+    """``None`` always passes."""
+    assert_filter_passes(AbsoluteHostPath, None)
+
+
+def test_server_volume_map_pass_none(assert_filter_passes):
+    """``None`` always passes."""
+    assert_filter_passes(ServerVolumeMap, None)
+
+
+def test_absolute_host_path_keeps_the_value_as_written(assert_filter_passes):
+    """The path is validated, not expanded or resolved."""
+    assert_filter_passes(AbsoluteHostPath, "~/Dev", "~/Dev")
+    assert_filter_passes(AbsoluteHostPath, "/abs", "/abs")
+
+
+def test_absolute_host_path_rejects_relative(assert_filter_errors):
+    """A relative path, or another user's home, is not absolute."""
+    assert_filter_errors(AbsoluteHostPath, "rel", [AbsoluteHostPath.CODE_NOT_ABSOLUTE])
+    assert_filter_errors(
+        AbsoluteHostPath, "~bob/x", [AbsoluteHostPath.CODE_NOT_ABSOLUTE]
     )

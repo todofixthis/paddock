@@ -9,6 +9,7 @@ from filters.pytest import skip_value_check
 from class_registry import ClassRegistry
 
 from paddock.agents import BaseAgent
+from paddock.agents.servers import BaseServer, ServerConnection
 from paddock.cli import ParsedArgs
 from paddock.config.agent_choice import UNNAMED_SERVER
 from paddock.config.errors import ConfigError
@@ -1073,3 +1074,130 @@ def test_project_toml_agent_table_kept_when_allowlisted(tmp_path: Path, monkeypa
         '[config.allowlist]\nproject_toml = ["agent"]\n',
     )
     assert r.server_key == "srv"
+
+
+_PROJECT_FILE_WITH_SERVER_SETTINGS = (
+    '[agents.y]\nextra_args = ["-a"]\n[agents.y.server]\nimge = 1\n'
+)
+_SERVER_SETTINGS_WARNING = (
+    "project_toml: ignored agents.y.server — server settings are read only from "
+    "the global section of your user config"
+)
+
+
+def _write_project_file(tmp_path: Path, contents: str) -> None:
+    """Write ``<tmp_path>/.paddock/config.toml``."""
+    pd = tmp_path / ".paddock"
+    pd.mkdir()
+    (pd / "config.toml").write_text(contents)
+
+
+def test_project_file_server_settings_warn_and_are_ignored(
+    tmp_path: Path, monkeypatch, caplog
+):
+    """An enabled project file's server settings are ignored with a warning."""
+    _setup_home(
+        tmp_path,
+        monkeypatch,
+        'image = "i"\n[config.allowlist]\nproject_toml = true\n',
+    )
+    _write_project_file(tmp_path, _PROJECT_FILE_WITH_SERVER_SETTINGS)
+    with caplog.at_level(logging.WARNING, logger="paddock"):
+        r = ConfigLoader().resolve(_empty_parsed(), workdir=tmp_path, environ={})
+    assert "server" not in r.config["agents"]["y"]
+    assert _SERVER_SETTINGS_WARNING in [rec.getMessage() for rec in caplog.records]
+
+
+def test_disabled_project_file_server_settings_draw_no_such_warning(
+    tmp_path: Path, monkeypatch, caplog
+):
+    """A disabled project file is ignored whole, server settings included."""
+    _setup_home(tmp_path, monkeypatch, 'image = "i"\n')
+    _write_project_file(tmp_path, _PROJECT_FILE_WITH_SERVER_SETTINGS)
+    with caplog.at_level(logging.WARNING, logger="paddock"):
+        ConfigLoader().resolve(_empty_parsed(), workdir=tmp_path, environ={})
+    assert not [
+        rec
+        for rec in caplog.records
+        if "server settings are read only" in rec.getMessage()
+    ]
+
+
+def test_user_server_settings_reach_the_merged_config(tmp_path: Path, monkeypatch):
+    """Server settings in the user config's global section are merged."""
+    _setup_home(
+        tmp_path, monkeypatch, 'image = "i"\n[agents.y.server]\nimage = "img"\n'
+    )
+    r = ConfigLoader().resolve(_empty_parsed(), workdir=tmp_path, environ={})
+    assert r.config["agents"]["y"]["server"]["image"] == "img"
+
+
+class _FakeClientC(_FakeAgent):
+    AGENT_KEY = "c"
+
+
+class _FakeServerY(BaseServer):
+    SERVER_KEY = "y"
+    PROTOCOL = "p"
+    CONTAINER_PORT = 1
+
+    def get_command(self) -> list[str]:
+        return ["y"]
+
+    def is_ready(self, connection: ServerConnection) -> bool:
+        return True
+
+
+def test_settings_warn_per_registry(tmp_path: Path, monkeypatch, caplog):
+    """extra_args needs a client of that name, server a server of that name."""
+    agents: ClassRegistry = ClassRegistry(attr_name="AGENT_KEY")
+    for cls in (_FakeClientC, _FakeClaude, _FakeShell):
+        agents.register(cls)
+    servers: ClassRegistry = ClassRegistry(attr_name="SERVER_KEY")
+    servers.register(_FakeServerY)
+    _setup_home(
+        tmp_path,
+        monkeypatch,
+        'image = "i"\n'
+        '[agents.y]\nextra_args = ["-a"]\n[agents.y.server]\nimage = "i"\n'
+        '[agents.c]\nextra_args = ["-a"]\n[agents.c.server]\nimage = "i"\n',
+    )
+    with caplog.at_level(logging.WARNING, logger="paddock"):
+        ConfigLoader(agents=agents, servers=servers).resolve(
+            _empty_parsed(), workdir=tmp_path, environ={}
+        )
+    assert [rec.getMessage() for rec in caplog.records] == [
+        '[agents.c.server] No server named "c" is installed, so its settings '
+        "are ignored; installed servers: y",
+        '[agents.y] No agent named "y" is installed, so its settings are '
+        "ignored; installed agents: c, claude, false",
+    ]
+
+
+def test_server_settings_warning_reads_none_without_servers(
+    tmp_path: Path, monkeypatch, caplog
+):
+    """With no server installed the list reads ``none``."""
+    _setup_home(
+        tmp_path, monkeypatch, 'image = "i"\n[agents.claude.server]\nimage = "i"\n'
+    )
+    with caplog.at_level(logging.WARNING, logger="paddock"):
+        ConfigLoader().resolve(_empty_parsed(), workdir=tmp_path, environ={})
+    assert [rec.getMessage() for rec in caplog.records] == [
+        '[agents.claude.server] No server named "claude" is installed, so its '
+        "settings are ignored; installed servers: none"
+    ]
+
+
+def test_matching_projects_entry_with_server_settings_stops_the_run(
+    tmp_path: Path, monkeypatch
+):
+    """Server settings in a [projects] entry are a validation error."""
+    _setup_home(
+        tmp_path,
+        monkeypatch,
+        'image = "i"\n'
+        f'[projects."{tmp_path.resolve()}".agents.y.server]\nimage = "i"\n',
+    )
+    with pytest.raises(ExceptionGroup):
+        ConfigLoader().resolve(_empty_parsed(), workdir=tmp_path, environ={})

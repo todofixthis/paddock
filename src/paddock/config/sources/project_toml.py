@@ -36,5 +36,40 @@ class ProjectTomlSource(ConfigSource):
         if not path.exists():
             return LoadResult(f.FilterRunner(schema, {}), {})
 
-        chain = f.TomlDecode | schema
-        return LoadResult(f.FilterRunner(chain, path.read_text(encoding="utf-8")), {})
+        text = path.read_text(encoding="utf-8")
+        decoded = f.FilterRunner(f.TomlDecode, text)
+        if not decoded.is_valid():
+            return LoadResult(f.FilterRunner(f.TomlDecode | schema, text), {})
+
+        data = dict(decoded.cleaned_data)
+        discarded = self._discard_server_settings(data)
+        return LoadResult(f.FilterRunner(schema, data), {}, discarded)
+
+    def _discard_server_settings(self, data: dict) -> list[str]:
+        """Remove every ``agents.<name>.server`` from decoded project config.
+
+        A project file may never set a shared server's settings, whatever the
+        allowlist grants, and must not be able to stop a run by getting them
+        wrong, so they go before validation (ADR 019). Anything that is not
+        the expected table is left for validation to report.
+
+        Args:
+            data: The decoded project file; ``agents`` is replaced by a copy
+                without the server settings.
+
+        Returns:
+            The dotted path of each table removed.
+        """
+        agents = data.get("agents")
+        if not isinstance(agents, dict):
+            return []
+
+        discarded: list[str] = []
+        kept: dict = {}
+        for name, settings in agents.items():
+            if isinstance(settings, dict) and "server" in settings:
+                settings = {k: v for k, v in settings.items() if k != "server"}
+                discarded.append(f"agents.{name}.server")
+            kept[name] = settings
+        data["agents"] = kept
+        return discarded

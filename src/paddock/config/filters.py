@@ -341,6 +341,78 @@ class VolumeMap(BaseFilter):
         return result if not self._has_errors else None
 
 
+class AbsoluteHostPath(BaseFilter):
+    """Requires a host path to be absolute, without looking it up.
+
+    For a shared server's paths, which cannot depend on the workdir (ADR 019).
+    A first segment of exactly ``~`` counts as home, the rule ``Filepath``
+    applies. The value is returned as written; nothing is expanded, resolved
+    or checked on disk. Place after ``f.Unicode``.
+    """
+
+    CODE_NOT_ABSOLUTE = "not_absolute"
+
+    templates = {
+        CODE_NOT_ABSOLUTE: (
+            "Path {value!r} must be absolute: a shared server's paths cannot "
+            "depend on the workdir."
+        ),
+    }
+
+    def _apply(self, value):
+        value = self._filter(value, f.Type(str))
+        if self._has_errors:
+            return None
+
+        path = Path(value)
+        if path.parts and path.parts[0] == "~":
+            path = Path.home().joinpath(*path.parts[1:])
+        if not path.is_absolute():
+            return self._invalid_value(value, self.CODE_NOT_ABSOLUTE)
+        return value
+
+
+class ServerVolumeMap(BaseFilter):
+    """Validates a server's volumes mapping, for shape only.
+
+    Keys (host paths) must be absolute and are kept as written; values
+    (container path specs) are validated through ``Volume``. Nothing is looked
+    up on disk: a server's paths are checked only when that server is chosen
+    (ADR 019).
+
+    Returns a ``dict[str, VolumeSpec]`` keyed by the host path as written.
+
+    Args:
+        container_home_dir:
+            Home directory to use for tilde expansion in container path
+            specs. When ``None`` (default), ``Path.home()`` is used.
+    """
+
+    def __init__(self, container_home_dir: str | Path | None = None):
+        super().__init__()
+        self._container_home_dir = container_home_dir
+
+    def _apply(self, value):
+        value = cast(dict, self._filter(value, f.Type(dict)))
+        if self._has_errors:
+            return None
+
+        result = {}
+        for raw_host, raw_container in value.items():
+            sub_key = str(raw_host)
+            host_path = self._filter(
+                raw_host, f.Unicode | AbsoluteHostPath, sub_key=sub_key
+            )
+            container_spec = self._filter(
+                raw_container,
+                Volume(home_dir=self._container_home_dir),
+                sub_key=sub_key,
+            )
+            if host_path is not None and container_spec is not None:
+                result[host_path] = container_spec
+        return result if not self._has_errors else None
+
+
 class AllowlistEntry(BaseFilter):
     """Validates a single ``[config.allowlist]`` entry.
 

@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, ClassVar
 
 import filters as f
@@ -21,10 +21,13 @@ class LoadResult:
             ever populated from an already-valid full runner, since a
             malformed ``[config]`` invalidates the instance runner first, so
             it needs no separate validity check.
+        discarded: Dotted paths the source itself removed before validation,
+            because that source may never set them. The loader reports them.
     """
 
     instance: "f.FilterRunner"
     meta: dict
+    discarded: list[str] = field(default_factory=list)
 
 
 # Iterated in ascending WEIGHT order; the loader uses this directly as the

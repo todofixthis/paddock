@@ -69,3 +69,35 @@ def test_load_invalid_toml(tmp_path: Path):
     (d / "config.toml").write_text("not = valid = toml")
     result = ProjectTomlSource().load(_ctx(tmp_path))
     assert not result.instance.is_valid()
+
+
+def _load_project_file(tmp_path: Path, contents: str):
+    """Write a project file and load it."""
+    d = tmp_path / ".paddock"
+    d.mkdir()
+    (d / "config.toml").write_text(contents)
+    return ProjectTomlSource().load(_ctx(tmp_path))
+
+
+def test_server_settings_are_discarded_before_validation(tmp_path: Path):
+    """A project file's server settings never reach validation (ADR 019)."""
+    result = _load_project_file(
+        tmp_path,
+        '[agents.y]\nextra_args = ["-a"]\n[agents.y.server]\nimge = 1\n',
+    )
+    assert result.instance.is_valid(), result.instance.errors
+    assert result.instance.cleaned_data["agents"] == {"y": {"extra_args": ["-a"]}}
+    assert result.discarded == ["agents.y.server"]
+
+
+def test_nothing_discarded_without_server_settings(tmp_path: Path):
+    """A project file with no server settings discards nothing."""
+    result = _load_project_file(tmp_path, '[agents.y]\nextra_args = ["-a"]\n')
+    assert result.discarded == []
+
+
+def test_non_table_agents_is_left_for_validation(tmp_path: Path):
+    """A malformed ``agents`` is reported by validation, not a crash."""
+    result = _load_project_file(tmp_path, "agents = 1\n")
+    assert not result.instance.is_valid()
+    assert "agents" in result.instance.errors

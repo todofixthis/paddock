@@ -7,6 +7,7 @@ import filters as f
 from class_registry.base import BaseRegistry
 
 from paddock.agents import agent_registry
+from paddock.agents.servers import server_registry
 from paddock.cli import ParsedArgs
 from paddock.config.agent_choice import UNNAMED_SERVER
 from paddock.config.allowlist import Allowlist
@@ -57,6 +58,7 @@ class ConfigLoader:
         user_config_path: Path | None = None,
         *,
         agents: BaseRegistry = agent_registry,
+        servers: BaseRegistry = server_registry,
     ) -> None:
         """Initialises the loader with an optional user config path override.
 
@@ -66,9 +68,12 @@ class ConfigLoader:
                 ``~/.config/paddock/config.toml``). Useful for testing.
             agents: The registry of clients, consulted for a client's default
                 server and for which ``agents`` entries are installed.
+            servers: The registry of servers, consulted for which ``agents``
+                entries' server settings are installed.
         """
         self._user_path_override = user_config_path
         self._agents = agents
+        self._servers = servers
 
     def resolve(
         self,
@@ -166,23 +171,37 @@ class ConfigLoader:
         return config.get("agents", {}).get(agent_key, {}).get("extra_args", [])
 
     def _warn_unknown_agent_settings(self, config: dict) -> None:
-        """Warn about ``agents`` entries that name no installed agent.
+        """Warn about ``agents`` settings that name nothing installed.
 
-        A warning, not an error, so a config shared between machines still
-        loads where a plugin's agent is missing (ADR 017).
+        ``extra_args`` needs a client of that name and ``server`` a server of
+        that name (ADR 018). A warning, not an error, so a config shared
+        between machines still loads where a plugin is missing (ADR 017).
 
         Args:
             config: The merged config.
         """
-        for name in sorted(config.get("agents", {})):
-            if name not in self._agents:
+        agents = config.get("agents", {})
+        for name in sorted(agents):
+            if "extra_args" in agents[name] and name not in self._agents:
                 logger.warning(
                     '[agents.%s] No agent named "%s" is installed, so its '
                     "settings are ignored; installed agents: %s",
                     name,
                     name,
-                    ", ".join(sorted(str(key) for key in self._agents)),
+                    self._installed(self._agents),
                 )
+            if "server" in agents[name] and name not in self._servers:
+                logger.warning(
+                    '[agents.%s.server] No server named "%s" is installed, so '
+                    "its settings are ignored; installed servers: %s",
+                    name,
+                    name,
+                    self._installed(self._servers),
+                )
+
+    def _installed(self, registry: BaseRegistry) -> str:
+        """List a registry's keys for a message, or ``none`` when empty."""
+        return ", ".join(sorted(str(key) for key in registry)) or "none"
 
     def _build_context(
         self,
@@ -281,6 +300,14 @@ class ConfigLoader:
             data = (
                 dict(result.instance.cleaned_data) if result.instance.is_valid() else {}
             )
+            if allowlist.is_enabled(key):
+                for path in result.discarded:
+                    logger.warning(
+                        "%s: ignored %s — server settings are read only from "
+                        "the global section of your user config",
+                        key,
+                        path,
+                    )
             kept, dropped = allowlist.filter_with_report(data, key)
             sanitised[key] = kept
             if dropped:
