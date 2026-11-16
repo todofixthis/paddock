@@ -5,9 +5,12 @@ import subprocess
 import sys
 from pathlib import Path
 
-from class_registry import RegistryKeyError
+from class_registry.base import BaseRegistry
 
-from paddock.agents import BaseAgent, agent_registry, installed_agent_keys
+from paddock.agents import BaseAgent, agent_registry
+from paddock.agents.errors import AgentError
+from paddock.agents.pairing import AgentPairing
+from paddock.agents.servers import server_registry
 from paddock.cli import parse_args
 from paddock.config.errors import ConfigError, PaddockEnvironmentError
 from paddock.config.loader import ConfigLoader
@@ -59,27 +62,45 @@ def _resolve_workdir(raw: str | None) -> Path:
     return workdir
 
 
-def _resolve_agent(agent_key: str) -> BaseAgent:
-    """Look up the configured agent, or exit 1 naming the installed agents.
+def _resolve_pairing(
+    agent_key: str,
+    server_key: str | None,
+    *,
+    agents: BaseRegistry = agent_registry,
+    servers: BaseRegistry = server_registry,
+) -> AgentPairing:
+    """Resolve the chosen client and server, or exit 1 saying why not.
 
     Resolved before the ``.paddock`` directory is created, so a typo in an
     agent key never leaves the filesystem to unwind.
 
     Args:
-        agent_key: The chosen agent's registry key, from the resolved config.
+        agent_key: The chosen client's registry key, from the resolved config.
+        server_key: The chosen server's registry key, or ``None`` for none.
+        agents: The registry of clients.
+        servers: The registry of servers.
 
     Returns:
-        The registered agent instance.
+        The pairing, with both halves instantiated.
     """
     try:
-        return agent_registry.get(agent_key)
-    except RegistryKeyError:
+        pairing = AgentPairing.resolve(
+            agent_key, server_key, agents=agents, servers=servers
+        )
+    except AgentError as e:
+        print(str(e), file=sys.stderr)
+        sys.exit(1)
+
+    # Nothing starts a server yet: the managed container of ADR 019 replaces
+    # this stop.
+    if pairing.server is not None:
         print(
-            f'[agent] Unknown agent "{agent_key}"; '
-            f"installed agents: {', '.join(installed_agent_keys())}",
+            f'[agent.server] Server "{server_key}" cannot be started by this '
+            "version of paddock",
             file=sys.stderr,
         )
         sys.exit(1)
+    return pairing
 
 
 def _prepare_image(config: dict, agent: BaseAgent) -> None:
@@ -118,7 +139,7 @@ def run(argv: list[str] | None = None) -> None:
         sys.exit(1)
 
     config = resolved.config
-    agent = _resolve_agent(resolved.agent_key)
+    agent = _resolve_pairing(resolved.agent_key, resolved.server_key).client
 
     try:
         with ProjectDirManager(

@@ -4,8 +4,11 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from class_registry import ClassRegistry
 
-from paddock.__main__ import run
+from paddock.__main__ import _resolve_pairing, run
+from paddock.agents.servers import BaseServer, ServerConnection
+from paddock.agents.shell import ShellAgent
 
 
 def _write_user_config(home: Path, contents: str) -> None:
@@ -579,3 +582,72 @@ def test_cli_client_override_runs_that_client(
     monkeypatch.chdir(minimal_config)
     argv = _dry_run_argv(capsys, mocker, ["--agent-client=false"])
     assert argv[-2:] == ["ubuntu:22.04", "/bin/bash"]
+
+
+_UNKNOWN_SERVER = '[agent.server] Unknown server "nope"; installed servers: none'
+
+
+def test_unknown_server_exits_one(capsys, tmp_path: Path, monkeypatch):
+    """An uninstalled server stops the run before .paddock is created.
+
+    The project file is enabled, as for the unknown-agent test: .paddock is
+    only ever created then, so without the grant the last check could not
+    fail.
+    """
+    _write_user_config(
+        tmp_path,
+        'image = "ubuntu:22.04"\nagent = { server = "nope" }\n'
+        "[config.allowlist]\nproject_toml = true\n",
+    )
+    monkeypatch.chdir(tmp_path)
+    with pytest.raises(SystemExit) as exc:
+        run(["--dry-run"])
+    assert exc.value.code == 1
+    assert capsys.readouterr().err.strip() == _UNKNOWN_SERVER
+    assert not (tmp_path / ".paddock").exists()
+
+
+def test_cli_server_override_is_checked(capsys, minimal_config: Path, monkeypatch):
+    """--agent-server names a server that must be installed."""
+    monkeypatch.chdir(minimal_config)
+    with pytest.raises(SystemExit) as exc:
+        run(["--dry-run", "--agent-server=nope"])
+    assert exc.value.code == 1
+    assert capsys.readouterr().err.strip() == _UNKNOWN_SERVER
+
+
+def test_server_false_runs_without_one(capsys, tmp_path: Path, mocker, monkeypatch):
+    """``server = false`` is a valid choice of no server."""
+    _write_user_config(
+        tmp_path,
+        'image = "ubuntu:22.04"\nagent = { client = "claude", server = false }\n',
+    )
+    monkeypatch.chdir(tmp_path)
+    argv = _dry_run_argv(capsys, mocker, [])
+    assert argv[-2:] == ["ubuntu:22.04", "claude"]
+
+
+def test_installed_server_cannot_start_yet(capsys):
+    """Until servers can be started, choosing an installed one stops the run."""
+
+    class Srv(BaseServer):
+        SERVER_KEY = "srv"
+        PROTOCOL = "p"
+        CONTAINER_PORT = 1
+
+        def get_command(self) -> list[str]:
+            return ["srv"]
+
+        def is_ready(self, connection: ServerConnection) -> bool:
+            return True
+
+    agents: ClassRegistry = ClassRegistry(attr_name="AGENT_KEY")
+    agents.register(ShellAgent)
+    servers: ClassRegistry = ClassRegistry(attr_name="SERVER_KEY")
+    servers.register(Srv)
+    with pytest.raises(SystemExit) as exc:
+        _resolve_pairing("false", "srv", agents=agents, servers=servers)
+    assert exc.value.code == 1
+    assert capsys.readouterr().err.strip() == (
+        '[agent.server] Server "srv" cannot be started by this version of paddock'
+    )
