@@ -301,13 +301,16 @@ class ManagedContainer:
         return json.loads(result.stdout)[0]
 
     def _could_not_start(self, stderr: str) -> PaddockEnvironmentError:
-        """Build the error for a Docker failure, from its first line.
+        """Build the error for a Docker failure, from the line giving the reason.
 
         Args:
             stderr: Docker's standard error.
         """
         lines = [line.strip() for line in stderr.splitlines() if line.strip()]
-        reason = lines[0] if lines else "docker gave no reason"
+        # A pull notice or progress can precede the reason, which Docker
+        # prefixes with its own name.
+        reasons = [line for line in lines if line.startswith("docker: ")] or lines
+        reason = reasons[0] if reasons else "docker gave no reason"
         return PaddockEnvironmentError(
             f'[docker] Could not start "{self._spec.name}": {reason}'
         )

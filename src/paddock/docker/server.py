@@ -259,10 +259,11 @@ class ServerLauncher:
         Raises:
             PaddockEnvironmentError: If the image or the container failed.
         """
-        if status.container_id is not None:
-            container.remove_stopped(status.container_id)
+        # The image first: if it fails, a stopped container keeps its logs.
         if self._settings.build is not None:
             self._prepare_image(self._settings.build)
+        if status.container_id is not None:
+            container.remove_stopped(status.container_id)
         return container.start()
 
     def _prepare_image(self, build: dict) -> None:

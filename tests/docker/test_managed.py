@@ -279,3 +279,19 @@ def test_volumes_round_trip_through_labels(docker):
 
 def test_volumes_from_labels_without_the_label_is_empty():
     assert ManagedContainer.volumes_from_labels({}) == []
+
+
+def test_start_reports_the_daemons_error_not_the_pull_preamble(docker):
+    """A missing local image puts a notice ahead of the reason on stderr."""
+    docker.run_returncode = 125
+    docker.run_stderr = (
+        "Unable to find image 'x:1' locally\n"
+        "docker: Error response from daemon: pull access denied for x\n"
+        "Run 'docker run --help' for more information\n"
+    )
+    with pytest.raises(PaddockEnvironmentError) as exc:
+        ManagedContainer(_spec()).start()
+    assert str(exc.value) == (
+        '[docker] Could not start "n": docker: Error response from daemon: '
+        "pull access denied for x"
+    )

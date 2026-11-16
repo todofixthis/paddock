@@ -537,3 +537,25 @@ def test_dry_run_mints_no_secret(docker, mocker):
     mint = mocker.patch("paddock.docker.server.secrets.token_urlsafe")
     _Run().launch(dry_run=True)
     mint.assert_not_called()
+
+
+def test_a_failed_image_keeps_the_stopped_container(docker, mocker):
+    """The stopped container's logs outlive a build that fails."""
+    docker.container = docker.container_entry(status="exited", container_id="dead1")
+    _, source = _image_source(mocker)
+    source.refresh.side_effect = subprocess.CalledProcessError(3, ["docker", "build"])
+    assert "Could not build or pull" in _Run(build=BUILD).error()
+    assert docker.ran("docker", "rm") == []
+
+
+def test_image_is_prepared_before_a_stopped_container_is_removed(docker, mocker):
+    docker.container = docker.container_entry(status="exited", container_id="dead1")
+    _, source = _image_source(mocker)
+
+    def refreshed(image: str) -> bool:
+        assert docker.ran("docker", "rm") == []
+        return True
+
+    source.refresh.side_effect = refreshed
+    assert _Run(build=BUILD).launch().created is True
+    assert docker.ran("docker", "rm") == [["docker", "rm", "dead1"]]
