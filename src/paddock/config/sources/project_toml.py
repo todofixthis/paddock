@@ -22,7 +22,10 @@ class ProjectTomlSource(ConfigSource):
     WEIGHT = 10
     ALLOWLIST_DEFAULT = False
 
-    _SERVER_SETTINGS_REASON = (
+    # Why each kind of key is discarded (ADR 020), completing the loader's
+    # "ignored <path> — <reason>" warning.
+    USER_ONLY_REASON = "only your user config may set it"
+    SERVER_SETTINGS_REASON = (
         "server settings are read only from the global section of your user config"
     )
 
@@ -46,8 +49,31 @@ class ProjectTomlSource(ConfigSource):
             return LoadResult(f.FilterRunner(f.TomlDecode | schema, text), {})
 
         data = dict(decoded.cleaned_data)
-        discarded = self._discard_server_settings(data)
+        discarded = [
+            *self._discard_user_only_sections(data),
+            *self._discard_server_settings(data),
+        ]
         return LoadResult(f.FilterRunner(schema, data), {}, discarded)
+
+    def _discard_user_only_sections(self, data: dict) -> list[Discarded]:
+        """Remove the sections only the user config may hold (ADR 020).
+
+        A committed file cannot grant itself access or configure other
+        projects, and must not be able to stop a run by trying, so ``config``
+        and ``projects`` go before validation, whatever they contain.
+
+        Args:
+            data: The decoded project file, changed in place.
+
+        Returns:
+            Each section removed, and why.
+        """
+        discarded: list[Discarded] = []
+        for key in sorted(self._META_SECTION_KEYS):
+            if key in data:
+                del data[key]
+                discarded.append(Discarded(key, self.USER_ONLY_REASON))
+        return discarded
 
     def _discard_server_settings(self, data: dict) -> list[Discarded]:
         """Remove every ``agents.<name>.server`` from decoded project config.
@@ -74,7 +100,7 @@ class ProjectTomlSource(ConfigSource):
             if isinstance(settings, dict) and "server" in settings:
                 settings = {k: v for k, v in settings.items() if k != "server"}
                 discarded.append(
-                    Discarded(f"agents.{name}.server", self._SERVER_SETTINGS_REASON)
+                    Discarded(f"agents.{name}.server", self.SERVER_SETTINGS_REASON)
                 )
             kept[name] = settings
         data["agents"] = kept

@@ -1217,3 +1217,39 @@ def test_server_settings_for_an_installed_server_do_not_warn(
             _empty_parsed(), workdir=tmp_path, environ={}
         )
     assert [rec.getMessage() for rec in caplog.records] == []
+
+
+def test_project_file_cannot_grant_itself_access(tmp_path: Path, monkeypatch, caplog):
+    """A project file's own allowlist is ignored with a warning (ADR 020).
+
+    The file is granted only volumes; its [config.allowlist] would grant
+    everything, and its image must still be dropped.
+    """
+    _setup_home(
+        tmp_path,
+        monkeypatch,
+        'image = "user"\n[config.allowlist]\nproject_toml = ["volumes"]\n',
+    )
+    _write_project_file(
+        tmp_path, 'image = "project"\n[config.allowlist]\nproject_toml = true\n'
+    )
+    with caplog.at_level(logging.WARNING, logger="paddock"):
+        r = ConfigLoader().resolve(_empty_parsed(), workdir=tmp_path, environ={})
+    assert r.config["image"] == "user"
+    assert [rec.getMessage() for rec in caplog.records] == [
+        "project_toml: ignored config — only your user config may set it",
+        "project_toml: dropped non-allowlisted keys image — add them to "
+        "[config.allowlist].project_toml to keep them",
+    ]
+
+
+def test_project_file_cannot_unlock_the_project_dir(tmp_path: Path, monkeypatch):
+    """config.project_dir_readonly in a project file changes nothing."""
+    _setup_home(
+        tmp_path,
+        monkeypatch,
+        'image = "i"\n[config.allowlist]\nproject_toml = true\n',
+    )
+    _write_project_file(tmp_path, "[config]\nproject_dir_readonly = false\n")
+    r = ConfigLoader().resolve(_empty_parsed(), workdir=tmp_path, environ={})
+    assert r.project_dir_readonly is True
