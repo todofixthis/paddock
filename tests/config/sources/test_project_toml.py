@@ -6,9 +6,10 @@ from paddock.config.context import ConfigContext
 from paddock.config.sources.base import Discarded
 from paddock.config.sources.project_toml import ProjectTomlSource
 
-_SERVER_REASON = (
-    "server settings are read only from the global section of your user config"
-)
+# The reasons come from the source: the loader tests pin their wording, as part
+# of the whole warning a user reads.
+_SERVER_REASON = ProjectTomlSource.SERVER_SETTINGS_REASON
+_USER_ONLY_REASON = ProjectTomlSource.USER_ONLY_REASON
 
 
 def _ctx(tmp_path) -> ConfigContext:
@@ -113,9 +114,6 @@ def test_scalar_server_setting_is_discarded_too(tmp_path: Path):
     result = _load_project_file(tmp_path, "[agents.y]\nserver = 1\n")
     assert result.instance.is_valid(), result.instance.errors
     assert result.discarded == [Discarded("agents.y.server", _SERVER_REASON)]
-
-
-_USER_ONLY_REASON = "only your user config may set it"
 
 
 def test_config_is_discarded_before_validation(tmp_path: Path):

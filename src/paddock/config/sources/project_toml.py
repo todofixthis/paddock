@@ -22,8 +22,10 @@ class ProjectTomlSource(ConfigSource):
     WEIGHT = 10
     ALLOWLIST_DEFAULT = False
 
-    _USER_ONLY_REASON = "only your user config may set it"
-    _SERVER_SETTINGS_REASON = (
+    # Why each kind of key is discarded (ADR 020), completing the loader's
+    # "ignored <path> — <reason>" warning.
+    USER_ONLY_REASON = "only your user config may set it"
+    SERVER_SETTINGS_REASON = (
         "server settings are read only from the global section of your user config"
     )
 
@@ -70,7 +72,7 @@ class ProjectTomlSource(ConfigSource):
         for key in sorted(self._META_SECTION_KEYS):
             if key in data:
                 del data[key]
-                discarded.append(Discarded(key, self._USER_ONLY_REASON))
+                discarded.append(Discarded(key, self.USER_ONLY_REASON))
         return discarded
 
     def _discard_server_settings(self, data: dict) -> list[Discarded]:
@@ -98,7 +100,7 @@ class ProjectTomlSource(ConfigSource):
             if isinstance(settings, dict) and "server" in settings:
                 settings = {k: v for k, v in settings.items() if k != "server"}
                 discarded.append(
-                    Discarded(f"agents.{name}.server", self._SERVER_SETTINGS_REASON)
+                    Discarded(f"agents.{name}.server", self.SERVER_SETTINGS_REASON)
                 )
             kept[name] = settings
         data["agents"] = kept
