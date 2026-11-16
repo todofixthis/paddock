@@ -69,7 +69,8 @@ Docker facts below were checked against Docker 29.9.2 on 2026-11-16.
   reading the container's status first and then `BaseServer.is_ready(connection)`,
   sleeping half a second after a poll that is not ready. A container found stopped
   stops the run at once; 60 polls without readiness stop it too. Both point to
-  `docker logs paddock-server-<key>` and leave the container.
+  `docker logs paddock-server-<key>` and leave the container, except one still
+  starting when the polls run out, which is removed (see above).
 - **Image.** Built or pulled under the server's `build` settings only when the
   container is about to be created. Docker's own output is the report; a failure
   stops the run.
@@ -427,8 +428,8 @@ Docker facts below were checked against Docker 29.9.2 on 2026-11-16.
   ```
 - `workdir` is passed only for a paired client and a server with
   `REQUIRES_WORKDIR_MOUNT`; `None` skips the workdir check. The caller decides.
-- `run_argv` is the `docker run` line where the container was, or under `dry_run`
-  would be, created; `None` where a running server is used.
+- `run_argv` is the `docker run` line where this run created the container, or
+  under `dry_run` would; `None` otherwise.
 - `connection.host_url` is `http://127.0.0.1:<published port>` and
   `connection.container_url` is `http://paddock-server-<key>:<CONTAINER_PORT>`.
   Under `dry_run` with no running server, `host_url` uses the configured port, or
@@ -478,7 +479,9 @@ Docker facts below were checked against Docker 29.9.2 on 2026-11-16.
     `repr(result)`.
   - `test_running_server_is_reused`: no `docker run`; `created is False`;
     `run_argv is None`; `drifted is False`; the secret is the one in the stubbed
-    inspect environment; `is_ready` is called.
+    inspect environment; `is_ready` is called. Take the stub's `paddock.spec-hash`
+    from the `run_argv` of a creating launch with the same fixtures, not from a
+    spec rebuilt by hand.
   - `test_running_server_without_a_secret_is_an_error`: exact text.
   - `test_drift_is_reported_not_acted_on`: a running server whose
     `paddock.spec-hash` differs gives `drifted is True`, and no `docker rm` or
@@ -507,6 +510,10 @@ Docker facts below were checked against Docker 29.9.2 on 2026-11-16.
   - `test_exit_during_start_is_reported`: inspect showing the container stopped
     during polling raises the stopped text before `is_ready` is called again, and
     no `docker rm` is recorded.
+  - `test_unpublished_port_is_polled_again`: `docker port` reporting nothing once,
+    then a port, succeeds after one sleep.
+  - `test_a_container_that_vanishes_while_polling_is_reported`: inspect answering
+    missing during the loop raises the stopped text.
   - `test_stopped_before_the_port_is_read_is_reported`: `docker port` reporting no
     port with the container stopped raises the stopped text.
   - `test_image_is_prepared_only_on_create`: with `settings.build` set, the image
@@ -538,14 +545,15 @@ Docker facts below were checked against Docker 29.9.2 on 2026-11-16.
     no `docker run`, no `network create` and no image refresh.
   - `test_dry_run_creates_nothing`: only `docker container inspect` and
     `docker network inspect` are recorded; `run_argv` is set; `host_url` ends
-    `:<port>`; `secret == "<secret>"`; `sleep`, `is_ready` and the image source's
+    `:<port>`; `secret == "<secret>"`; `drifted is False`; `sleep`, `is_ready` and the image source's
     `refresh` are never called.
   - `test_dry_run_refuses_a_foreign_network`.
   - `test_dry_run_with_a_configured_port_shows_it`.
   - `test_dry_run_against_a_running_server_reads_it`: the real port and secret,
     `run_argv is None`, and neither `is_ready` nor `sleep` is called.
-  - `test_dry_run_against_a_stopped_server_removes_nothing`: `run_argv` is set and
-    no `docker rm` is recorded.
+  - `test_dry_run_against_a_stopped_server_removes_nothing`: with a stopped
+    container whose `paddock.spec-hash` differs, `run_argv` is set,
+    `drifted is False` and no `docker rm` is recorded.
   - `test_dry_run_against_a_starting_server_uses_placeholders`: `run_argv is None`,
     `secret == "<secret>"`.
 
@@ -559,16 +567,19 @@ Docker facts below were checked against Docker 29.9.2 on 2026-11-16.
   1. Read the container's status; refuse a foreign one.
   2. Build the spec. Its environment variable *names* must be the same whether or
      not a container will be created, or every reuse would read as drift: use the
-     minted secret when creating, and `get_env("<secret>")` plus `SECRET_ENV`
-     otherwise.
+     minted secret when the container is missing or stopped and this is not a dry
+     run, and `get_env("<secret>")` plus `SECRET_ENV` otherwise.
   3. Run the workdir check, against the label's mounts where the container is
      running or starting, else the spec's.
   4. Check the network.
-  5. Under `dry_run`, return now: a running server has its secret and published
-     port read once; a starting one, or none, gets the placeholders; `run_argv` is
+  5. Under `dry_run`, return now: a running server has its secret read once (none
+     raises the no-secret text) and its published port read once (none falls back
+     to the configured port, or `<port>`); a starting one, or none, gets the
+     placeholders; `run_argv` is
      set only where the container is missing or stopped. Nothing is removed.
   6. Where the container is missing or stopped: remove a stopped one, prepare the
-     image, then start. Running and starting containers skip all three.
+     image where `settings.build` is set, then start. Running and starting
+     containers skip all three.
   7. One loop of up to 60 polls does the waiting for every path. Each poll reads
      the status. Foreign raises the foreign-container text; stopped or missing
      raises the stopped text; starting sleeps. Running has its secret read (none
@@ -579,8 +590,11 @@ Docker facts below were checked against Docker 29.9.2 on 2026-11-16.
      observed ID and raise the never-started text; otherwise raise the not-ready
      text.
 
-  `created` is `True` only where this run's `start()` created the container, and
-  `drifted` is computed from the label only where it did not. The mount that covers
+  `created` is `True` only where this run's `start()` created the container.
+  `drifted` is computed only where the result uses a container this run did not
+  create (running or starting), from the labels of the status read by the poll, or
+  the dry-run read, that returns; it is `False` wherever `run_argv` is set or no
+  container exists. The mount that covers
   a path is the one with the longest container path that is the path itself or one
   of its parents. Do not assert exact counts of inspect calls in the tests:
   `start()` checks the network again.
