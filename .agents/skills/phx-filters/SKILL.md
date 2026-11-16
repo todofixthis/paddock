@@ -110,14 +110,15 @@ a list of strings. It applies Unicode normalisation, strips unprintable characte
 normalises line endings, which keeps a config file portable between systems.
 
 `f.Unicode` also coerces: `1` becomes `"1"`, `True` becomes `"1"`, `False` becomes
-`"0"`, and a table becomes its `repr`. Use it bare unless the value's specification
-says a non-string must be an error; then put `f.Type(str)` in front of it, as `agent`
-and `agents.<name>.extra_args` do. Never use `f.Type(str)` in place of `f.Unicode`.
+`"0"`, and a table becomes its `repr`. Where converting a non-string to a string is
+not appropriate, put `f.Type(str)` in front of it, as `agent` and
+`agents.<name>.extra_args` do; otherwise use it bare. `f.Type(str)` augments
+`f.Unicode` and never replaces it.
 
 ```python
 # The default
 f.Unicode | f.NotEmpty
-# A non-string must be an error
+# Converting a non-string is not appropriate
 f.Type(str) | f.Unicode | f.NotEmpty
 # A list of strings whose entries must not be coerced; without f.Array a bare
 # string would be split into characters
