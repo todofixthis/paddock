@@ -9,6 +9,7 @@ from class_registry import ClassRegistry
 from paddock.__main__ import _resolve_pairing, run
 from paddock.agents.servers import BaseServer, ServerConnection
 from paddock.agents.shell import ShellAgent
+from paddock.config.project_dir import ProjectDirManager
 
 
 def _write_user_config(home: Path, contents: str) -> None:
@@ -284,8 +285,14 @@ def test_help_flag(capsys):
     assert "usage" in captured.out.lower()
 
 
-def test_unknown_agent_exits_one(capsys, tmp_path: Path, monkeypatch):
-    """An unregistered agent key reports the installed agents and exits 1."""
+def test_unknown_agent_exits_one(capsys, tmp_path: Path, mocker, monkeypatch):
+    """An unregistered agent key reports the installed agents and exits 1.
+
+    The .paddock manager is never entered: checking that the directory is
+    absent afterwards would pass either way, since the manager removes one it
+    created.
+    """
+    entered = mocker.spy(ProjectDirManager, "__enter__")
     _write_user_config(
         tmp_path,
         'image = "ubuntu:22.04"\n[config.allowlist]\nproject_toml = true\n',
@@ -298,6 +305,7 @@ def test_unknown_agent_exits_one(capsys, tmp_path: Path, monkeypatch):
     assert captured.err.strip() == (
         '[agent] Unknown agent "bogus"; installed agents: claude, false'
     )
+    entered.assert_not_called()
     assert not (tmp_path / ".paddock").exists()
 
 
@@ -587,13 +595,14 @@ def test_cli_client_override_runs_that_client(
 _UNKNOWN_SERVER = '[agent.server] Unknown server "nope"; installed servers: none'
 
 
-def test_unknown_server_exits_one(capsys, tmp_path: Path, monkeypatch):
+def test_unknown_server_exits_one(capsys, tmp_path: Path, mocker, monkeypatch):
     """An uninstalled server stops the run before .paddock is created.
 
-    The project file is enabled, as for the unknown-agent test: .paddock is
-    only ever created then, so without the grant the last check could not
-    fail.
+    The .paddock manager is never entered: checking that the directory is
+    absent afterwards would pass either way, since the manager removes one it
+    created.
     """
+    entered = mocker.spy(ProjectDirManager, "__enter__")
     _write_user_config(
         tmp_path,
         'image = "ubuntu:22.04"\nagent = { server = "nope" }\n'
@@ -604,7 +613,7 @@ def test_unknown_server_exits_one(capsys, tmp_path: Path, monkeypatch):
         run(["--dry-run"])
     assert exc.value.code == 1
     assert capsys.readouterr().err.strip() == _UNKNOWN_SERVER
-    assert not (tmp_path / ".paddock").exists()
+    entered.assert_not_called()
 
 
 def test_cli_server_override_is_checked(capsys, minimal_config: Path, monkeypatch):

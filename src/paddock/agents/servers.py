@@ -9,11 +9,6 @@ from paddock.config.filters import VolumeSpec
 server_registry: EntryPointClassRegistry = EntryPointClassRegistry("paddock.servers")
 
 
-def installed_server_keys() -> list[str]:
-    """List the registry keys of the installed servers, sorted, for messages."""
-    return sorted(str(key) for key in server_registry)
-
-
 @dataclass(frozen=True)
 class ServerConnection:
     """What a running server hands a client so it can connect."""

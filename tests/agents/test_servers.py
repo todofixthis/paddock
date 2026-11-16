@@ -2,11 +2,7 @@ import dataclasses
 
 import pytest
 
-from paddock.agents.servers import (
-    BaseServer,
-    ServerConnection,
-    installed_server_keys,
-)
+from paddock.agents.servers import BaseServer, ServerConnection, server_registry
 
 
 class MinimalServer(BaseServer):
@@ -28,7 +24,7 @@ def test_server_registry_is_empty_without_plugins() -> None:
 
     This changes when the first bundled server is registered.
     """
-    assert installed_server_keys() == []
+    assert list(server_registry) == []
 
 
 def test_base_server_defaults() -> None:

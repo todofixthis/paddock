@@ -1201,3 +1201,19 @@ def test_matching_projects_entry_with_server_settings_stops_the_run(
     )
     with pytest.raises(ExceptionGroup):
         ConfigLoader().resolve(_empty_parsed(), workdir=tmp_path, environ={})
+
+
+def test_server_settings_for_an_installed_server_do_not_warn(
+    tmp_path: Path, monkeypatch, caplog
+):
+    """A name holding only server settings needs no client of that name."""
+    agents: ClassRegistry = ClassRegistry(attr_name="AGENT_KEY")
+    agents.register(_FakeClaude)
+    servers: ClassRegistry = ClassRegistry(attr_name="SERVER_KEY")
+    servers.register(_FakeServerY)
+    _setup_home(tmp_path, monkeypatch, 'image = "i"\n[agents.y.server]\nimage = "i"\n')
+    with caplog.at_level(logging.WARNING, logger="paddock"):
+        ConfigLoader(agents=agents, servers=servers).resolve(
+            _empty_parsed(), workdir=tmp_path, environ={}
+        )
+    assert [rec.getMessage() for rec in caplog.records] == []

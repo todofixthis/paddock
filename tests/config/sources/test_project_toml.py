@@ -101,3 +101,10 @@ def test_non_table_agents_is_left_for_validation(tmp_path: Path):
     result = _load_project_file(tmp_path, "agents = 1\n")
     assert not result.instance.is_valid()
     assert "agents" in result.instance.errors
+
+
+def test_scalar_server_setting_is_discarded_too(tmp_path: Path):
+    """A ``server`` that is not even a table is discarded, not validated."""
+    result = _load_project_file(tmp_path, "[agents.y]\nserver = 1\n")
+    assert result.instance.is_valid(), result.instance.errors
+    assert result.discarded == ["agents.y.server"]

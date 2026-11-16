@@ -134,3 +134,13 @@ def test_protocol_client_needs_a_matching_server():
         '[agent] Agent "paired" needs a server that speaks "p", but server '
         '"other" speaks "q"'
     )
+
+
+def test_mismatched_protocols_are_not_paired():
+    """is_paired compares the protocols, whatever resolve would allow."""
+    assert AgentPairing(client=_Paired(), server=_Other()).is_paired is False
+
+
+def test_protocol_client_without_a_server_is_not_paired():
+    """is_paired needs a server, whatever resolve would allow."""
+    assert AgentPairing(client=_Paired(), server=None).is_paired is False
