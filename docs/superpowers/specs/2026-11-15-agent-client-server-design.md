@@ -347,11 +347,16 @@ If the spike shows the shape is wrong, it comes back as a design change, not a p
 
 ## Delivery
 
-Three pull requests, each with its own plan:
+Four pull requests, each with its own plan. The second was split in two once its
+size was clear, to keep the config rules apart from the Docker lifecycle:
 
-1. **`agents.<name>` and `extra_args`.** No server concepts.
-2. **Client/server architecture and OpenCode.**
-3. **Omnigent**, after the spike.
+1. **`agents.<name>` and `extra_args`.** No server concepts. Merged.
+2. **Agent halves and pairing.** `agent` as a client and a server half, the server
+   registry, server settings and the pairing check. No Docker changes; a run that
+   chooses a server stops until the next one lands.
+3. **The server container and OpenCode.** `ManagedContainer`, the OpenCode client
+   and server, the bundled Dockerfile case and the user docs.
+4. **Omnigent**, after the spike.
 
 End-to-end checks use the `e2e-testing` skill. In a cloud session only
 `mcr.microsoft.com` images pull, so the OpenCode check builds its server image from
