@@ -63,6 +63,8 @@ class BaseAgent(ABC):
         Arguments that point this client at its paired server.
 
         Placed after the command and before any configured ``extra_args``.
+        They are part of the command paddock prints, so never put
+        ``connection.secret`` here: pass it through :meth:`get_server_env`.
 
         Args:
             connection: The paired server's address and secret.
