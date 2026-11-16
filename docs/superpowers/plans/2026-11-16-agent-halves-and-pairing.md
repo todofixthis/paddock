@@ -43,11 +43,13 @@ separate worktree exists.
   before `.paddock` is created.
 - `agents.<name>.server` (keys `build`, `image`, `port`, `volumes`) is valid only in
   the user config's global section. In a `[projects]` entry it is a validation
-  error. In the project file it is discarded before validation with a warning of its
-  own, whatever the allowlist grants. Its host paths must be absolute after `~`
+  error. In the project file it is discarded before validation, whatever the
+  allowlist grants, with a warning of its own when that file is enabled; a disabled
+  project file is ignored whole and draws none. Its host paths must be absolute after `~`
   expansion; nothing is looked up on disk in this plan.
 - `extra_args` needs a client named `<name>`; `server` needs a server named
-  `<name>`; either without one draws a warning and is ignored (ADR 017).
+  `<name>`; either without one draws a warning and is ignored (ADR 017). An empty
+  list of installed servers reads `none` in every message.
 - Strings go through `f.Unicode`; `f.Type(str)` goes in front where a non-string
   must be an error (the `phx-filters` skill).
 - Registries are injected, never patched: anything that consults `agent_registry`
@@ -65,7 +67,8 @@ separate worktree exists.
 2. A string above a table (`[projects]` entry `agent = "claude"` over user-level
    `agent = { server = "srv" }`): the server is reset, not kept. Task 2.
 3. `PADDOCK_AGENT` with `PADDOCK_AGENT_SERVER`: both are honoured; today's
-   name-to-path mapping would lose the first. Task 2.
+   name-to-path mapping would lose the first. Task 2
+   (`test_env.py::test_agent_whole_then_half`).
 4. A typo inside the table (`agent = { clinet = "x" }`): an error at `agent.clinet`,
    not a silent default. Task 2.
 5. A project file holding `[agents.x.server]`, even a malformed one: the run goes
@@ -136,8 +139,9 @@ separate worktree exists.
 
 - [ ] **Step 2: Run them and confirm they fail**
 
-  Run: `uv run pytest tests/agents -q`
-  Expected: the new tests FAIL (missing attributes, missing module).
+  Run: `uv run pytest tests/agents -q --continue-on-collection-errors`
+  Expected: `test_servers.py` errors at collection (no such module) and the
+  attribute tests FAIL.
 
 - [ ] **Step 3: Implement** the interfaces above. Each method and class gets a
   docstring; `BaseServer`'s class docstring cites ADR 018.
@@ -161,8 +165,19 @@ separate worktree exists.
   `src/paddock/config/sources/cli.py`, `src/paddock/config/sources/env.py`,
   `src/paddock/cli.py`, `src/paddock/__main__.py`
 - Test: `tests/config/test_agent_choice.py`, `tests/config/test_filters.py`,
-  `tests/config/test_loader.py`, `tests/config/sources/test_cli.py`,
-  `tests/config/sources/test_env.py`, `tests/test_cli.py`, `tests/test_main.py`
+  `tests/config/test_loader.py`, `tests/config/test_schema.py`,
+  `tests/config/test_context.py`, every file under `tests/config/sources/`,
+  `tests/test_cli.py`, `tests/test_main.py`
+- Eight test helpers build `ParsedArgs` with every field (`tests/config/`
+  `test_loader.py`, `test_context.py`, and `sources/test_base.py`, `test_cli.py`,
+  `test_env.py`, `test_project_overrides.py`, `test_project_toml.py`,
+  `test_user.py`); each gains `agent_client=None, agent_server=None`.
+- Existing tests that assert the scalar `agent` and must assert the full table
+  instead: `test_filters.py::test_agent_string`, `test_agent_false_string`,
+  `test_agent_false_bool`, `test_agent_table_rejected`;
+  `test_loader.py::test_apply_defaults`; `test_schema.py::test_valid_minimal`,
+  `test_agent_false`; `sources/test_user.py::test_load_strips_projects_and_config`;
+  `sources/test_project_toml.py::test_load_returns_validated_config`.
 
 **Interfaces:**
 - Consumes: `BaseAgent.DEFAULT_SERVER` from Task 1.
@@ -203,23 +218,30 @@ separate worktree exists.
     `{"server": "srv"}`; `from_parts(None, server=False)` is `{"server": False}`.
   - `test_nothing_given_is_none`: `from_parts(None)` is `None`.
 
-  `tests/config/test_filters.py`, replacing the existing `Agent` tests whose
-  expected values change (`test_agent_string`, `test_agent_false_string`,
-  `test_agent_false_bool`):
-  - `"claude"` cleans to `{"client": "claude", "server": UNNAMED_SERVER}`; `False`
-    and `"false"` to `{"client": False, "server": UNNAMED_SERVER}`.
-  - `{"client": "x"}` cleans to itself; `{"server": "false"}` to
-    `{"server": False}`; `{"client": "false"}` to `{"client": False}`.
+  `tests/config/test_filters.py`, rewriting the four existing `Agent` tests named
+  above and adding:
+  - `test_agent_string`: `"claude"` cleans to
+    `{"client": "claude", "server": UNNAMED_SERVER}`.
+  - `test_agent_false_bool` and `test_agent_false_string`: `False` and `"false"`
+    clean to `{"client": False, "server": UNNAMED_SERVER}`.
+  - `test_agent_table_names_only_its_halves`: `{"client": "x"}` cleans to itself;
+    `{"server": "false"}` to `{"server": False}`; `{"client": "false"}` to
+    `{"client": False}`.
   - `test_agent_is_idempotent`: applying `Agent` to each cleaned value above returns
     it unchanged.
   - `test_agent_rejects_an_unknown_half`: `{"clinet": "x"}` gives
     `{"clinet": [f.FilterMapper.CODE_EXTRA_KEY]}`.
+  - `test_agent_table_rejected`, kept for `[agent.claude]` written for
+    `[agents.claude]`: `{"claude": {}}` gives
+    `{"claude": [f.FilterMapper.CODE_EXTRA_KEY]}`.
   - `test_agent_rejects_a_non_string_half`: `{"client": 1}` gives
     `{"client": [f.Type.CODE_WRONG_TYPE]}`; `{"client": ""}` gives
-    `{"client": [f.NotEmpty.CODE_EMPTY]}`; `{"server": True}` is invalid at
-    `server`.
-  - Keep `test_agent_true_rejected`; change `test_agent_table_rejected` to
-    `test_agent_rejects_a_list`: `["claude"]` gives `[f.Type.CODE_WRONG_TYPE]`.
+    `{"client": [f.NotEmpty.CODE_EMPTY]}`; `{"server": True}` gives
+    `{"server": [AgentHalf.CODE_INVALID]}`.
+  - `test_agent_rejects_a_list`: `["claude"]` gives `[f.Type.CODE_WRONG_TYPE]`.
+  - Keep `test_agent_true_rejected`.
+  - `test_agent_half_pass_none`: `AgentHalf` passes `None` through, as the
+    `phx-filters` skill requires of every custom filter's first test.
 
   `tests/config/test_loader.py`. Define two fakes at module level, a client
   `FakePaired` (`AGENT_KEY = "paired"`, `DEFAULT_SERVER = "srv"`) and a plain
@@ -253,18 +275,25 @@ separate worktree exists.
     the warning names `agent` and `server_key is None`.
   Update the existing loader tests that read `config["agent"]` to the table form.
 
-  `tests/test_cli.py`: `--agent-client=x` and `--agent-server=y` populate
-  `ParsedArgs.agent_client` and `agent_server`; both default to `None`;
-  `--agent-server=false` is kept as the string `"false"` for the source to map.
+  `tests/test_cli.py`:
+  - `test_agent_half_flags_populate_parsed_args`: `--agent-client=x` and
+    `--agent-server=y` populate `ParsedArgs.agent_client` and `agent_server`; both
+    default to `None`.
+  - `test_agent_half_flags_accept_the_space_form`:
+    `["--agent-client", "x", "--agent-server", "y"]` gives the same, with an empty
+    `command`.
+  - `test_agent_server_false_is_kept_as_written`: `--agent-server=false` is the
+    string `"false"`, for the source to map.
 
-  `tests/config/sources/test_cli.py` and `test_env.py`, one pair each:
-  - whole plus a half: `--agent=claude --agent-server=srv` /
+  `tests/config/sources/test_cli.py` and `test_env.py`, the same three in each,
+  from flags in one and variables in the other:
+  - `test_agent_whole_then_half`: `--agent=claude --agent-server=srv` /
     `PADDOCK_AGENT=claude PADDOCK_AGENT_SERVER=srv` clean to
     `agent == {"client": "claude", "server": "srv"}`.
-  - a half alone: `--agent-client=x` / `PADDOCK_AGENT_CLIENT=x` clean to
-    `agent == {"client": "x"}`.
-  - `--agent-server=false` / `PADDOCK_AGENT_SERVER=false` clean to
-    `agent == {"server": False}`.
+  - `test_agent_half_alone`: `--agent-client=x` / `PADDOCK_AGENT_CLIENT=x` clean
+    to `agent == {"client": "x"}`.
+  - `test_agent_server_false`: `--agent-server=false` /
+    `PADDOCK_AGENT_SERVER=false` clean to `agent == {"server": False}`.
 
   `tests/test_main.py`: update assertions on the `Agent:` log line if any, and add
   `test_cli_client_override_runs_that_client`: user `agent = "claude"`,
@@ -272,10 +301,10 @@ separate worktree exists.
 
 - [ ] **Step 2: Run them and confirm they fail**
 
-  Run: `uv run pytest tests/config tests/test_cli.py tests/test_main.py -q`
-  Expected: the new and rewritten tests FAIL; note which existing tests now fail
-  only because they assert the old scalar form, and update those to the table form
-  as part of Step 3, never by loosening what they check.
+  Run: `uv run pytest tests/config tests/test_cli.py tests/test_main.py -q --continue-on-collection-errors`
+  Expected: `test_agent_choice.py` errors at collection and the new and rewritten
+  tests FAIL. Tests built on the `ParsedArgs` helpers fail too until Step 3 adds
+  the fields.
 
 - [ ] **Step 3: Implement**
 
@@ -288,11 +317,14 @@ separate worktree exists.
     `f.Type(str) | f.Unicode | f.NotEmpty`; `True` is `CODE_INVALID`. Extract the
     half as its own filter class, `AgentHalf`, since the environment schema needs
     it too.
-  - `cli.py`: `--agent-client` and `--agent-server`, plain strings like `--agent`.
+  - `cli.py`: `--agent-client` and `--agent-server`, plain strings like `--agent`,
+    each also added to `_KNOWN_VALUE_FLAGS` so the space-separated form is not read
+    as a replacement command.
   - `CliConfigSource`: `raw["agent"] = AgentChoice.from_parts(parsed.agent,
     client=parsed.agent_client, server=parsed.agent_server)` when not `None`.
-  - `EnvConfigSource`: `PADDOCK_AGENT_CLIENT` and `PADDOCK_AGENT_SERVER` in
-    `_env_schema` as `AgentHalf`; `load` takes the three agent variables out of the
+  - `EnvConfigSource`: all three agent variables (`PADDOCK_AGENT`,
+    `PADDOCK_AGENT_CLIENT`, `PADDOCK_AGENT_SERVER`) are `AgentHalf` in
+    `_env_schema`, not `Agent`, whose table output `from_parts` would nest; `load` takes the three agent variables out of the
     cleaned mapping, builds the table with `AgentChoice.from_parts`, and sets
     `shaped["agent"]` directly, so `_deep_set` never sees them.
   - `ConfigLoader._apply_defaults`: default the halves, not the value:
@@ -303,8 +335,8 @@ separate worktree exists.
     using `self._agents.get_class(agent_key)` only when `agent_key in self._agents`,
     else `False`. Set `server_key` to the server string or `None`. `_agent_key`
     now takes `config["agent"]["client"]`.
-  - `__main__.py`: log `Agent: <agent_key>` and, when `server_key` is set,
-    `Server: <server_key>`.
+  - `__main__.py`: log `Agent: <agent_key>`. No `Server:` line yet: every run with
+    a server stops before logging until the second half.
 
 - [ ] **Step 4: Run the checks**
 
@@ -324,8 +356,8 @@ separate worktree exists.
   `src/paddock/config/loader.py`, `src/paddock/config/sources/base.py`,
   `src/paddock/config/sources/project_toml.py`,
   `src/paddock/config/sources/user.py`
-- Test: `tests/config/test_schema.py`, `tests/config/test_loader.py`,
-  `tests/config/sources/test_project_toml.py`
+- Test: `tests/config/test_schema.py`, `tests/config/test_filters.py`,
+  `tests/config/test_loader.py`, `tests/config/sources/test_project_toml.py`
 
 **Interfaces:**
 - Consumes: `server_registry`, `installed_server_keys` from Task 1.
@@ -352,7 +384,16 @@ separate worktree exists.
     `{"/abs": VolumeSpec("/abs", "rw")}`.
   - `test_server_settings_reject_a_relative_volume`: `{"rel/dir": "/c:rw"}` is
     invalid at `agents.x.server.volumes.rel/dir`.
-  - `test_server_settings_accept_a_tilde_volume`: `{"~/Dev": "~/Dev:rw"}` is valid.
+  - `test_server_settings_accept_a_tilde_volume`: `{"~/Dev": "~/Dev:rw"}` is valid;
+    `{"~bob/Dev": "/c:rw"}` is not, `~` meaning home only as a whole first segment,
+    the rule `Filepath` applies.
+
+  `tests/config/test_filters.py`:
+  - `test_absolute_host_path_pass_none` and `test_server_volume_map_pass_none`.
+  - `test_absolute_host_path_keeps_the_value_as_written`: `"~/Dev"` and `"/abs"`
+    clean to themselves.
+  - `test_absolute_host_path_rejects_relative`: `"rel"` and `"~bob/x"` give
+    `[AbsoluteHostPath.CODE_NOT_ABSOLUTE]`.
   - `test_server_settings_reject_a_relative_build_path`: `dockerfile = "Dockerfile"`
     is invalid at `agents.x.server.build.dockerfile`; likewise `context`.
   - `test_server_settings_reject_a_bad_port`: `0`, `65536`, `"4096"` and `True` are
@@ -376,6 +417,8 @@ separate worktree exists.
     valid, `cleaned_data["agents"] == {"y": {"extra_args": ["-a"]}}`, and
     `result.discarded == ["agents.y.server"]`.
   - `test_nothing_discarded_without_server_settings`: `discarded == []`.
+  - `test_non_table_agents_is_left_for_validation`: a project file `agents = 1`
+    loads invalid with today's error at `agents`, and does not raise.
 
   `tests/config/test_loader.py`:
   - `test_project_file_server_settings_warn_and_are_ignored`: with
@@ -396,8 +439,16 @@ separate worktree exists.
     `[agents.c.server] No server named "c" is installed, so its settings are
     ignored; installed servers: y` and
     `[agents.y] No agent named "y" is installed, so its settings are ignored;
-    installed agents: c, claude, false`. Adjust the installed lists to the fakes
-    used; the existing `extra_args` message text does not change.
+    installed agents: c, claude, false`. Build the fakes so those lists are exact.
+    Names are reported in sorted order, and for one name `extra_args` before
+    `server`. The existing `extra_args` message text does not change.
+  - `test_server_settings_warning_reads_none_without_servers`: with the real, empty
+    server registry, user-level `[agents.claude.server]` `image = "i"` warns
+    `[agents.claude.server] No server named "claude" is installed, so its settings
+    are ignored; installed servers: none`.
+  - `test_matching_projects_entry_with_server_settings_stops_the_run`: a
+    `[projects]` entry for the workdir holding `agents.y.server` raises the
+    `ExceptionGroup`.
 
 - [ ] **Step 2: Run them and confirm they fail**
 
@@ -408,7 +459,7 @@ separate worktree exists.
 - [ ] **Step 3: Implement**
 
   - A filter class `AbsoluteHostPath` in `filters.py`: after `f.Unicode`, the value
-    with a leading `~` expanded must be absolute, else a new code
+    must be absolute once a first segment of exactly `~` is expanded, else a new code
     `CODE_NOT_ABSOLUTE` with template `"Path {value!r} must be absolute: a shared
     server's paths cannot depend on the workdir."`. It returns the value as
     written and touches no disk.
@@ -424,9 +475,10 @@ separate worktree exists.
   - `_agents_schema` becomes a function of `server_settings`; thread the flag
     through `_standard_fields`, `standard_config_schema` and `user_config_schema`
     as the Interfaces block says.
-  - `ProjectTomlSource.load`: decode the TOML first; where it is a table, remove
-    each `agents.<name>.server` and record its dotted path in `discarded`; then
-    validate what remains. An undecodable file is reported as today.
+  - `ProjectTomlSource.load`: decode the TOML first; remove each
+    `agents.<name>.server` and record its dotted path in `discarded`, skipping
+    wherever `agents` or `agents.<name>` is not a table so validation reports it as
+    today; then validate what remains. An undecodable file is reported as today.
   - `ConfigLoader._sanitise`: for each enabled source, log one WARNING per
     `discarded` path with the text the loader test pins.
   - `ConfigLoader._warn_unknown_agent_settings`: judge per setting, as the Global
@@ -499,12 +551,19 @@ separate worktree exists.
     "--agent-server=nope"])` exits 1 with the same line.
   - `test_server_false_runs_without_one`: `agent = { client = "claude", server =
     false }`; `run(["--dry-run"])` exits 0.
+  - `test_installed_server_cannot_start_yet`: call the helper directly with fake
+    registries holding a plain client and a server `srv`; it exits 1 and stderr is
+    exactly `[agent.server] Server "srv" cannot be started by this version of
+    paddock`.
+  The three `run` tests use the `minimal_config` fixture or set an image, so a
+  missing image is not what stops them.
 
 - [ ] **Step 2: Run them and confirm they fail**
 
-  Run: `uv run pytest tests/agents/test_pairing.py tests/test_main.py -q`
-  Expected: the new tests FAIL; `test_unknown_agent_exits_one` and
-  `test_server_false_runs_without_one` may pass already.
+  Run: `uv run pytest tests/agents/test_pairing.py tests/test_main.py -q --continue-on-collection-errors`
+  Expected: `test_pairing.py` errors at collection and the new `test_main` tests
+  FAIL, except `test_server_false_runs_without_one`, which may pass already, as
+  `test_unknown_agent_exits_one` does.
 
 - [ ] **Step 3: Implement**
 
@@ -514,13 +573,11 @@ separate worktree exists.
     `AgentError` to stderr and exits 1, before `ProjectDirManager` is entered.
     Pass `pairing.client` wherever the agent instance was used.
   - Until the second half of this pull request lands there is nothing to start a
-    server with. Where `pairing.server` is not `None`, stop with
+    server with. In the same helper, where `pairing.server` is not `None`, print
     `[agent.server] Server "<key>" cannot be started by this version of paddock`
-    and exit 1. Add `test_installed_server_cannot_start_yet` in
-    `tests/agents/test_pairing.py` only if the check lives in `AgentPairing`;
-    otherwise leave it untested and say so in the commit body, since no installed
-    server can reach it. Mark the line with a comment naming ADR 019 as what
-    replaces it.
+    and exit 1. The helper takes `agents=` and `servers=` keywords like everything
+    else that consults a registry. Mark the line with a comment naming ADR 019 as
+    what replaces it.
 
 - [ ] **Step 4: Run the checks**
 
@@ -540,13 +597,18 @@ separate worktree exists.
 
 - [ ] **Step 1: Run a real container** with the `e2e-testing` skill (preflight
   first), matching at line start. Scenario config: the skill's base image and
-  `agent = "claude"`. `paddock --agent-client=false bash -c 'echo HALF_OK'` must
-  exit 0 with one `^HALF_OK` line: the client half alone switched the container to
-  the shell. Then `paddock --agent-server=nope --agent=false bash -c 'echo NO'`
-  must exit 1, print the unknown-server line, and print no `^NO` line. Prove the
-  first check can fail: drop `--agent-client=false` and confirm `^HALF_OK` is
-  absent (the container would run `claude`, which the base image lacks; use
-  `--dry-run` for this half and assert the argv ends `claude`).
+  `agent = "claude"`. These scenarios are about the agent itself, the case the
+  skill allows for passing arguments after `--` in place of a positional command,
+  which would replace the agent's command whichever client is chosen (ADR 007).
+  - `paddock --agent-client=false -- -c 'echo HALF_OK'` must exit 0 with one
+    `^HALF_OK` line: the client half alone switched the container to the shell,
+    which ran `/bin/bash -c 'echo HALF_OK'`.
+  - Prove that check can fail: the same command without `--agent-client=false`
+    must print no `^HALF_OK` line, since the container then runs
+    `claude -c 'echo HALF_OK'`, which the base image lacks. Confirm with
+    `--dry-run` that its argv ends `claude -c 'echo HALF_OK'`.
+  - `paddock --agent=false --agent-server=nope -- -c 'echo NO'` must exit 1, print
+    the unknown-server line, and print no `^NO` line.
 
 - [ ] **Step 2: Run the whole suite on every supported Python**
 
@@ -574,6 +636,10 @@ separate worktree exists.
 - The merged `config["agent"]` is a table. Tests that asserted the scalar are
   updated, not shimmed.
 - A server-choosing run stops with a temporary message until the second half lands.
+- ADR 018's "the log says so", for a no-protocol client beside a server, is built
+  in the second half: no such run gets as far as logging in this one.
+- `test_server_registry_is_empty_without_plugins` will need changing when the
+  second half registers a bundled server; its docstring says so.
 
 ## Self-Review Checklist
 

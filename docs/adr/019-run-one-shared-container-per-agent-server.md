@@ -105,11 +105,11 @@ but never interrupts a session, where Option 3's guess could.
 - **Settings.** `agents.<name>.server` (image, build, volumes, port) is read only
   from the global section of the user config. In a `[projects]` entry it is a
   validation error, on every run from any project, that being the user's own file.
-  In the project file it is discarded before validation, with a warning of its own,
-  whatever the allowlist grants, so a committed file can neither set it nor stop
+  In the project file it is discarded before validation, whatever the allowlist
+  grants, with a warning of its own where that file is enabled, so a committed file can neither set it nor stop
   the runs of everyone who granted that file something else. This is the gate of
   its own that [ADR 017][] said such a setting would need. A shared server has no
-  per-project settings, and an untrusted source must not widen its mounts. Its host paths must be absolute, an exception to [ADR 012][]:
+  per-project settings, and an untrusted source must not widen its mounts. Its host paths must be absolute, a leading `~` aside, an exception to [ADR 012][]:
   resolving them against the workdir would give one server a different run spec per
   project. They are checked on disk only when that server is chosen, in the spirit
   of [ADR 014][], so a stale server mount cannot stop a run that does not use it.

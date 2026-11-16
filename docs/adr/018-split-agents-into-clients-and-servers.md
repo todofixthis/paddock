@@ -2,7 +2,7 @@
 status: Accepted
 date: 2026-11-16
 scope: [README.rst, docs/usage/, pyproject.toml, src/paddock/__main__.py, src/paddock/agents/, src/paddock/cli.py, src/paddock/config/, src/paddock/docker/]
-summary: An agent is a client (BaseAgent, the existing paddock.agents registry) optionally paired with a server (BaseServer, a new paddock.servers registry, authored under src/paddock/agents/); a client names its default server and the protocol it speaks, with no registry of named pairings and no server hooks on the agent class; agent is a client name, false, or a table naming either half; a string or false names the client and resets the server half to unnamed, and an unnamed half takes its default after the merge (client claude, server the merged client's default); agent stays one allowlist directive; a client is paired with a server only when both name the same protocol, so a client with a protocol needs such a server, and one without may be chosen beside any server but is not connected to it; servers are classes, not containers described in config; every client runs in a container, never on the host.
+summary: An agent is a client (BaseAgent, the existing paddock.agents registry) optionally paired with a server (BaseServer, a new paddock.servers registry, authored under src/paddock/agents/); a client names its default server and the protocol it speaks, with no registry of named pairings and no server defined on the agent class itself; agent is a client name, false, or a table naming either half; a string or false names the client and resets the server half to unnamed, and an unnamed half takes its default after the merge (client claude, server the merged client's default); agent stays one allowlist directive; a client is paired with a server only when both name the same protocol, so a client with a protocol needs such a server, and one without may be chosen beside any server but is not connected to it; servers are classes, not containers described in config; every client runs in a container, never on the host.
 revisit-when: A pairing needs a name of its own, distinct from its client's; a client or server needs to speak more than one protocol; a client is shown to load and run nothing from the workdir and needs the host's terminal or tools; a server needs its connection arguments placed after extra_args; a run needs two servers at once.
 ---
 
@@ -106,14 +106,15 @@ or `false` discards a server a lower source named. After the merge, an unnamed c
 is `claude` and an unnamed server is the merged client's `DEFAULT_SERVER`. So
 `agent.client` alone brings that client's server with it, and no source needs the
 registry to be read. `--agent-client`, `--agent-server` and the matching
-`PADDOCK_AGENT_*` variables name one half. Within one source the string applies
+`PADDOCK_AGENT_*` variables name one half. Within one source the whole value applies
 first, reset included, and then that source's halves; the environment source must
 handle this explicitly, its name-to-path mapping losing the string otherwise.
 
 `agent` stays one allowlist directive ([ADR 004][]): a grant of half the value could
 not carry the reset.
 
-**Pairing.** A client is paired with a server when both name the same `PROTOCOL`. A
+**Pairing.** A client is paired with a server when both name the same `PROTOCOL`
+and it is not `None`. A
 client with a `PROTOCOL` must be paired, and the run stops otherwise. A client
 without one may be chosen beside any server: the server is started, but the client
 neither joins its network nor receives its secret, and ADR 019's checks on a paired
