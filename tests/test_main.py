@@ -595,7 +595,7 @@ def test_cli_client_override_runs_that_client(
     assert argv[-2:] == ["ubuntu:22.04", "/bin/bash"]
 
 
-_UNKNOWN_SERVER = '[agent.server] Unknown server "nope"; installed servers: none'
+_UNKNOWN_SERVER = '[agent.server] Unknown server "nope"; installed servers: opencode'
 
 
 def test_unknown_server_exits_one(capsys, tmp_path: Path, mocker, monkeypatch):

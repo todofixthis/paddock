@@ -55,6 +55,9 @@ requires-python = ">=3.12, <4"
 claude = "paddock.agents.claude:ClaudeAgent"
 false = "paddock.agents.shell:ShellAgent"
 
+[project.entry-points."paddock.servers"]
+opencode = "paddock.agents.opencode:OpenCodeServer"
+
 [project.scripts]
 paddock = "paddock.__main__:main"
 
