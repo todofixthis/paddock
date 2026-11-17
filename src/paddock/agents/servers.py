@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import ClassVar
 
@@ -24,6 +25,23 @@ class ServerConnection:
 
     secret: str = field(repr=False)
     """The shared secret the server was started with; kept out of ``repr``."""
+
+
+@dataclass(frozen=True)
+class Secret:
+    """An environment variable's value that paddock must never print.
+
+    Return one from :meth:`BaseServer.get_env` or
+    :meth:`~paddock.agents.BaseAgent.get_server_env` for a value derived from
+    the secret, such as an encoded credential. A value containing the secret
+    itself is treated as secret without it.
+
+    Nothing detects a derived value left unwrapped: it is printed, and on a
+    server every later run warns that its settings have drifted.
+    """
+
+    value: str = field(repr=False)
+    """The value the container receives."""
 
 
 class BaseServer(ABC):
@@ -82,9 +100,14 @@ class BaseServer(ABC):
         """Docker build args to pass when paddock builds the server's image."""
         return {}
 
-    def get_env(self, secret: str) -> dict[str, str]:
+    def get_env(self, secret: str) -> Mapping[str, str | Secret]:
         """
         Environment variables to start the server with.
+
+        Paddock prints each value in the server's ``docker run`` command,
+        except one that contains ``secret`` or is wrapped in :class:`Secret`.
+        Wrap any value derived from ``secret`` that no longer contains it.
+        ``PADDOCK_SERVER_SECRET`` is paddock's own and overrides one set here.
 
         Args:
             secret: The shared secret paddock minted for this server.

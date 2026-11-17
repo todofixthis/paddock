@@ -7,6 +7,7 @@ from enum import Enum
 
 from paddock.config.errors import PaddockEnvironmentError
 from paddock.config.filters import VolumeSpec
+from paddock.docker.environment import ContainerEnvironment
 
 MANAGED_LABEL = "paddock.managed"
 SPEC_HASH_LABEL = "paddock.spec-hash"
@@ -29,8 +30,8 @@ class ContainerSpec:
     command: list[str]
     """The command to run in the container."""
 
-    env: dict[str, str] = field(repr=False)
-    """Environment variables; the values may be secret."""
+    env: ContainerEnvironment
+    """Environment variables, each safe to print or secret."""
 
     volumes: list[tuple[str, VolumeSpec]]
     """Mounts, each from a host path or a named volume."""
@@ -44,14 +45,14 @@ class ContainerSpec:
     def spec_hash(self) -> str:
         """Hash everything a changed setting would alter.
 
-        Environment variables count by name only, so a new secret is not
-        drift; volumes are sorted, so reordering config is not either.
+        A secret environment variable counts by name only, so a new secret
+        is not drift; volumes are sorted, so reordering config is not either.
         """
         canonical = json.dumps(
             {
                 "command": self.command,
                 "container_port": self.container_port,
-                "env": sorted(self.env),
+                "env": {name: self.env.safe.get(name) for name in self.env.names},
                 "host_port": self.host_port,
                 "image": self.image,
                 "volumes": self._sorted_volumes(),
@@ -63,8 +64,8 @@ class ContainerSpec:
     def run_argv(self) -> list[str]:
         """Assemble the ``docker run`` argv.
 
-        Environment variables are passed by name, so no value appears in it:
-        the caller supplies the values in the subprocess environment.
+        A secret environment variable is passed by name, so its value does
+        not appear: the caller supplies it in the subprocess environment.
         """
         argv = ["docker", "run", "-d", "--name", self.name, "--network", self.name]
         argv += ["--label", f"{MANAGED_LABEL}={self.owner}"]
@@ -72,8 +73,7 @@ class ContainerSpec:
         argv += ["--label", f"{VOLUMES_LABEL}={json.dumps(self._sorted_volumes())}"]
         host_port = "" if self.host_port is None else self.host_port
         argv += ["-p", f"127.0.0.1:{host_port}:{self.container_port}"]
-        for name in sorted(self.env):
-            argv += ["-e", name]
+        argv += self.env.flags()
         for source, spec in self.volumes:
             argv += ["-v", f"{source}:{spec}"]
         return [*argv, self.image, *self.command]
@@ -174,7 +174,7 @@ class ManagedContainer:
         result = subprocess.run(
             self._spec.run_argv(),
             capture_output=True,
-            env={**os.environ, **self._spec.env},
+            env={**os.environ, **self._spec.env.secrets},
             text=True,
         )
         if result.returncode == 0:

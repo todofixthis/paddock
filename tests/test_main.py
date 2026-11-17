@@ -652,7 +652,7 @@ class _Client(BaseAgent):
         return ["--server", connection.container_url]
 
     def get_server_env(self, connection: ServerConnection) -> dict[str, str]:
-        return {"SRV_PASSWORD": connection.secret}
+        return {"SRV_PASSWORD": connection.secret, "SRV_URL": connection.container_url}
 
 
 class _Paired(_Client):
@@ -749,9 +749,11 @@ def test_paired_run_starts_the_server_then_the_client(mocker, tmp_path, monkeypa
     argv = paired.docker.call_args.args[0]
     assert argv[argv.index("--network") + 1] == "paddock-server-srv"
     assert argv[-4:] == ["img", "paired", "--server", "http://paddock-server-srv:1234"]
-    assert argv[argv.index("-e") + 1] == "SRV_PASSWORD"
+    flags = [argv[i + 1] for i, a in enumerate(argv) if a == "-e"]
+    assert flags == ["SRV_PASSWORD", "SRV_URL=http://paddock-server-srv:1234"]
     env = paired.docker.call_args.kwargs["env"]
     assert env["SRV_PASSWORD"] == _SECRET
+    assert "SRV_URL" not in env
     assert env["HOME"] == str(tmp_path)
 
 

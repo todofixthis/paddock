@@ -94,7 +94,10 @@ class FakeDocker:
         owner = labels.pop("paddock.managed", None)
         self.container = self.container_entry(
             owner=owner,
-            env=[f"{name}={env[name]}" for name in self._values(argv, "-e")],
+            env=[
+                flag if "=" in flag else f"{flag}={env[flag]}"
+                for flag in self._values(argv, "-e")
+            ],
             labels=labels,
             container_id=f"created{self._created}",
         )

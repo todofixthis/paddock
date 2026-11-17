@@ -3,7 +3,9 @@ import json
 import pytest
 
 from paddock.config.errors import PaddockEnvironmentError
+from paddock.agents.servers import Secret
 from paddock.config.filters import VolumeSpec
+from paddock.docker.environment import ContainerEnvironment
 from paddock.docker.managed import (
     ContainerSpec,
     ContainerState,
@@ -20,12 +22,13 @@ def _spec(**overrides) -> ContainerSpec:
         "owner": "server:srv",
         "image": "img",
         "command": ["serve", "--now"],
-        "env": {"TOKEN": "s3cr3t"},
+        "env": {"MODE": "fast", "TOKEN": Secret("s3cr3t")},
         "volumes": VOLUMES,
         "container_port": 1234,
         "host_port": None,
     }
     values.update(overrides)
+    values["env"] = ContainerEnvironment(values["env"])
     return ContainerSpec(**values)
 
 
@@ -49,6 +52,8 @@ def test_run_argv_shape():
         "-p",
         "127.0.0.1::1234",
         "-e",
+        "MODE=fast",
+        "-e",
         "TOKEN",
         "-v",
         "/host/a:/a:rw",
@@ -66,19 +71,26 @@ def test_run_argv_with_a_host_port():
 
 
 def test_run_argv_sorts_env_names():
-    argv = _spec(env={"B": "1", "A": "2"}).run_argv()
-    assert [argv[i + 1] for i, a in enumerate(argv) if a == "-e"] == ["A", "B"]
+    argv = _spec(env={"B": Secret("1"), "A": "2"}).run_argv()
+    assert [argv[i + 1] for i, a in enumerate(argv) if a == "-e"] == ["A=2", "B"]
 
 
-def test_run_argv_never_holds_an_env_value():
+def test_run_argv_never_holds_a_secret_env_value():
     spec = _spec()
     assert not any("s3cr3t" in arg for arg in spec.run_argv())
     assert "s3cr3t" not in repr(spec)
 
 
-def test_spec_hash_ignores_env_values_but_not_names():
-    assert _spec().spec_hash() == _spec(env={"TOKEN": "other"}).spec_hash()
-    assert _spec().spec_hash() != _spec(env={"TOKEN": "x", "MORE": "y"}).spec_hash()
+def test_spec_hash_ignores_a_secret_value_but_not_its_name():
+    base = _spec(env={"TOKEN": Secret("x")}).spec_hash()
+    assert _spec(env={"TOKEN": Secret("other")}).spec_hash() == base
+    assert _spec(env={"OTHER": Secret("x")}).spec_hash() != base
+
+
+def test_spec_hash_changes_with_a_safe_env_value():
+    base = _spec(env={"MODE": "fast"}).spec_hash()
+    assert _spec(env={"MODE": "slow"}).spec_hash() != base
+    assert _spec(env={"MODE": Secret("fast")}).spec_hash() != base
 
 
 def test_spec_hash_changes_with_image_command_volumes_and_ports():
@@ -212,6 +224,7 @@ def test_start_passes_env_values_in_the_environment(docker, monkeypatch):
     ManagedContainer(_spec()).start()
     env = docker.env_of("docker", "run")
     assert env["TOKEN"] == "s3cr3t"
+    assert "MODE" not in env
     assert env["PATH_MARKER"] == "kept"
 
 

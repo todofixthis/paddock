@@ -35,6 +35,8 @@ language = "en-nz"
 
 # Report unresolved Python cross-references, which -W then fails the build on
 nitpicky = True
+# The standard library's types have no target here: there is no intersphinx.
+nitpick_ignore = [("py:class", "collections.abc.Mapping")]
 
 source_suffix = {
     ".md": "markdown",

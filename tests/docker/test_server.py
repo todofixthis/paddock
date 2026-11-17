@@ -1,4 +1,5 @@
 import logging
+import re
 import subprocess
 from pathlib import Path
 
@@ -51,8 +52,10 @@ class _Srv(BaseServer):
     def get_build_args(self) -> dict[str, str]:
         return {"FROM_SERVER": "1"}
 
+    mode = "fast"
+
     def get_env(self, secret: str) -> dict[str, str]:
-        return {"SRV_PASSWORD": secret}
+        return {"SRV_MODE": self.mode, "SRV_PASSWORD": secret}
 
 
 def _settings(**overrides) -> ServerSettings:
@@ -134,6 +137,24 @@ def test_secret_is_minted_and_exported(docker):
     assert len(secret) >= 32
     assert env[SECRET_ENV] == secret
     assert env["SRV_PASSWORD"] == secret
+
+
+def test_run_line_shows_safe_env_values_and_no_secret(docker):
+    result = _Run().launch()
+    assert result.run_argv is not None
+    assert _flags(result.run_argv, "-e") == [
+        SECRET_ENV,
+        "SRV_MODE=fast",
+        "SRV_PASSWORD",
+    ]
+    assert not any(result.connection.secret in arg for arg in result.run_argv)
+
+
+def test_a_changed_safe_env_value_is_drift(docker):
+    _Run().launch()
+    server = _Srv()
+    server.mode = "slow"
+    assert _Run(server).launch().drifted is True
 
 
 def test_each_server_gets_its_own_secret(docker):
@@ -479,7 +500,7 @@ def test_dry_run_creates_nothing(docker, mocker):
     assert result.run_argv is not None
     assert result.run_argv[:3] == ["docker", "run", "-d"]
     assert result.connection.host_url == "http://127.0.0.1:<port>"
-    assert result.connection.secret == "<secret>"
+    assert result.connection.secret == "secret-not-minted"
     assert result.created is False
     assert result.drifted is False
     assert run.sleeps == []
@@ -530,7 +551,7 @@ def test_dry_run_against_a_starting_server_uses_placeholders(docker):
     docker.container = docker.container_entry(status="created")
     result = _Run().launch(dry_run=True)
     assert result.run_argv is None
-    assert result.connection.secret == "<secret>"
+    assert result.connection.secret == "secret-not-minted"
 
 
 def test_dry_run_mints_no_secret(docker, mocker):
@@ -559,3 +580,9 @@ def test_image_is_prepared_before_a_stopped_container_is_removed(docker, mocker)
     source.refresh.side_effect = refreshed
     assert _Run(build=BUILD).launch().created is True
     assert docker.ran("docker", "rm") == [["docker", "rm", "dead1"]]
+
+
+def test_placeholder_secret_survives_what_a_minted_one_does(docker):
+    """A URL-quoted secret must be classed alike on create and on reuse."""
+    result = _Run().launch(dry_run=True)
+    assert re.fullmatch(r"[A-Za-z0-9_-]+", result.connection.secret)

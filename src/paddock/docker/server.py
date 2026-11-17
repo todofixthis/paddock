@@ -9,6 +9,7 @@ from paddock.agents.servers import BaseServer, ServerConnection
 from paddock.config.errors import PaddockEnvironmentError
 from paddock.config.filters import VolumeSpec
 from paddock.config.server_settings import ServerSettings
+from paddock.docker.environment import ContainerEnvironment
 from paddock.docker.factory import ImageSourceFactory
 from paddock.docker.managed import (
     SPEC_HASH_LABEL,
@@ -53,8 +54,10 @@ class ServerLauncher:
     POLLS = 60
     POLL_INTERVAL = 0.5
 
-    # Stand in for values a dry run does not have.
-    _NO_SECRET = "<secret>"
+    # Stand in for values a dry run does not have. The secret's is drawn from
+    # a minted secret's alphabet, so that an encoding which leaves a real
+    # secret intact leaves it intact too, and both are classed alike.
+    _NO_SECRET = "secret-not-minted"
     _NO_PORT = "<port>"
 
     _LIVE = (ContainerState.RUNNING, ContainerState.STARTING)
@@ -132,8 +135,8 @@ class ServerLauncher:
     def _spec(self, secret: str) -> ContainerSpec:
         """Build the container's spec around one secret.
 
-        The environment's names must not depend on the secret, or every reuse
-        would read as drift.
+        The environment's names and safe values must not depend on the
+        secret, or every reuse would read as drift.
 
         Args:
             secret: The secret to start the server with, or a placeholder.
@@ -143,7 +146,9 @@ class ServerLauncher:
             owner=f"server:{self._key}",
             image=self._settings.image,
             command=self._server.get_command(),
-            env={**self._server.get_env(secret), SECRET_ENV: secret},
+            env=ContainerEnvironment(
+                {**self._server.get_env(secret), SECRET_ENV: secret}, secret=secret
+            ),
             volumes=[
                 *self._server.get_volumes().items(),
                 *self._settings.volumes.items(),

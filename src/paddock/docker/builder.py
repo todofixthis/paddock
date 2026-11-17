@@ -8,6 +8,7 @@ from paddock.agents import BaseAgent
 from paddock.agents.servers import ServerConnection
 from paddock.config.errors import PaddockEnvironmentError
 from paddock.config.filters import VolumeSpec
+from paddock.docker.environment import ContainerEnvironment
 
 # Network modes Docker cannot combine with a second network.
 _UNCOMBINABLE_NETWORKS = frozenset({"bridge", "default", "host", "none"})
@@ -61,24 +62,24 @@ class DockerCommandBuilder:
             argv += self._volume_flag(host_or_name, container_spec)
         for network in self._networks():
             argv += ["--network", network]
-        # By name only: the values, which include the server's secret, travel
-        # in the subprocess environment and never in the printed command.
-        for name in sorted(self.environment):
-            argv += ["-e", name]
+        argv += self.environment.flags()
         argv.append(self._config["image"])
         argv += command if command else [*self._agent_command(), *agent_args]
         return argv
 
     @cached_property
-    def environment(self) -> dict[str, str]:
-        """Environment variables to run ``docker run`` with.
+    def environment(self) -> ContainerEnvironment:
+        """The environment variables that connect the client to its server.
 
-        The container receives each by name (``-e NAME``). Empty for a client
-        that is not paired with a server.
+        ``docker run`` must be given the secret ones in its own environment.
+        Empty for a client that is not paired with a server.
         """
         if self._connection is None:
-            return {}
-        return dict(self._agent.get_server_env(self._connection))
+            return ContainerEnvironment({})
+        return ContainerEnvironment(
+            self._agent.get_server_env(self._connection),
+            secret=self._connection.secret,
+        )
 
     @staticmethod
     def check_paired_network(

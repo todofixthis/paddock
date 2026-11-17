@@ -256,7 +256,7 @@ def run(
                 sys.exit(0)
 
             result = subprocess.run(
-                docker_argv, env={**os.environ, **command_builder.environment}
+                docker_argv, env={**os.environ, **command_builder.environment.secrets}
             )
             sys.exit(result.returncode)
     except PaddockEnvironmentError as e:

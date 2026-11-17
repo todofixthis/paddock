@@ -3,7 +3,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from paddock.agents.servers import ServerConnection
+from paddock.agents.servers import Secret, ServerConnection
 from paddock.config.errors import PaddockEnvironmentError
 
 from paddock.config.filters import VolumeSpec
@@ -354,15 +354,25 @@ def test_configured_network_equal_to_the_servers_is_passed_once(mocker, tmp_path
     assert _networks(builder.build(command=[])) == ["paddock-server-srv"]
 
 
-def test_server_env_is_passed_by_name_only(mocker, tmp_path: Path):
-    agent = make_agent(server_env={"OPENCODE_PASSWORD": "s3cr3t", "A_URL": "u"})
+def test_server_env_shows_safe_values_and_hides_secret_ones(mocker, tmp_path: Path):
+    agent = make_agent(
+        server_env={
+            "OPENCODE_PASSWORD": CONNECTION.secret,
+            "A_URL": "u",
+            "DERIVED": Secret("dXNlcjpwdw=="),
+        }
+    )
     builder = _paired_builder(mocker, tmp_path, agent=agent)
     argv = builder.build(command=[])
-    names = [argv[i + 1] for i, a in enumerate(argv[:-1]) if a == "-e"]
-    assert names == ["A_URL", "OPENCODE_PASSWORD"]
+    flags = [argv[i + 1] for i, a in enumerate(argv[:-1]) if a == "-e"]
+    assert flags == ["A_URL=u", "DERIVED", "OPENCODE_PASSWORD"]
     assert argv.index("-e") < argv.index("img")
-    assert not any("s3cr3t" in arg for arg in argv)
-    assert builder.environment == {"OPENCODE_PASSWORD": "s3cr3t", "A_URL": "u"}
+    assert not any(CONNECTION.secret in arg for arg in argv)
+    assert not any("dXNlcjpwdw==" in arg for arg in argv)
+    assert builder.environment.secrets == {
+        "DERIVED": "dXNlcjpwdw==",
+        "OPENCODE_PASSWORD": CONNECTION.secret,
+    }
     agent.get_server_env.assert_called_with(CONNECTION)
 
 
@@ -388,7 +398,7 @@ def test_unpaired_client_is_untouched(mocker, tmp_path: Path):
     assert "--network" not in argv
     assert "-e" not in argv
     assert argv[-3:] == ["img", "claude", "extra"]
-    assert builder.environment == {}
+    assert builder.environment.secrets == {}
 
 
 @pytest.mark.parametrize(

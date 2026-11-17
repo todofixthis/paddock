@@ -114,8 +114,28 @@ but never interrupts a session, where Option 3's guess could.
 - **Secret.** Always minted at start and held only in the container's environment;
   later runs read it back with `docker inspect`. The running container is the single
   source of truth, so there is no state file to lose and two racing first runs agree.
-  It travels as `-e NAME`, never in a printed command. Leaving it unset would not
-  mean no secret with OpenCode, which mints its own.
+  Leaving it unset would not mean no secret with OpenCode, which mints its own.
+- **Environment variables.** Each one Paddock sets on a server or a paired client
+  is either safe or secret. A safe one is passed as `-e NAME=value`, so the printed
+  command shows what the container was given. A secret one is passed as `-e NAME`,
+  its value in the environment `docker run` itself is given, so it reaches no
+  printed command, log line or process listing. A value is secret when it contains
+  the server's secret, which needs nothing from the class that supplies it, so
+  the secret itself cannot be printed by oversight. A value derived from the
+  secret that no longer contains it, such as a base64 credential, is secret only
+  if the class wraps it in `Secret`. Nothing detects one left unwrapped: it is
+  printed, and on a server every later run warns of drift, the value having been
+  computed from the real secret at creation and from a placeholder since. Paddock
+  adds one variable of its own to every server, `PADDOCK_SERVER_SECRET`, which
+  holds the secret for later runs to read back and overrides a server's variable
+  of that name. A client's `get_server_args` are part of the printed command
+  whatever they hold, so the secret goes through the environment. A secret is not
+  printed masked (`NAME=****`): the printed line is the argv that runs, and a
+  masked one would not be. It is not the whole command: pasted into a shell
+  without the secret variables set, it starts a container without them. A safe
+  value is part of the run spec, so a changed one is drift; a secret counts by
+  its name alone, so a newly minted value is not drift, though an added or
+  renamed secret variable is.
 - **Settings.** `agents.<name>.server` (image, build, volumes, port) is read only
   from the global section of the user config. In a `[projects]` entry it is a
   validation error, on every run from any project, that being the user's own file.
