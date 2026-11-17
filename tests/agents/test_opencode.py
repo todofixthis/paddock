@@ -20,10 +20,16 @@ class _Info(BaseHTTPRequestHandler):
     """Answer ``GET /api/info`` as OpenCode does: 200 with the password."""
 
     status_when_authorised = 200
+    redirect_to: str | None = None
 
     def do_GET(self) -> None:
         expected = "Basic " + base64.b64encode(f"opencode:{SECRET}".encode()).decode()
-        if self.path != "/api/info":
+        if self.path == "/elsewhere":
+            self.send_response(200)
+        elif self.redirect_to is not None:
+            self.send_response(302)
+            self.send_header("Location", self.redirect_to)
+        elif self.path != "/api/info":
             self.send_response(404)
         elif self.headers.get("Authorization") != expected:
             self.send_response(401)
@@ -45,6 +51,7 @@ def info_url() -> Iterator[str]:
     httpd.shutdown()
     httpd.server_close()
     _Info.status_when_authorised = 200
+    _Info.redirect_to = None
 
 
 def _connection(host_url: str, secret: str = SECRET) -> ServerConnection:
@@ -119,6 +126,17 @@ def test_not_ready_when_nothing_listens() -> None:
     assert OpenCodeServer().is_ready(_connection("http://127.0.0.1:1")) is False
 
 
+def test_a_redirect_is_not_ready_and_is_not_followed(info_url: str) -> None:
+    """Following one would carry the password to wherever it points."""
+    _Info.redirect_to = f"{info_url}/elsewhere"
+    assert OpenCodeServer().is_ready(_connection(info_url)) is False
+
+
+def test_a_malformed_redirect_is_not_ready(info_url: str) -> None:
+    _Info.redirect_to = "http://[bad/x"
+    assert OpenCodeServer().is_ready(_connection(info_url)) is False
+
+
 def test_probe_ignores_the_hosts_proxy(info_url: str, monkeypatch) -> None:
     """The server is on loopback; a proxy would never reach it."""
     monkeypatch.setenv("http_proxy", "http://127.0.0.1:1")
@@ -172,7 +190,7 @@ def test_client_takes_the_password_from_the_environment() -> None:
     assert SECRET not in " ".join(client.get_server_args(connection))
 
 
-def test_choosing_the_client_brings_its_server(tmp_path, monkeypatch) -> None:
+def test_choosing_the_client_brings_its_server(tmp_path) -> None:
     """``agent = "opencode"`` resolves to the client paired with the server."""
     config_dir = tmp_path / ".config" / "paddock"
     config_dir.mkdir(parents=True)

@@ -59,6 +59,19 @@ class OpenCodeAgent(BaseAgent):
         return {**OPENCODE_FIXED_ENV, OPENCODE_PASSWORD_ENV: connection.secret}
 
 
+class _NoRedirects(urllib.request.HTTPRedirectHandler):
+    """Refuse every redirect, so the probe reads one as an error.
+
+    Following one would send the password wherever it points.
+    """
+
+    def http_error_302(self, *args: object, **kwargs: object) -> None:
+        """Decline, which leaves the reply to be raised as an HTTP error."""
+        return None
+
+    http_error_301 = http_error_303 = http_error_307 = http_error_308 = http_error_302
+
+
 class OpenCodeServer(BaseServer):
     """OpenCode's server, which runs every tool the agent uses (ADR 021)."""
 
@@ -72,7 +85,9 @@ class OpenCodeServer(BaseServer):
 
     # The probe goes to loopback, which a proxy from the environment would
     # never reach: with one set, every probe would read as not ready.
-    _OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    _OPENER = urllib.request.build_opener(
+        urllib.request.ProxyHandler({}), _NoRedirects()
+    )
 
     def get_command(self) -> list[str]:
         """Listen on every interface, so clients on the network reach it."""

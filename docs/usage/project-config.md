@@ -31,11 +31,11 @@ Project-level config is **off by default (blocked)**. Grant it the narrowest set
 project_toml = ["volumes"]
 ```
 
-A grant directly under `[config.allowlist]` applies to every repository you run paddock from. The project file keeps the lowest [weight](#precedence), so it can't override a value you set, but `volumes` and `build.args` merge per entry, so a granted file adds to yours, and `agents` merges per agent, so it can configure any agent you have not. Weigh what each key hands a committed file:
+A grant directly under `[config.allowlist]` applies to every repository you run paddock from. The project file keeps the lowest [weight](#precedence), so it can't override a value you set, but `volumes` and `build.args` merge per entry, so a granted file adds to yours, and `agents` merges per agent, so it can configure any agent you have not. Weigh what each key hands a committed file, and whoever can write that file: under the `opencode` agent that includes the agent itself, for every project its server mounts read-write, so a grant there is a grant to the agent. See the caution under [What the agent can reach](agents/opencode.md#what-the-agent-can-reach).
 
 - `build.dockerfile` / `build.context` — paddock runs `docker build` on the host, from the project's Dockerfile and context.
 - `volumes` — any existing host path, including `~`-relative ones expanded against *your* home (`~/.ssh`, say), mounted `rw` if the mapping says so.
-- `agent` — selecting `claude` mounts your `~/.claude` read-write, plus `~/.claude.json` if it exists. The file can also choose an agent's [server](configuration.md#agentsnameserver), which starts a long-lived container from your server settings — your image, your mounts, your port — that keeps running after the project's own container exits. It cannot change those settings. Before granting anything to a project the `opencode` server mounts, read the caution under [What the agent can reach](agents/opencode.md#what-the-agent-can-reach).
+- `agent` — selecting `claude` mounts your `~/.claude` read-write, plus `~/.claude.json` if it exists. The file can also choose an agent's [server](configuration.md#agentsnameserver), which starts a long-lived container from your server settings — your image, your mounts, your port — that keeps running after the project's own container exits. It cannot change those settings.
 - `agents` — arguments for any agent you have set none for yourself; see the caution under [The allowlist](#the-allowlist).
 - `network` — including `host`.
 
@@ -143,7 +143,8 @@ When project-level config is enabled, paddock:
 1. Creates `.paddock/` in the project workdir if it does not already exist.
 2. Mounts it into the agent's container at the same absolute path, **read-only** by
    default. An agent with a server runs its tools in the server, which reaches the
-   directory through its own mounts, read-write where they are; see the
+   directory through its own mounts: read-write under `opencode`, whose server must
+   mount the workdir read-write; see the
    [`opencode` agent](agents/opencode.md#what-the-agent-can-reach).
 3. After the container exits, removes `.paddock/` — but only if paddock created it and it is still empty. If it has contents, paddock logs a warning and leaves the directory in place for you to inspect.
 

@@ -194,14 +194,17 @@ remove the mount and recreate it.
 > [!CAUTION]
 > **Two OpenCodes on one database can corrupt it**
 >
-> paddock never stops its server, and `opencode` on the host leaves a background
-> service running after its window closes. Each opens the database, and nothing stops
-> both doing so at once. Stop one before you start the other:
+> paddock never stops its server, and almost any `opencode` command on the host starts
+> a background service that keeps running afterwards: `opencode session list` and
+> `opencode auth list` do, as the interface does; `opencode debug paths` and
+> `opencode service …` do not. Each side opens the database, and nothing stops both
+> doing so at once. Stop one before you start the other:
 >
-> - Before using OpenCode on the host: `docker stop paddock-server-opencode`. This ends
->   every project's sessions in progress.
+> - Before running `opencode` on the host: `docker stop paddock-server-opencode`. This
+>   ends every project's sessions in progress.
 > - Before the next paddock run with this agent, in any project:
->   `opencode service stop`. That run removes the stopped server and starts a new one.
+>   `opencode service stop`, and `opencode service status` to check. That run removes
+>   the stopped server and starts a new one.
 
 Sharing has three further costs:
 
@@ -218,6 +221,9 @@ Sharing has three further costs:
   ```bash
   sudo chown -R "$(id -u):$(id -g)" ~/.local/share/opencode
   ```
+
+  So the way back to the host's OpenCode is: stop the server, take the files back,
+  then run `opencode`.
 
 ## The client's image
 

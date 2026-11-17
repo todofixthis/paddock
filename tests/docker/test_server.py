@@ -160,12 +160,27 @@ def test_a_mount_at_a_parent_path_replaces_nothing(docker):
     assert _flags(result.run_argv, "-v") == ["/host:/root:rw", "data:/root/data:rw"]
 
 
-def test_a_replaced_volume_is_stable_across_runs(docker):
+@pytest.mark.parametrize("written", ["/data/../data", "//data", "/data/."])
+def test_a_container_path_written_another_way_still_replaces(docker, written):
     server = _Srv()
     server.scratch_volumes = {"data": VolumeSpec("/data", "rw")}
-    volumes = {"/host/data": VolumeSpec("/data", "rw")}
-    _Run(server, volumes=volumes).launch()
-    assert _Run(server, volumes=volumes).launch().drifted is False
+    result = _Run(server, volumes={"/host/data": VolumeSpec(written, "rw")}).launch()
+    assert result.run_argv is not None
+    assert _flags(result.run_argv, "-v") == [f"/host/data:{written}:rw"]
+
+
+def test_replacing_a_running_servers_volume_is_drift(docker):
+    server = _Srv()
+    server.scratch_volumes = {"data": VolumeSpec("/data", "rw")}
+    _Run(server).launch()
+    replaced = _Run(server, volumes={"/host/data": VolumeSpec("/data", "rw")})
+    assert replaced.launch().drifted is True
+
+
+def test_a_mount_that_replaces_the_servers_own_can_hold_the_workdir(docker):
+    server = _Srv()
+    server.own_volumes = {"/elsewhere": VolumeSpec("/a", "ro")}
+    assert _Run(server, volumes=RW_A).launch("/a/project").created is True
 
 
 def test_a_configured_port_is_published(docker):

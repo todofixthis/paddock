@@ -1259,7 +1259,9 @@ user-level build.
 
 An agent's server runs an image of its own,
 [`agents.<name>.server.image`](#agentsnameserver), which can be set only in the global
-section of your user file, never per project.
+section of your user file, never per project. Where the server runs the agent's tools,
+as `opencode`'s does, a per-project `image` changes the interface's container alone:
+every project shares the server's toolchain.
 
 ### `network`
 
