@@ -10,13 +10,15 @@ from class_registry.base import BaseRegistry
 from paddock.agents import BaseAgent, agent_registry
 from paddock.agents.errors import AgentError
 from paddock.agents.pairing import AgentPairing
-from paddock.agents.servers import server_registry
+from paddock.agents.servers import ServerConnection, server_registry
 from paddock.cli import parse_args
 from paddock.config.errors import ConfigError, PaddockEnvironmentError
-from paddock.config.loader import ConfigLoader
+from paddock.config.loader import ConfigLoader, ResolvedConfig
 from paddock.config.project_dir import ProjectDirManager
 from paddock.docker.builder import DockerCommandBuilder
 from paddock.docker.factory import ImageSourceFactory
+from paddock.docker.server import ServerLauncher
+from paddock.docker.version import DockerVersion
 
 logger = logging.getLogger("paddock")
 
@@ -84,23 +86,81 @@ def _resolve_pairing(
         The pairing, with both halves instantiated.
     """
     try:
-        pairing = AgentPairing.resolve(
+        return AgentPairing.resolve(
             agent_key, server_key, agents=agents, servers=servers
         )
     except AgentError as e:
         print(str(e), file=sys.stderr)
         sys.exit(1)
 
-    # Nothing starts a server yet: the managed container of ADR 019 replaces
-    # this stop.
-    if pairing.server is not None:
-        print(
-            f'[agent.server] Server "{server_key}" cannot be started by this '
-            "version of paddock",
-            file=sys.stderr,
+
+def _start_server(
+    pairing: AgentPairing,
+    resolved: ResolvedConfig,
+    workdir: Path,
+    *,
+    dry_run: bool,
+    quiet: bool,
+) -> ServerConnection | None:
+    """Make the chosen server available before the client starts (ADR 019).
+
+    Every check runs before the server is started, and the server before
+    ``.paddock`` is created.
+
+    Args:
+        pairing: The chosen client and server.
+        resolved: The resolved config.
+        workdir: The run's workdir.
+        dry_run: Check everything, but start nothing.
+        quiet: Suppress the server's ``docker run`` line.
+
+    Returns:
+        The connection for a paired client; ``None`` with no server, or for a
+        client chosen beside a server it does not speak to.
+
+    Raises:
+        PaddockEnvironmentError: If the server cannot be used.
+    """
+    server = pairing.server
+    if server is None:
+        return None
+    key = server.SERVER_KEY
+    if pairing.is_paired:
+        DockerCommandBuilder.check_paired_network(
+            resolved.config.get("network"),
+            agent_key=resolved.agent_key,
+            server_key=key,
         )
-        sys.exit(1)
-    return pairing
+    DockerVersion.require_minimum()
+
+    # The loader resolves settings for every installed server it is given, and
+    # the pairing came from the same registry.
+    assert resolved.server_settings is not None
+    launcher = ServerLauncher(server, resolved.server_settings, environ=os.environ)
+    needs_workdir = pairing.is_paired and server.REQUIRES_WORKDIR_MOUNT
+    result = launcher.launch(
+        workdir=workdir if needs_workdir else None, dry_run=dry_run
+    )
+
+    if result.run_argv is not None and not quiet:
+        print(shlex.join(result.run_argv))
+    if result.drifted:
+        logger.warning(
+            'Server "%s" is running with settings that differ from your '
+            "config; they apply when it is recreated: docker rm -f "
+            "paddock-server-%s",
+            key,
+            key,
+        )
+    if not pairing.is_paired:
+        logger.info(
+            'Server: %s (not connected: agent "%s" speaks no server protocol)',
+            key,
+            resolved.agent_key,
+        )
+        return None
+    logger.info("Server: %s (%s)", key, result.connection.host_url)
+    return result.connection
 
 
 def _prepare_image(config: dict, agent: BaseAgent) -> None:
@@ -124,13 +184,25 @@ def _prepare_image(config: dict, agent: BaseAgent) -> None:
     logger.info("Image %s: %s", source.action, outcome)
 
 
-def run(argv: list[str] | None = None) -> None:
+def run(
+    argv: list[str] | None = None,
+    *,
+    agents: BaseRegistry = agent_registry,
+    servers: BaseRegistry = server_registry,
+) -> None:
+    """Run paddock.
+
+    Args:
+        argv: The command line, or ``None`` for the process's own.
+        agents: The registry of clients.
+        servers: The registry of servers.
+    """
     parsed = parse_args(argv if argv is not None else sys.argv[1:])
     _setup_logging(parsed.quiet)
 
     workdir = _resolve_workdir(parsed.workdir)
 
-    loader = ConfigLoader()
+    loader = ConfigLoader(agents=agents, servers=servers)
     try:
         resolved = loader.resolve(parsed, workdir, environ=dict(os.environ))
     except* ConfigError as eg:
@@ -139,9 +211,15 @@ def run(argv: list[str] | None = None) -> None:
         sys.exit(1)
 
     config = resolved.config
-    agent = _resolve_pairing(resolved.agent_key, resolved.server_key).client
+    pairing = _resolve_pairing(
+        resolved.agent_key, resolved.server_key, agents=agents, servers=servers
+    )
+    agent = pairing.client
 
     try:
+        connection = _start_server(
+            pairing, resolved, workdir, dry_run=parsed.dry_run, quiet=parsed.quiet
+        )
         with ProjectDirManager(
             workdir,
             readonly=resolved.project_dir_readonly,
@@ -152,6 +230,7 @@ def run(argv: list[str] | None = None) -> None:
                 agent=agent,
                 workdir=workdir,
                 project_dir_volume=project_dir_volume,
+                connection=connection,
             )
             logger.info("Using image: %s", config["image"])
             logger.info("Agent: %s", resolved.agent_key)
@@ -176,7 +255,9 @@ def run(argv: list[str] | None = None) -> None:
             if parsed.dry_run:
                 sys.exit(0)
 
-            result = subprocess.run(docker_argv)
+            result = subprocess.run(
+                docker_argv, env={**os.environ, **command_builder.environment.secrets}
+            )
             sys.exit(result.returncode)
     except PaddockEnvironmentError as e:
         print(str(e), file=sys.stderr)

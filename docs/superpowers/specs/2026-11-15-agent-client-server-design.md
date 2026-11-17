@@ -219,7 +219,7 @@ in a container. It gains:
   a client that needs no server.
 - `get_server_args(connection) -> list[str]`, default `[]`. Inserted after the
   command and before `extra_args`.
-- `get_server_env(connection) -> dict[str, str]`, default `{}`.
+- `get_server_env(connection) -> Mapping[str, str | Secret]`, default `{}`.
 
 Existing subclasses need no change.
 
@@ -237,7 +237,7 @@ instantiation through the registry as for agents.
   tools in the project.
 - `get_command()`, `get_volumes()`, `get_scratch_volumes()`, `get_build_args()`, as
   for clients.
-- `get_env(secret) -> dict[str, str]`.
+- `get_env(secret) -> Mapping[str, str | Secret]`.
 - `is_ready(connection) -> bool`. An HTTP probe from the host through the published
   port.
 
@@ -267,25 +267,28 @@ running" and knows nothing about agents. ADR 019 states the rules; in outline:
 - **Start on demand:** prepare the image under the server's `build` policy, create
   the server's network, `docker run -d`, then poll `is_ready` for up to 30 seconds.
   On timeout, or if the container exits first, stop with a pointer to
-  `docker logs` and leave the container.
+  `docker logs` and leave the container; one created but never started is removed.
 - **No `--rm`, no restart policy.** A stopped server is removed by ID, without
   force, and recreated on the next run.
 - **Never stopped by Paddock.** Labels hold the run spec, mounts included. Drift
   warns and prints `docker rm -f paddock-server-<key>`.
 - **Network:** one Paddock-owned, labelled bridge network per server. A paired
-  client joins it alongside any configured `network`; `host`, `none` and
-  `container:` stop a paired run.
+  client joins it alongside any configured `network`; `bridge`, `default`,
+  `host`, `none` and `container:` stop a paired run.
 - **Port:** `CONTAINER_PORT` is published on `127.0.0.1` only (Docker-assigned
   unless `port` is set), for the readiness probe and the server's web interface.
 - **Secret:** always minted at start, held only in the container's environment, read
-  back with `docker inspect`, passed as `-e NAME`.
+  back with `docker inspect`.
+- **Environment variables:** a safe one is passed as `-e NAME=value` and shows in
+  the printed command; a secret one, being any value that contains the secret or
+  is wrapped in `Secret`, is passed as `-e NAME` (ADR 019).
 - **`--dry-run`** prints the server's `docker run` line where one is needed and
   creates, builds and removes nothing; an unassigned port prints as `<port>`.
 
 ### Running the client
 
 As today, plus, for a paired client: the server's network, `get_server_env` passed
-as `-e NAME`, and the command `[*get_command(), *get_server_args(), *extra_args,
+as `-e` flags by the same rule, and the command `[*get_command(), *get_server_args(), *extra_args,
 *agent_args]`. A replacement command works as it does for any client.
 
 ### OpenCode
@@ -347,16 +350,18 @@ If the spike shows the shape is wrong, it comes back as a design change, not a p
 
 ## Delivery
 
-Four pull requests, each with its own plan. The second was split in two once its
-size was clear, to keep the config rules apart from the Docker lifecycle:
+Six pull requests, each with its own plan. The work was split further as its size
+became clear, to keep the config rules, the Docker lifecycle and each agent apart:
 
 1. **`agents.<name>` and `extra_args`.** No server concepts. Merged.
 2. **Agent halves and pairing.** `agent` as a client and a server half, the server
    registry, server settings and the pairing check. No Docker changes; a run that
-   chooses a server stops until the next one lands.
-3. **The server container and OpenCode.** `ManagedContainer`, the OpenCode client
-   and server, the bundled Dockerfile case and the user docs.
-4. **Omnigent**, after the spike.
+   chooses a server stops until the server container lands. Merged.
+3. **Discards for the project file.** Merged.
+4. **The server container.** `ManagedContainer`, the launcher and the paired run.
+5. **OpenCode.** Its client and server, the bundled Dockerfile case and the user
+   docs.
+6. **Omnigent**, after the spike.
 
 End-to-end checks use the `e2e-testing` skill. In a cloud session only
 `mcr.microsoft.com` images pull, so the OpenCode check builds its server image from
@@ -366,7 +371,8 @@ the skill's base image with the `@opencode/cli` binary copied in.
 
 - Where normalising `agent` sits in the loader, and how the `Agent` filter changes.
 - The exact run-spec fields hashed for drift.
-- Two `--network` flags on `docker run` work on Docker 29 (checked 2026-11-15). On an
-  older Docker that rejects them, `docker network connect` after start.
+- Two `--network` flags on `docker run` work on Docker 29 (checked 2026-11-15). A
+  Docker older than 25.0 rejects them, and stops a run that chooses a server
+  (ADR 019).
 - Container paths for OpenCode's volumes, and what, if anything, the client
   container persists (prompt history, preferences).

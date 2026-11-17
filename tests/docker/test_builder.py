@@ -1,6 +1,11 @@
 from pathlib import Path
 from unittest.mock import MagicMock
 
+import pytest
+
+from paddock.agents.servers import Secret, ServerConnection
+from paddock.config.errors import PaddockEnvironmentError
+
 from paddock.config.filters import VolumeSpec
 from paddock.docker.builder import DockerCommandBuilder, sanitise_volume_name
 
@@ -15,12 +20,20 @@ def test_sanitise_volume_name():
     )
 
 
-def make_agent(command=None, volumes=None, scratch_volumes=None):
+def make_agent(
+    command=None,
+    volumes=None,
+    scratch_volumes=None,
+    server_args=None,
+    server_env=None,
+):
     agent = MagicMock()
     agent.AGENT_KEY = "claude"
     agent.get_command.return_value = command or ["claude"]
     agent.get_volumes.return_value = volumes or {}
     agent.get_scratch_volumes.return_value = scratch_volumes or {}
+    agent.get_server_args.return_value = server_args or []
+    agent.get_server_env.return_value = server_env or {}
     return agent
 
 
@@ -295,3 +308,115 @@ def test_volumes_snapshot_shared_with_build(mocker, tmp_path: Path):
     vol_args = [argv[i + 1] for i, a in enumerate(argv) if a == "-v"]
     assert vol_args == [f"{host}:{spec}" for host, spec in logged]
     assert "/host/.claude.json:/root/.claude.json:rw" in vol_args
+
+
+CONNECTION = ServerConnection(
+    container_url="http://paddock-server-srv:1234",
+    host_url="http://127.0.0.1:32768",
+    network="paddock-server-srv",
+    secret="s3cr3t",
+)
+
+
+def _paired_builder(
+    mocker, tmp_path: Path, *, network=None, agent=None, connection=CONNECTION
+):
+    """A builder for a client, paired with ``connection`` unless it is None."""
+    mocker.patch(
+        "paddock.docker.builder.DockerCommandBuilder._container_name_available",
+        return_value=True,
+    )
+    return DockerCommandBuilder(
+        config={"image": "img", "volumes": {}, "network": network},
+        agent=agent or make_agent(),
+        workdir=tmp_path,
+        connection=connection,
+    )
+
+
+def _networks(argv: list[str]) -> list[str]:
+    """Every ``--network`` value in ``argv``."""
+    return [argv[i + 1] for i, a in enumerate(argv[:-1]) if a == "--network"]
+
+
+def test_paired_client_joins_the_servers_network(mocker, tmp_path: Path):
+    argv = _paired_builder(mocker, tmp_path).build(command=[])
+    assert _networks(argv) == ["paddock-server-srv"]
+
+
+def test_paired_client_keeps_its_configured_network_too(mocker, tmp_path: Path):
+    argv = _paired_builder(mocker, tmp_path, network="mine").build(command=[])
+    assert _networks(argv) == ["mine", "paddock-server-srv"]
+
+
+def test_configured_network_equal_to_the_servers_is_passed_once(mocker, tmp_path: Path):
+    builder = _paired_builder(mocker, tmp_path, network="paddock-server-srv")
+    assert _networks(builder.build(command=[])) == ["paddock-server-srv"]
+
+
+def test_server_env_shows_safe_values_and_hides_secret_ones(mocker, tmp_path: Path):
+    agent = make_agent(
+        server_env={
+            "OPENCODE_PASSWORD": CONNECTION.secret,
+            "A_URL": "u",
+            "DERIVED": Secret("dXNlcjpwdw=="),
+        }
+    )
+    builder = _paired_builder(mocker, tmp_path, agent=agent)
+    argv = builder.build(command=[])
+    flags = [argv[i + 1] for i, a in enumerate(argv[:-1]) if a == "-e"]
+    assert flags == ["A_URL=u", "DERIVED", "OPENCODE_PASSWORD"]
+    assert argv.index("-e") < argv.index("img")
+    assert not any(CONNECTION.secret in arg for arg in argv)
+    assert not any("dXNlcjpwdw==" in arg for arg in argv)
+    assert builder.environment.secrets == {
+        "DERIVED": "dXNlcjpwdw==",
+        "OPENCODE_PASSWORD": CONNECTION.secret,
+    }
+    agent.get_server_env.assert_called_with(CONNECTION)
+
+
+def test_server_args_precede_agent_args(mocker, tmp_path: Path):
+    agent = make_agent(server_args=["--server", "http://x"])
+    argv = _paired_builder(mocker, tmp_path, agent=agent).build(
+        command=[], agent_args=["extra", "cli"]
+    )
+    assert argv[-5:] == ["claude", "--server", "http://x", "extra", "cli"]
+    agent.get_server_args.assert_called_with(CONNECTION)
+
+
+def test_replacement_command_drops_server_args(mocker, tmp_path: Path):
+    agent = make_agent(server_args=["--server", "http://x"])
+    argv = _paired_builder(mocker, tmp_path, agent=agent).build(command=["bash"])
+    assert argv[-2:] == ["img", "bash"]
+
+
+def test_unpaired_client_is_untouched(mocker, tmp_path: Path):
+    agent = make_agent(server_args=["--server", "x"], server_env={"P": "v"})
+    builder = _paired_builder(mocker, tmp_path, agent=agent, connection=None)
+    argv = builder.build(command=[], agent_args=["extra"])
+    assert "--network" not in argv
+    assert "-e" not in argv
+    assert argv[-3:] == ["img", "claude", "extra"]
+    assert builder.environment.secrets == {}
+
+
+@pytest.mark.parametrize(
+    "network", ["host", "none", "bridge", "default", "container:abc"]
+)
+def test_paired_network_check_refuses_uncombinable_networks(network: str):
+    with pytest.raises(PaddockEnvironmentError) as exc:
+        DockerCommandBuilder.check_paired_network(
+            network, agent_key="paired", server_key="srv"
+        )
+    assert str(exc.value) == (
+        f'[network] "{network}" cannot be combined with a server\'s network; '
+        'agent "paired" is paired with server "srv"'
+    )
+
+
+@pytest.mark.parametrize("network", [None, "mine", "hosting"])
+def test_paired_network_check_allows_a_user_network_or_none(network: str | None):
+    DockerCommandBuilder.check_paired_network(
+        network, agent_key="paired", server_key="srv"
+    )

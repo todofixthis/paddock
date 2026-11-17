@@ -1,9 +1,10 @@
 from abc import ABC, abstractmethod
+from collections.abc import Mapping
 from typing import ClassVar
 
 from class_registry.entry_points import EntryPointClassRegistry
 
-from paddock.agents.servers import ServerConnection
+from paddock.agents.servers import Secret, ServerConnection
 from paddock.config.filters import VolumeSpec
 
 agent_registry: EntryPointClassRegistry = EntryPointClassRegistry("paddock.agents")
@@ -63,15 +64,24 @@ class BaseAgent(ABC):
         Arguments that point this client at its paired server.
 
         Placed after the command and before any configured ``extra_args``.
+        They are part of the command paddock prints, so never put
+        ``connection.secret`` here: pass it through :meth:`get_server_env`.
 
         Args:
             connection: The paired server's address and secret.
         """
         return []
 
-    def get_server_env(self, connection: ServerConnection) -> dict[str, str]:
+    def get_server_env(
+        self, connection: ServerConnection
+    ) -> Mapping[str, str | Secret]:
         """
         Environment variables that connect this client to its paired server.
+
+        Paddock prints each value in the client's ``docker run`` command,
+        except one that contains ``connection.secret`` or is wrapped in
+        :class:`~paddock.agents.servers.Secret`. Wrap any value derived from
+        the secret that no longer contains it.
 
         Args:
             connection: The paired server's address and secret.

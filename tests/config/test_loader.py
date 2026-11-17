@@ -933,6 +933,28 @@ def _fake_agents() -> ClassRegistry:
     return registry
 
 
+class _FakeSrv(BaseServer):
+    """A server ``srv`` with a default image, the ``paired`` client's default."""
+
+    SERVER_KEY = "srv"
+    PROTOCOL = "p"
+    CONTAINER_PORT = 1234
+    DEFAULT_IMAGE = "srv-default"
+
+    def get_command(self) -> list[str]:
+        return ["serve"]
+
+    def is_ready(self, connection: ServerConnection) -> bool:
+        return True
+
+
+def _fake_servers() -> ClassRegistry:
+    """A registry holding the one fake server, ``srv``."""
+    registry: ClassRegistry = ClassRegistry(attr_name="SERVER_KEY")
+    registry.register(_FakeSrv)
+    return registry
+
+
 def _resolve_agent_config(tmp_path: Path, monkeypatch, config: str) -> ResolvedConfig:
     """Resolve a user config against the fake clients.
 
@@ -947,9 +969,55 @@ def _resolve_agent_config(tmp_path: Path, monkeypatch, config: str) -> ResolvedC
         monkeypatch,
         'image = "i"\n' + config.replace("{workdir}", str(tmp_path.resolve())),
     )
-    return ConfigLoader(agents=_fake_agents()).resolve(
+    return ConfigLoader(agents=_fake_agents(), servers=_fake_servers()).resolve(
         _empty_parsed(), workdir=tmp_path, environ={}
     )
+
+
+def test_chosen_server_settings_are_resolved(tmp_path: Path, monkeypatch):
+    """The chosen server's settings table is checked and carried."""
+    r = _resolve_agent_config(
+        tmp_path, monkeypatch, 'agent = "paired"\n[agents.srv.server]\nimage = "img"\n'
+    )
+    assert r.server_settings is not None
+    assert r.server_settings.image == "img"
+
+
+def test_chosen_server_without_settings_uses_its_default_image(
+    tmp_path: Path, monkeypatch
+):
+    r = _resolve_agent_config(tmp_path, monkeypatch, 'agent = "paired"\n')
+    assert r.server_settings is not None
+    assert r.server_settings.image == "srv-default"
+
+
+_MISSING_SERVER_VOLUME = '[agents.srv.server.volumes]\n"/no/such/path" = "/x"\n'
+
+
+def test_unchosen_server_settings_are_not_checked_on_disk(tmp_path: Path, monkeypatch):
+    """A stale mount for a server the run does not use cannot stop it."""
+    r = _resolve_agent_config(
+        tmp_path, monkeypatch, 'agent = "plain"\n' + _MISSING_SERVER_VOLUME
+    )
+    assert r.server_settings is None
+
+
+def test_chosen_server_with_a_missing_volume_stops_the_run(tmp_path: Path, monkeypatch):
+    with pytest.raises(ExceptionGroup) as exc:
+        _resolve_agent_config(
+            tmp_path, monkeypatch, 'agent = "paired"\n' + _MISSING_SERVER_VOLUME
+        )
+    assert any(
+        str(e).startswith("[agents.srv.server.volumes./no/such/path] ")
+        for e in exc.value.exceptions
+    )
+
+
+def test_uninstalled_server_has_no_settings(tmp_path: Path, monkeypatch):
+    """An uninstalled server is the entry point's to report."""
+    r = _resolve_agent_config(tmp_path, monkeypatch, 'agent = { server = "nope" }\n')
+    assert r.server_key == "nope"
+    assert r.server_settings is None
 
 
 def test_string_takes_the_clients_default_server(tmp_path: Path, monkeypatch):
