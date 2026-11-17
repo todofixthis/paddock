@@ -2,6 +2,7 @@ import base64
 import http.client
 import urllib.request
 
+from paddock.agents import BaseAgent
 from paddock.agents.servers import BaseServer, Secret, ServerConnection
 from paddock.config.filters import VolumeSpec
 
@@ -15,6 +16,47 @@ OPENCODE_USERNAME = "opencode"
 
 # Stops a client or server replacing the version the image pins.
 OPENCODE_FIXED_ENV = {"OPENCODE_DISABLE_AUTOUPDATE": "1"}
+
+
+class OpenCodeAgent(BaseAgent):
+    """OpenCode's terminal client, which runs none of the agent's tools.
+
+    It is sandboxed all the same: it loads plugins from the project it
+    starts in (ADR 018).
+    """
+
+    AGENT_KEY = "opencode"
+    DEFAULT_SERVER = "opencode"
+    PROTOCOL = OPENCODE_PROTOCOL
+
+    def get_command(self) -> list[str]:
+        return ["opencode"]
+
+    def get_volumes(self) -> dict[str, VolumeSpec]:
+        """Mount nothing: sign-in and sessions live in the server."""
+        return {}
+
+    def get_scratch_volumes(self, image: str) -> dict[str, VolumeSpec]:
+        """Keep the interface's own state between runs (ADR 021).
+
+        One volume whatever the image, since the state is the interface's
+        and not the image's.
+        """
+        return {
+            "paddock-client-opencode-state": VolumeSpec(
+                "/root/.local/state/opencode", "rw"
+            )
+        }
+
+    def get_build_args(self) -> dict[str, str]:
+        return {"AGENT": "opencode"}
+
+    def get_server_args(self, connection: ServerConnection) -> list[str]:
+        """Name the server by flag: OpenCode reads no variable for it."""
+        return ["--server", connection.container_url]
+
+    def get_server_env(self, connection: ServerConnection) -> dict[str, str | Secret]:
+        return {**OPENCODE_FIXED_ENV, OPENCODE_PASSWORD_ENV: connection.secret}
 
 
 class OpenCodeServer(BaseServer):

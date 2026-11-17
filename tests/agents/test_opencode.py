@@ -5,9 +5,13 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 
 import pytest
 
-from paddock.agents.opencode import OpenCodeServer
+from paddock.agents import agent_registry
+from paddock.agents.pairing import AgentPairing
+from paddock.agents.opencode import OpenCodeAgent, OpenCodeServer
 from paddock.agents.servers import ServerConnection, server_registry
+from paddock.cli import parse_args
 from paddock.config.filters import VolumeSpec
+from paddock.config.loader import ConfigLoader
 
 SECRET = "s3cr3t-s3cr3t"
 
@@ -121,3 +125,64 @@ def test_probe_ignores_the_hosts_proxy(info_url: str, monkeypatch) -> None:
     monkeypatch.delenv("no_proxy", raising=False)
     monkeypatch.delenv("NO_PROXY", raising=False)
     assert OpenCodeServer().is_ready(_connection(info_url)) is True
+
+
+def test_client_is_registered() -> None:
+    assert isinstance(agent_registry["opencode"], OpenCodeAgent)
+
+
+def test_client_identity() -> None:
+    client = OpenCodeAgent()
+    assert client.AGENT_KEY == "opencode"
+    assert client.DEFAULT_SERVER == "opencode"
+    assert client.PROTOCOL == OpenCodeServer.PROTOCOL
+
+
+def test_client_command_and_build_arg() -> None:
+    client = OpenCodeAgent()
+    assert client.get_command() == ["opencode"]
+    assert client.get_build_args() == {"AGENT": "opencode"}
+
+
+def test_client_mounts_nothing_from_the_host() -> None:
+    assert OpenCodeAgent().get_volumes() == {}
+
+
+def test_client_keeps_interface_state_in_a_named_volume() -> None:
+    assert OpenCodeAgent().get_scratch_volumes("any-image") == {
+        "paddock-client-opencode-state": VolumeSpec("/root/.local/state/opencode", "rw")
+    }
+
+
+def test_client_points_at_the_server_by_flag() -> None:
+    connection = _connection("http://127.0.0.1:4096")
+    assert OpenCodeAgent().get_server_args(connection) == [
+        "--server",
+        "http://paddock-server-opencode:4096",
+    ]
+
+
+def test_client_takes_the_password_from_the_environment() -> None:
+    connection = _connection("http://127.0.0.1:4096")
+    client = OpenCodeAgent()
+    assert client.get_server_env(connection) == {
+        "OPENCODE_DISABLE_AUTOUPDATE": "1",
+        "OPENCODE_PASSWORD": SECRET,
+    }
+    assert SECRET not in " ".join(client.get_server_args(connection))
+
+
+def test_choosing_the_client_brings_its_server(tmp_path, monkeypatch) -> None:
+    """``agent = "opencode"`` resolves to the client paired with the server."""
+    config_dir = tmp_path / ".config" / "paddock"
+    config_dir.mkdir(parents=True)
+    (config_dir / "config.toml").write_text(
+        'agent = "opencode"\nimage = "i"\n[agents.opencode.server]\nimage = "i"\n'
+    )
+    parsed = parse_args([])
+    resolved = ConfigLoader().resolve(parsed, workdir=tmp_path, environ={})
+    assert resolved.agent_key == "opencode"
+    assert resolved.server_key == "opencode"
+    assert resolved.server_settings is not None
+    pairing = AgentPairing.resolve(resolved.agent_key, resolved.server_key)
+    assert pairing.is_paired

@@ -894,7 +894,7 @@ def test_resolve_warns_about_settings_for_an_uninstalled_agent(
         ConfigLoader().resolve(_empty_parsed(), workdir=tmp_path, environ={})
     assert [rec.getMessage() for rec in caplog.records] == [
         '[agents.claud] No agent named "claud" is installed, so its settings '
-        "are ignored; installed agents: claude, false"
+        "are ignored; installed agents: claude, false, opencode"
     ]
 
 
