@@ -67,6 +67,18 @@
     },
     {
       "customType": "regex",
+      "datasourceTemplate": "npm",
+      "depNameTemplate": "@opencode/cli",
+      "description": "Update README.rst's OPENCODE_VERSION default alongside the Dockerfile's",
+      "managerFilePatterns": [
+        "/^README\\.rst$/"
+      ],
+      "matchStrings": [
+        "``OPENCODE_VERSION``\\n\\s+- ``(?<currentValue>[^`]+)``"
+      ]
+    },
+    {
+      "customType": "regex",
       "datasourceTemplate": "python-version",
       "depNameTemplate": "python",
       "description": "Update README.rst's PYTHON_VERSION default alongside the Dockerfile's",
@@ -90,6 +102,13 @@
       "matchPackageNames": [
         "@anthropic-ai/claude-code"
       ]
+    },
+    {
+      "description": "Let an OpenCode release settle for three days: it has no stable channel and ships several times a week",
+      "matchPackageNames": [
+        "@opencode/cli"
+      ],
+      "minimumReleaseAge": "3 days"
     },
     {
       "description": "Keep PYTHON_VERSION at major.minor, which deadsnakes' package names use, and skip pre-releases",

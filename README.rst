@@ -182,6 +182,15 @@ sessions.
 Runs ``/bin/bash``.  Useful for exploring the container environment or
 running ad-hoc commands without a coding agent.
 
+``opencode``
+~~~~~~~~~~~~
+
+Runs OpenCode's client in the container, against one OpenCode server that
+paddock starts in a container of its own and every project shares.  The
+server runs the agent's tools, so it needs its own image and your projects
+mounted; see the
+`OpenCode page <https://phx-paddock.readthedocs.io/en/latest/usage/agents/opencode.html>`__.
+
 Adding agents
 ~~~~~~~~~~~~~
 
@@ -195,6 +204,11 @@ group in any installed package:
 
 Each agent must subclass ``paddock.agents.BaseAgent`` and implement
 ``get_command()`` and ``get_volumes()``.
+
+An agent that needs a shared server registers one under the
+``paddock.servers`` group, as a subclass of
+``paddock.agents.servers.BaseServer``.  The two are paired when they name
+the same ``PROTOCOL``.
 
 Docker Image
 ------------
@@ -215,13 +229,16 @@ Build arguments:
      - Ubuntu base image tag
    * - ``AGENT``
      - ``none``
-     - ``claude`` or ``none``
+     - ``claude``, ``none`` or ``opencode``
    * - ``CLAUDE_CODE_VERSION``
      - ``2.1.323``
      - Claude Code version, for ``AGENT=claude``
    * - ``NODE_VERSION``
      - ``26``
      - Node.js major version
+   * - ``OPENCODE_VERSION``
+     - ``2.3.0``
+     - OpenCode version, for ``AGENT=opencode``
    * - ``PYTHON_VERSION``
      - ``3.13``
      - Python version (installed from deadsnakes)

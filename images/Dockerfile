@@ -9,6 +9,8 @@ ARG AGENT=none
 ARG CLAUDE_CODE_VERSION=2.1.323
 # renovate: datasource=node-version depName=node versioning=node
 ARG NODE_VERSION=26
+# renovate: datasource=npm depName=@opencode/cli
+ARG OPENCODE_VERSION=2.3.0
 # renovate: datasource=python-version depName=python versioning=python
 ARG PYTHON_VERSION=3.13
 
@@ -28,7 +30,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Node.js (required for Claude Code)
+# Install Node.js (required to install the agents)
 RUN curl -fsSL "https://deb.nodesource.com/setup_${NODE_VERSION}.x" | bash - \
     && apt-get install -y nodejs \
     && apt-get clean \
@@ -38,5 +40,6 @@ RUN curl -fsSL "https://deb.nodesource.com/setup_${NODE_VERSION}.x" | bash - \
 RUN case "$AGENT" in \
     claude) npm install -g "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}" ;; \
     none) echo "No agent selected" ;; \
+    opencode) npm install -g "@opencode/cli@${OPENCODE_VERSION}" ;; \
     *) echo "Unknown agent: $AGENT" && exit 1 ;; \
     esac
