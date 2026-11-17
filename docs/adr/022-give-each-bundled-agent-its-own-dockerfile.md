@@ -2,8 +2,8 @@
 status: Accepted
 date: 2026-11-17
 scope: [images/, src/paddock/agents/, pyproject.toml, .github/workflows/build.yml, .github/scripts/, renovate.json, README.rst, docs/usage/]
-summary: images/ holds one Dockerfile per bundled agent, named <agent>.Dockerfile (claude.Dockerfile, opencode.Dockerfile), each complete in itself and pinned and smoke-tested as ADR 016 requires; not one Dockerfile holding every agent's install, not a shared base image, and not one multi-stage file with a target per agent; paddock still passes AGENT to every build, so each file declares it, and claude.Dockerfile keeps its claude and none cases, none being what agent = false builds; OpenCode's one file serves both its client and its server.
-revisit-when: The toolchain steps the Dockerfiles repeat are found to have drifted apart; paddock publishes images to a registry; a bundled agent needs more than one image, as OpenCode's client and server might; paddock can build one stage of a Dockerfile.
+summary: images/ holds one Dockerfile per bundled agent, named <agent>.Dockerfile (claude.Dockerfile, opencode.Dockerfile), each complete in itself and pinned and smoke-tested as ADR 016 requires; not one Dockerfile holding every agent's install, not a shared base image, and not one multi-stage file with a target per agent; every bundled agent still passes AGENT to its build, so each file declares it, and claude.Dockerfile keeps its claude and none cases, none being what agent = false builds; OpenCode's one file serves both its client and its server.
+revisit-when: The toolchain steps the Dockerfiles repeat are found to have drifted apart; paddock publishes images to a registry; a bundled agent needs more than one image, as OpenCode's client and server might.
 ---
 
 # 022: Give Each Bundled Agent Its Own Dockerfile
@@ -45,7 +45,7 @@ conditional, and the file stops being readable as an example of anything.
 ### Option 2: One Dockerfile per agent (Accepted)
 
 `images/<agent>.Dockerfile`, each complete in itself: `claude.Dockerfile`, which
-is the old file under a new name, and `opencode.Dockerfile`.
+is the released file under a new name, and `opencode.Dockerfile`.
 
 **Pros:** Each file is a whole, copyable example for its agent, and the unit a
 published image would be built from.
@@ -66,12 +66,14 @@ the other.
 
 ### Option 4: One multi-stage Dockerfile, with a target per agent
 
-A toolchain stage, and a stage per agent built with `--target`.
+A toolchain stage and a stage per agent, the last `FROM` choosing one by the
+`AGENT` argument.
 
 **Pros:** No repeated steps, one build step, no registry.
-**Cons:** Paddock passes a build no target, so it would need a `build.target`
-setting first. The file is every agent's again, as in Option 1.
-**Risks:** A build without a target produces whichever stage is last.
+**Cons:** The file is every agent's again, as in Option 1, and harder to read
+than Option 1's `case`.
+**Risks:** An `AGENT` that names no stage fails with a message about a missing
+image, not an unknown agent.
 
 ## Decision
 
@@ -90,12 +92,13 @@ server's version and nothing else, so a client-only file would be smaller, but
 two files mean two pins to keep equal and two images to build before a first
 run. One image for both removes the mismatch.
 
-**`AGENT` stays.** Paddock still passes each build the agent's name, because a
-user's own Dockerfile may branch on it, so every bundled file declares it.
-`claude.Dockerfile` is the old file unchanged: it keeps its `claude` and `none`
+**`AGENT` stays.** Each bundled agent still passes its build its name, because
+a user's own Dockerfile may branch on it, so every bundled file declares it.
+`claude.Dockerfile` is the released file unchanged, the OpenCode case having
+been added and removed again before any release: it keeps its `claude` and `none`
 cases, `none` being the image `agent = false` builds, and its default of `none`.
 That default sits oddly under the file's name, since a bare `docker build` of
-it installs no agent; paddock always passes the argument, and changing what
+it installs no agent; the bundled agents always pass the argument, and changing what
 the renamed file builds was not part of renaming it. `opencode.Dockerfile`
 installs OpenCode whatever the argument says.
 
@@ -111,7 +114,9 @@ installs OpenCode whatever the argument says.
 - A change to the toolchain steps is made in every file. Nothing checks that
   they agree.
 - A new bundled agent costs a Dockerfile, a leg in the CI matrix, a case in the
-  smoke test and its README rows.
+  smoke test (and its command in the `none` case's list), its README rows, and
+  a Renovate manager for each row, without which the row silently stops being
+  bumped (ADR 016).
 - `opencode.Dockerfile` no longer refuses an agent it does not know. Pointed at
   it, `agent = "claude"` builds an image without Claude and fails when the
   container starts, where the one file failed at the build.
