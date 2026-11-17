@@ -5,7 +5,7 @@
 paddock reads two config files, among [other sources](configuration.md#where-configuration-comes-from):
 
 - **User-level** (`$XDG_CONFIG_HOME/paddock/config.toml`, by default `~/.config/paddock/config.toml`) — your personal defaults, applied to every project.
-- **Project-level** (`.paddock/config.toml` in the project workdir) — settings committed alongside a project and shared with everyone who works on it. It takes the same [directives](configuration.md#directives), except `config` and `projects`, which paddock [ignores there](#warning-behaviour).
+- **Project-level** (`.paddock/config.toml` in the project workdir) — settings committed alongside a project and shared with everyone who works on it. It takes the same [directives](configuration.md#directives), except `config`, `projects` and an agent server's settings (`agents.<name>.server`), which paddock [ignores there](#warning-behaviour).
 
 Because project-level config lives inside a project repository, paddock treats it as **untrusted by default**. A malicious or misconfigured project could otherwise redirect your Docker image, override your network settings, mount sensitive paths, or pass arguments to your agent. Even once enabled it carries the lowest [weight](#precedence) of any source, so it can't override a value you set — though it can add mounts and build arguments to yours, and arguments for an agent you have set none for. You must explicitly grant each project (or all projects) permission to contribute config before paddock will honour it.
 
@@ -35,7 +35,7 @@ A grant directly under `[config.allowlist]` applies to every repository you run 
 
 - `build.dockerfile` / `build.context` — paddock runs `docker build` on the host, from the project's Dockerfile and context.
 - `volumes` — any existing host path, including `~`-relative ones expanded against *your* home (`~/.ssh`, say), mounted `rw` if the mapping says so.
-- `agent` — selecting `claude` mounts your `~/.claude` read-write, plus `~/.claude.json` if it exists.
+- `agent` — selecting `claude` mounts your `~/.claude` read-write, plus `~/.claude.json` if it exists. The file can also choose an agent's [server](configuration.md#agentsnameserver), which starts a long-lived container from your server settings — your image, your mounts, your port — that keeps running after the project's own container exits. It cannot change those settings. Before granting anything to a project the `opencode` server mounts, read the caution under [What the agent can reach](agents/opencode.md#what-the-agent-can-reach).
 - `agents` — arguments for any agent you have set none for yourself; see the caution under [The allowlist](#the-allowlist).
 - `network` — including `host`.
 
@@ -185,13 +185,14 @@ A source that is disabled failed validation — malformed TOML, an unknown key, 
 <source> source had errors but is disabled by [config.allowlist] — ignored
 ```
 
-An enabled project file set a key that only your user config may set, `config` or `projects`. No grant can keep it, so paddock removes it before validating the file, and nothing under it can stop the run:
+An enabled project file set a key that only your user config may set: `config`, `projects`, or an agent server's settings. No grant can keep it, so paddock removes it before validating the file, and nothing under it can stop the run:
 
 ```
 project_toml: ignored <key> — only your user config may set it
+project_toml: ignored agents.<name>.server — server settings are read only from the global section of your user config
 ```
 
-All three are intentional: paddock loads every source unconditionally so it can warn you when config is being silently dropped. A disabled project file that holds nothing but `config` or `projects` is the one case that draws no warning: paddock ignores a disabled file whole.
+All three are intentional: paddock loads every source unconditionally so it can warn you when config is being silently dropped. A disabled project file that holds nothing but these user-only keys is the one case that draws no warning: paddock ignores a disabled file whole.
 
 `--quiet` disables all logging, these warnings included; fatal config errors still print.
 

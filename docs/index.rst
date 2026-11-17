@@ -5,7 +5,8 @@
    :glob:
    :hidden:
 
-   usage/**
+   usage/*
+   usage/agents/*
 
 .. toctree::
    :caption: Reference
