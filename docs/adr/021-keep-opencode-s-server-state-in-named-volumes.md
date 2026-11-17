@@ -2,7 +2,7 @@
 status: Accepted
 date: 2026-11-17
 scope: [src/paddock/agents/, src/paddock/docker/, images/Dockerfile, docs/usage/]
-summary: By default OpenCode's server keeps its data and state directories in two named Docker volumes (paddock-server-opencode-data and -state, under /root/.local) and its client keeps its interface state in a third (paddock-client-opencode-state), apart from the host's OpenCode; a user may opt into sharing by mounting a host directory at one of those paths under agents.opencode.server.volumes, which replaces the named volume there, and Paddock never does so unasked; the config and cache directories deliberately get no volume, and the server has no default image, so agents.opencode.server.image is required.
+summary: By default OpenCode's server keeps its data and state directories in two named Docker volumes (paddock-server-opencode-data and -state, under /root/.local) and its client keeps its interface state in a third (paddock-client-opencode-state), apart from the host's OpenCode; a mount configured under agents.<name>.server.volumes replaces any mount the server's class declares at exactly the same container path, for every server, which is how a user opts into sharing the host's OpenCode data directory, and Paddock never shares it unasked; a client's volumes have no such rule; the config and cache directories deliberately get no volume, and the server has no default image, so agents.opencode.server.image is required.
 revisit-when: OpenCode gains a lock that stops two processes opening one database; a shared database is found corrupted; Paddock can warn about an accepted risk and let the user silence that warning; OpenCode moves its database, credentials or directory layout; Paddock runs containers as a user other than root; a server can have more than one instance; an image exists that carries a typical user's toolchain.
 ---
 
@@ -54,9 +54,9 @@ session and the sign-in. The client loses its interface state on every run.
 ### Option 2: Named volumes by default, the host's directories by opt-in (Accepted)
 
 The server's data and state directories are two named volumes, and the client's
-state directory a third. A user who mounts a host directory at one of the
-server's two paths, under `agents.opencode.server.volumes`, gets that directory
-there in place of the named volume.
+state directory a third. A user who mounts the host's data directory at the
+server's path for it, under `agents.opencode.server.volumes`, gets that
+directory there in place of the named volume.
 
 **Pros:** State outlives the container. Only the one server ever opens the
 database. The agent, whose shell can read the database, sees only credentials
@@ -86,18 +86,29 @@ Option 2. Option 3's risk is the one failure this work exists to remove, and it
 would be reached by ordinary use: nothing about running `opencode` on the host
 looks wrong. A default must not be corruptible by ordinary use.
 
-**Sharing is the user's to choose.** A volume configured under
-`agents.<name>.server.volumes` replaces the server's own volume at the same
-container path, for any server. For OpenCode that is the opt-in: mount the
-host's data directory at `/root/.local/share/opencode`, and the state directory
-likewise. There is no setting that names the host's directories for the user;
-they write the path, so what is shared is in their config in full. The docs
-set out what they take on: the server is never stopped by Paddock, so a host
-`opencode` started while it runs is a second process on the database, and the
-user must stop one before starting the other; the agent can read every
-credential in that database; and the database then holds container paths.
-Paddock prints no warning for this yet: one shown on every run would be read
-past, and it has no way to silence a single warning.
+**Sharing is the user's to choose.** A mount configured under
+`agents.<name>.server.volumes` replaces any mount the server's class declares
+at exactly the same container path, named volume or not, for every server. For
+OpenCode that is the opt-in: mount the host's data directory read-write at
+`/root/.local/share/opencode`, which is where transcripts and sign-in live. A
+mount at a parent of that path does not replace the volume, which then hides
+the host's directory beneath it. There is no setting that names the host's
+directory for the user; they write the path, so what is shared is in their
+config in full.
+
+The docs set out what they take on. The server is never stopped by Paddock, and
+the host's `opencode` leaves a background service running, so the two overlap
+unless the user stops one before starting the other, and overlapping they are
+two processes on one database. The agent can read every credential in that
+database. The database then holds container paths. Under a rootful Docker on Linux the
+server, running as root, leaves root-owned files in the host's directory, which the host's
+`opencode` may be unable to open. Paddock prints no warning for any of this
+yet: one shown on every run would be read past, and it has no way to silence a
+single warning.
+
+The rule is the server's alone. The client's interface state stays in its
+named volume, and a `volumes` entry at that path is a duplicate mount that
+Docker refuses; prompt history is not worth a second rule.
 
 The volumes are named for the server, not the image, since there is one server:
 `paddock-server-opencode-data` and `paddock-server-opencode-state`, at
@@ -132,8 +143,12 @@ missing setting stops the run before anything starts.
 - A user who shares the data directory and runs a host `opencode` beside the
   server can corrupt the database, and nothing but the docs says so. A warning
   the user can silence is a [backlog item][suppressible warnings].
-- Moving between the named volume and a host directory moves no data: sessions
-  and sign-in stay where they were written.
+- Moving between the named volume and a host directory moves no data: the
+  server shows whichever it is given, and the other's sessions and sign-in stay
+  where they were written.
+- A server plugin's own mount, a read-only one included, can be replaced by the
+  user's config. Server settings come only from the user's own global config
+  (ADR 019), so no project file can do it.
 - The server's container is shared and long-lived, so a setting the agent
   writes to the config directory in one project stays in force for every
   project until the server is recreated.
