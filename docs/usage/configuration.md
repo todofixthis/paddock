@@ -817,7 +817,9 @@ name stops the run and lists the installed agents:
 Use `false` to explore an image or debug it. With [`build.dockerfile`](#builddockerfile)
 set, though, a rebuild under `false` tags the same [`image`](#image) with `AGENT=none`,
 replacing an image that had the agent installed. To get a shell in your agent's image,
-pass a [command](#run-options) instead: `paddock /bin/bash`.
+pass a [command](#run-options) instead: `paddock /bin/bash`. For an agent with a
+server that is a shell in the client's container; the tools run in the server, which
+`docker exec -it paddock-server-<name> /bin/bash` reaches.
 
 #### Clients and servers
 
@@ -852,7 +854,9 @@ Sources merge the two halves separately, the higher weight winning each:
   `claude` with no server.
 - **Within one source, the whole value applies first and the halves over it**, whatever
   order you write them in: `--agent-server=opencode --agent=false` is the shell beside
-  the `opencode` server.
+  the `opencode` server. Only the command line and the environment can hold both; a
+  TOML file sets `agent` to a name or to a table, and one with `agent = "claude"`
+  cannot also have an `[agent]` header.
 
 A client that needs a server stops the run when it has none, or one of another kind:
 
@@ -953,7 +957,6 @@ image = "paddock-opencode:latest"
 
 [agents.opencode.server]
 image = "paddock-opencode:latest"
-port = 4096
 
 [agents.opencode.server.build]
 dockerfile = "~/src/paddock/images/Dockerfile"
@@ -995,7 +998,7 @@ replaces it; that is how you
 [share OpenCode's data with the host](agents/opencode.md#sharing-opencodes-data-with-the-host).
 
 A run that chooses a server needs Docker Engine 25.0 or newer. Settings for a name no
-installed server has are ignored with a [warning](#troubleshooting).
+installed server has are ignored with a [warning](#agent-servers).
 
 ### `build.args`
 
@@ -1229,6 +1232,10 @@ at the same path in the container. Set `false` to let the agent keep state there
 runs. A `[projects."<workdir>"]` value beats the user-level one. See
 [The `.paddock` directory](project-config.md#the-paddock-directory).
 
+The setting covers the agent's own container. An agent with a server runs its tools in
+the server, which reaches `.paddock/` through its own mounts whatever this says; see
+the [`opencode` agent](agents/opencode.md#what-the-agent-can-reach).
+
 ### `image`
 
 The Docker image to run. Required.
@@ -1245,11 +1252,14 @@ Without it, Docker pulls the image on first use if it isn't local, and
 [`build.policy`](#buildpolicy) can keep it current.
 
 The image must have the agent's command on its `PATH` and run as root; see
-[Custom Docker Images](docker-images.md). An agent's server runs an image of its own,
-[`agents.<name>.server.image`](#agentsnameserver). Set it in your user file, and per project
+[Custom Docker Images](docker-images.md). Set `image` in your user file, and per project
 where a project needs a different toolchain — but see
 [`build.dockerfile`](#builddockerfile) before combining a per-project image with a
 user-level build.
+
+An agent's server runs an image of its own,
+[`agents.<name>.server.image`](#agentsnameserver), which can be set only in the global
+section of your user file, never per project.
 
 ### `network`
 
@@ -1398,7 +1408,9 @@ Your user file has invalid TOML or a bad value; `<key>` names the field. Common 
 a misspelt key (`imgae`), `[agent.<name>]` written for
 [`[agents.<name>]`](#agentsnameextra_args) (reported at `agent.<name>`; when the file
 also sets `agent` to a name, as `[user] This value is not valid TOML.`, repeated for
-`[project_overrides]`), an allowlist source other than `cli`, `env` and
+`[project_overrides]`), an `[agent]` header in a file that also sets `agent` to a name
+(the same `not valid TOML` message; write `agent = { client = "…", server = "…" }`
+instead), an allowlist source other than `cli`, `env` and
 `project_toml`, or an allowlist value that isn't `true`, `false` or a list of
 [allowlist paths](#configallowlist).
 

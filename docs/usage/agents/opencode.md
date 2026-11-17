@@ -45,9 +45,9 @@ image = "paddock-opencode:latest"
 
 Three things in the mount matter:
 
-- **The container path equals the host path**, written in full. `~` on the container
-  side means `/root`, so `"~/code" = "~/code:rw"` mounts your projects at `/root/code`,
-  which doesn't count.
+- **The container path equals the host path**, written in full and with symlinks
+  resolved, as `pwd -P` prints it. `~` on the container side means `/root`, so
+  `"~/code" = "~/code:rw"` mounts your projects at `/root/code`, which doesn't count.
 - **`:rw` is written out.** A bare value mounts read-only.
 - **It covers every project you run paddock in.** Mount the parent directory once rather
   than each project: a new mount takes effect only when the server is recreated, which
@@ -64,6 +64,11 @@ docker run --rm -it --name paddock-widgets-opencode --workdir=/home/alice/code/w
 
 A variable printed without a value, such as `OPENCODE_PASSWORD`, is a secret paddock
 passes through the environment so that it appears in no command.
+
+The first real run prints the server's command, waits up to 30 seconds for the server
+to answer, logs `Server: opencode (http://127.0.0.1:<port>)`, then opens OpenCode's
+interface, not yet [signed in](#signing-in-and-where-state-lives). Later runs find the
+server running and go straight to the interface.
 
 `agents.opencode.server.image` is required: no default image carries your toolchain.
 Without it the run stops:
@@ -149,11 +154,15 @@ under `--server` with "Unrecognized flag".
 ## Sharing OpenCode's data with the host
 
 Use this to keep OpenCode on your host as a fallback for paddock, with the same
-sessions and sign-in on both sides. Read the caution below before you do: sharing is
-safe only while you keep the two from running at once.
+sessions and sign-in on both sides. Read this whole section before you do: sharing is
+safe only while you keep the two from running at once, and under rootful Docker on
+Linux the host's OpenCode needs a `chown` before each use. Back the directory up first;
+paddock cannot repair a corrupted database.
 
-Find the host's data directory with `opencode debug paths` (the `data` row), and mount
-it read-write at exactly `/root/.local/share/opencode` in the server:
+Find the host's data directory with `opencode debug paths` (the `data` row), then stop
+the host's background service, which outlives OpenCode's window: `opencode service
+stop`. Mount the directory read-write at exactly `/root/.local/share/opencode` in the
+server:
 
 ```toml
 [agents.opencode.server.volumes]
@@ -198,7 +207,8 @@ Sharing has three further costs:
 
 - **The agent can read every credential in the database**, not only those you entered
   through paddock: its shell runs in the server, where the file is mounted.
-- **The database comes to hold paths from the container.**
+- **The database comes to hold paths from the container.** They match the host's for
+  projects mounted at their own paths, which the server requires of every workdir.
 - **Under rootful Docker on Linux, the server leaves root-owned files in the
   directory.** In testing the database came out owned by `root`, mode `600`, and
   `opencode` on the host, run as an ordinary user, then failed with

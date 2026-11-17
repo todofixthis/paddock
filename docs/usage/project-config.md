@@ -141,7 +141,10 @@ Project overrides (weight 30) are merged after user defaults (weight 20), so the
 When project-level config is enabled, paddock:
 
 1. Creates `.paddock/` in the project workdir if it does not already exist.
-2. Mounts it into the container at the same absolute path, **read-only** by default.
+2. Mounts it into the agent's container at the same absolute path, **read-only** by
+   default. An agent with a server runs its tools in the server, which reaches the
+   directory through its own mounts, read-write where they are; see the
+   [`opencode` agent](agents/opencode.md#what-the-agent-can-reach).
 3. After the container exits, removes `.paddock/` — but only if paddock created it and it is still empty. If it has contents, paddock logs a warning and leaves the directory in place for you to inspect.
 
 A `.paddock` that is a symlink is rejected rather than followed:
