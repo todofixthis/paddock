@@ -21,11 +21,12 @@ stops it:
 
 ## Setting up
 
-Build one image for both containers from the bundled Dockerfile, in a checkout of
+Build one image for both containers from the bundled `images/opencode.Dockerfile`, in
+a checkout of
 [paddock](https://github.com/todofixthis/paddock):
 
 ```bash
-docker build --build-arg AGENT=opencode -t paddock-opencode:latest -f images/Dockerfile .
+docker build -t paddock-opencode:latest -f images/opencode.Dockerfile images
 ```
 
 Then, in your user config (`~/.config/paddock/config.toml`), choose the agent, name the
@@ -233,8 +234,9 @@ server's only warns, but one image for both, as [above](#setting-up), rules the
 mismatch out.
 
 With [`build.dockerfile`](../configuration.md#builddockerfile) set, paddock builds the
-client's image with `AGENT=opencode`; the bundled Dockerfile installs OpenCode for that
-value, at the version its `OPENCODE_VERSION` argument pins. That build runs after the
+client's image with the build argument `AGENT=opencode`. The bundled
+`opencode.Dockerfile` installs OpenCode whatever that argument says, at the version its
+`OPENCODE_VERSION` argument pins. That build runs after the
 server has started, so it cannot supply the server's image on a first run: see
 [`agents.<name>.server`](../configuration.md#agentsnameserver) for building that.
 

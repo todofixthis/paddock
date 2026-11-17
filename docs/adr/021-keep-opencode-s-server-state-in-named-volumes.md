@@ -1,7 +1,7 @@
 ---
 status: Accepted
 date: 2026-11-17
-scope: [src/paddock/agents/, src/paddock/docker/, images/Dockerfile, docs/usage/]
+scope: [src/paddock/agents/, src/paddock/docker/, images/, docs/usage/]
 summary: By default OpenCode's server keeps its data and state directories in two named Docker volumes (paddock-server-opencode-data and -state, under /root/.local) and its client keeps its interface state in a third (paddock-client-opencode-state), apart from the host's OpenCode; a mount configured under agents.<name>.server.volumes replaces any mount the server's class declares at exactly the same container path, for every server, which is how a user opts into sharing the host's OpenCode data directory, and Paddock never shares it unasked; a client's volumes have no such rule; the config and cache directories deliberately get no volume, and the server has no default image, so agents.opencode.server.image is required.
 revisit-when: OpenCode gains a lock that stops two processes opening one database; a shared database is found corrupted; Paddock can warn about an accepted risk and let the user silence that warning; OpenCode moves its database, credentials or directory layout; Paddock runs containers as a user other than root; a server can have more than one instance; an image exists that carries a typical user's toolchain.
 ---

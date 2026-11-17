@@ -213,10 +213,11 @@ the same ``PROTOCOL``.
 Docker Image
 ------------
 
-A ready-to-use ``Dockerfile`` is included in `images/ <https://github.com/todofixthis/paddock/tree/main/images>`__.  It installs
-Python (via the deadsnakes PPA), Node.js, and the selected coding agent.
+A ready-to-use Dockerfile for each bundled agent is included in
+`images/ <https://github.com/todofixthis/paddock/tree/main/images>`__.  Each
+installs Python (via the deadsnakes PPA), Node.js and its agent.
 
-Build arguments:
+``claude.Dockerfile`` build arguments:
 
 .. list-table::
    :header-rows: 1
@@ -229,28 +230,40 @@ Build arguments:
      - Ubuntu base image tag
    * - ``AGENT``
      - ``none``
-     - ``claude``, ``none`` or ``opencode``
+     - ``claude``, or ``none`` for the image without an agent
    * - ``CLAUDE_CODE_VERSION``
      - ``2.1.323``
      - Claude Code version, for ``AGENT=claude``
    * - ``NODE_VERSION``
      - ``26``
      - Node.js major version
-   * - ``OPENCODE_VERSION``
-     - ``2.3.0``
-     - OpenCode version, for ``AGENT=opencode``
    * - ``PYTHON_VERSION``
      - ``3.13``
      - Python version (installed from deadsnakes)
 
-Build the image manually:
+``opencode.Dockerfile`` takes ``UBUNTU_VERSION``, ``NODE_VERSION`` and
+``PYTHON_VERSION`` with the same defaults, and one argument of its own.  It
+serves both of OpenCode's containers, and installs OpenCode whatever ``AGENT``
+says:
+
+.. list-table::
+   :header-rows: 1
+
+   * - ARG
+     - Default
+     - Description
+   * - ``OPENCODE_VERSION``
+     - ``2.3.0``
+     - OpenCode version
+
+Build an image manually:
 
 .. code-block:: bash
 
    docker build \
      --build-arg AGENT=claude \
      -t my-claude-image \
-     -f images/Dockerfile .
+     -f images/claude.Dockerfile images
 
 Or set ``build.dockerfile`` in your config and let paddock build it
 automatically according to your chosen policy.

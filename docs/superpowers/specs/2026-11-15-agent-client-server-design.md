@@ -308,7 +308,7 @@ as `-e` flags by the same rule, and the command `[*get_command(), *get_server_ar
   without Paddock starts its own service there, which would again put two processes
   on one database. Sign-in happens through the Paddock-launched client. A user may
   share the host's data directory by opt-in (ADR 021).
-- **Bundled Dockerfile:** an `opencode` case installing `@opencode/cli` at a
+- **Bundled Dockerfile:** `images/opencode.Dockerfile` (ADR 022) installing `@opencode/cli` at a
   Renovate-pinned version, with its README row and CI smoke test (ADR 016).
 - **Docs:** a `CAUTION` that everything under the server's read-write mounts is
   writable by the agent, project files included, so a `project_toml` grant there is
@@ -361,7 +361,7 @@ became clear, to keep the config rules, the Docker lifecycle and each agent apar
 3. **Discards for the project file.** Merged.
 4. **The server container.** `ManagedContainer`, the launcher and the paired run.
    Merged.
-5. **OpenCode.** Its client and server, the bundled Dockerfile case and the user
+5. **OpenCode.** Its client and server, its bundled Dockerfile and the user
    docs. Delivered by the pull request that adds ADR 021.
 6. **Omnigent**, after the spike.
 

@@ -1,7 +1,7 @@
 ---
 status: Accepted
 date: 2026-11-16
-scope: [docs/usage/, images/Dockerfile, src/paddock/__main__.py, src/paddock/agents/, src/paddock/cli.py, src/paddock/config/, src/paddock/docker/]
+scope: [docs/usage/, images/, src/paddock/__main__.py, src/paddock/agents/, src/paddock/cli.py, src/paddock/config/, src/paddock/docker/]
 summary: Paddock starts one long-lived container per server key (paddock-server-<key>, identified by label) on demand and never stops or restarts it, with no flag to manage it (not one per run or per project, not stopped when the last client exits, and not left to the user to run); it runs without --rm and without a restart policy, a stopped one being removed and recreated on the next run; it has a Paddock-owned network of its own, publishes its port on loopback only, carries its run spec in labels so drift warns rather than restarts, and holds its minted secret only in its environment, read back with docker inspect; agents.<name>.server settings are read only from the user config's global section, with absolute host paths checked only when that server is chosen; a project file's server settings are discarded before validation with a warning, and a [projects] entry's are a validation error; a server that runs tools in the project stops a paired client's run unless the workdir lies under a read-write mount at its own path; a run that chooses a server needs Docker Engine 25.0, for a client container on two networks; the project file is still honoured under a server's mounts, as the allowlist grants.
 revisit-when: Paddock gains a command to manage servers; users need more than one instance of a server; idle servers' resource use draws complaints; recreating a server to add a mount proves too disruptive; Docker gains a way to add a mount to a running container; a secret readable through docker inspect stops being acceptable; a server needs settings that vary by project; a companion container needs a per-run lifetime, as a proxy sidecar might; users need to connect to a server Paddock did not start; users on a Docker older than 25.0 need a server; the Docker daemon is not on the local machine; an agent is found to have rewritten a project file or the user config through a server's mounts.
 ---
@@ -183,6 +183,7 @@ but never interrupts a session, where Option 3's guess could.
   remains. The docs carry both as a caution, and the planned `doctor` command is to
   flag `project_toml = true`.
 - The bundled Dockerfile gains a case for each agent whose server it can build.
+  ADR 022 replaces this: such an agent gains a Dockerfile of its own.
 - Isolation between projects under such a server is the set of mounts the user
   chose, not one project per container.
 

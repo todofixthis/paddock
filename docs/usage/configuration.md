@@ -959,7 +959,7 @@ image = "paddock-opencode:latest"
 image = "paddock-opencode:latest"
 
 [agents.opencode.server.build]
-dockerfile = "~/src/paddock/images/Dockerfile"
+dockerfile = "~/src/paddock/images/opencode.Dockerfile"
 policy = "weekly"
 
 [agents.opencode.server.volumes]
@@ -1015,7 +1015,7 @@ Build arguments (`docker build --build-arg`) for when paddock builds the image.
 - **Allowlist path:** `build.args` (or `build`)
 
 Has no effect without [`build.dockerfile`](#builddockerfile). Use it to set the `ARG`s
-your Dockerfile declares; the bundled Dockerfile's `ARG`s are listed under
+your Dockerfile declares; the bundled Dockerfiles' `ARG`s are listed under
 [Docker Image](https://phx-paddock.readthedocs.io/en/latest/#docker-image).
 
 paddock also passes the agent's `AGENT` argument, which a `build.args.AGENT` overrides,
@@ -1039,7 +1039,7 @@ The directory sent to Docker as the build context, when paddock builds the image
 - **Allowlist path:** `build.context` (or `build`)
 
 Has no effect without `build.dockerfile`. Set it when the Dockerfile `COPY`s files from
-outside its own directory; the bundled Dockerfile `COPY`s nothing, so it needs none.
+outside its own directory; the bundled Dockerfiles `COPY` nothing, so they need none.
 Relative paths resolve against the workdir; see [Validation](#validation).
 
 ### `build.dockerfile`
@@ -1078,8 +1078,9 @@ docker build -t <image> -f <build.dockerfile> [--build-arg …] <build.context>
 [`build.args`](#buildargs) and [`build.context`](#buildcontext) have no effect without
 this one.
 
-To start from the bundled Dockerfile, copy it from
-[`images/`](https://github.com/todofixthis/paddock/tree/main/images). For what any
+To start from a bundled Dockerfile, copy your agent's from
+[`images/`](https://github.com/todofixthis/paddock/tree/main/images):
+`claude.Dockerfile` or `opencode.Dockerfile`. For what any
 image needs to work with paddock, see [Custom Docker Images](docker-images.md).
 
 ```toml
@@ -1087,7 +1088,7 @@ image needs to work with paddock, see [Custom Docker Images](docker-images.md).
 image = "widgets-dev:latest"
 
 [projects."/home/alice/code/widgets".build]
-dockerfile = "~/src/paddock/images/Dockerfile"
+dockerfile = "~/src/paddock/images/claude.Dockerfile"
 policy = "weekly"
 ```
 

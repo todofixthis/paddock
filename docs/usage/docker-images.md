@@ -36,8 +36,9 @@ The workdir mounts at the same absolute path as on the host, so paths in agent s
 
 ## Starting points
 
-paddock ships a Dockerfile in `images/` that installs Python, Node.js and the selected
-agent; see [Docker Image][docker-image]. Point [`build.dockerfile`](configuration.md#builddockerfile) at your
+paddock ships a Dockerfile for each bundled agent in `images/`, `claude.Dockerfile` and
+`opencode.Dockerfile`, each installing Python, Node.js and its agent; see
+[Docker Image][docker-image]. Point [`build.dockerfile`](configuration.md#builddockerfile) at your
 own Dockerfile to have paddock build it for you, or set
 [`image`](configuration.md#image) to a prebuilt one.
 
@@ -60,13 +61,10 @@ next build reruns it. For example, an agent step pinned this way:
 ```dockerfile
 # renovate: datasource=npm depName=@anthropic-ai/claude-code
 ARG CLAUDE_CODE_VERSION=2.1.292
-# renovate: datasource=npm depName=@opencode/cli
-ARG OPENCODE_VERSION=2.3.0
 
 RUN case "$AGENT" in \
     claude) npm install -g "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}" ;; \
     none) echo "No agent selected" ;; \
-    opencode) npm install -g "@opencode/cli@${OPENCODE_VERSION}" ;; \
     *) echo "Unknown agent: $AGENT" && exit 1 ;; \
     esac
 ```
@@ -136,7 +134,7 @@ jobs:
       - uses: docker/build-push-action@v7
         with:
           context: .
-          file: images/Dockerfile
+          file: images/claude.Dockerfile
           pull: true
           push: true
           # Image names must be lowercase

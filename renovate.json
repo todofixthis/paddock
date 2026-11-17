@@ -17,9 +17,9 @@
     },
     {
       "customType": "regex",
-      "description": "Update the Dockerfile's annotated ARG version pins",
+      "description": "Update the bundled Dockerfiles' annotated ARG version pins",
       "managerFilePatterns": [
-        "/^images/Dockerfile$/"
+        "/^images/[^/]+\\.Dockerfile$/"
       ],
       "matchStrings": [
         "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)(?: versioning=(?<versioning>\\S+))?\\nARG [A-Z0-9_]+=(?<currentValue>\\S+)"
@@ -121,7 +121,8 @@
       ],
       "matchFileNames": [
         "README.rst",
-        "images/Dockerfile"
+        "images/claude.Dockerfile",
+        "images/opencode.Dockerfile"
       ]
     }
   ]

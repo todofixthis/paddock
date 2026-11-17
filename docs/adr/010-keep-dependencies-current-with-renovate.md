@@ -1,7 +1,7 @@
 ---
 status: Accepted
 date: 2026-10-07
-scope: [.github/, AGENTS.md, images/Dockerfile, pyproject.toml, renovate.json, uv.lock]
+scope: [.github/, AGENTS.md, images/, pyproject.toml, renovate.json, uv.lock]
 summary: Keep dependencies and pins current with Renovate (config:recommended, Actions pinned by digest, and a regex manager bumping the phx-adr pins together), not Dependabot or hand bumps.
 revisit-when: Renovate's pull requests outpace review; the hosted Renovate app stops being available to this repository; Renovate's phx-claude-siat bumps don't resolve to release commits; phx-claude-siat stops tagging releases as bare X.Y.Z versions.
 ---

@@ -37,8 +37,8 @@ state, and what it writes to the file is lost.
 ## Building the image
 
 When paddock [builds the image](../configuration.md#builddockerfile), it passes the
-build argument `AGENT=claude`. The bundled Dockerfile installs Claude Code for that
-value, at the version its `CLAUDE_CODE_VERSION` argument pins; see
+build argument `AGENT=claude`. The bundled `images/claude.Dockerfile` installs Claude
+Code for that value, at the version its `CLAUDE_CODE_VERSION` argument pins; see
 [Docker Image](https://phx-paddock.readthedocs.io/en/latest/#docker-image). A
 [`build.args.AGENT`](../configuration.md#buildargs) of your own overrides it, and a
 Dockerfile without `ARG AGENT` ignores it.
