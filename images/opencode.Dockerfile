@@ -39,5 +39,5 @@ RUN curl -fsSL "https://deb.nodesource.com/setup_${NODE_VERSION}.x" | bash - \
 
 # Install OpenCode. One image serves both of its containers: the server, which
 # runs the agent's tools and so needs the toolchain above, and the client,
-# which must match the server's version
+# which is thereby at the server's version
 RUN npm install -g "@opencode/cli@${OPENCODE_VERSION}"

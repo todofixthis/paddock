@@ -29,7 +29,7 @@
       "customType": "regex",
       "datasourceTemplate": "docker",
       "depNameTemplate": "ubuntu",
-      "description": "Update the Ubuntu tags in the user docs alongside the Dockerfile's base image (ADR 010)",
+      "description": "Update the Ubuntu tags in the user docs alongside the Dockerfiles' base image (ADR 010)",
       "managerFilePatterns": [
         "/^README\\.rst$/",
         "/^docs/usage/.+\\.md$/"
@@ -44,7 +44,7 @@
       "customType": "regex",
       "datasourceTemplate": "npm",
       "depNameTemplate": "@anthropic-ai/claude-code",
-      "description": "Update README.rst's CLAUDE_CODE_VERSION default alongside the Dockerfile's",
+      "description": "Update README.rst's CLAUDE_CODE_VERSION default alongside the Dockerfiles'",
       "managerFilePatterns": [
         "/^README\\.rst$/"
       ],
@@ -56,7 +56,7 @@
       "customType": "regex",
       "datasourceTemplate": "node-version",
       "depNameTemplate": "node",
-      "description": "Update README.rst's NODE_VERSION default alongside the Dockerfile's",
+      "description": "Update README.rst's NODE_VERSION default alongside the Dockerfiles'",
       "managerFilePatterns": [
         "/^README\\.rst$/"
       ],
@@ -69,7 +69,7 @@
       "customType": "regex",
       "datasourceTemplate": "npm",
       "depNameTemplate": "@opencode/cli",
-      "description": "Update README.rst's OPENCODE_VERSION default alongside the Dockerfile's",
+      "description": "Update README.rst's OPENCODE_VERSION default alongside the Dockerfiles'",
       "managerFilePatterns": [
         "/^README\\.rst$/"
       ],
@@ -81,7 +81,7 @@
       "customType": "regex",
       "datasourceTemplate": "python-version",
       "depNameTemplate": "python",
-      "description": "Update README.rst's PYTHON_VERSION default alongside the Dockerfile's",
+      "description": "Update README.rst's PYTHON_VERSION default alongside the Dockerfiles'",
       "managerFilePatterns": [
         "/^README\\.rst$/"
       ],
@@ -121,8 +121,7 @@
       ],
       "matchFileNames": [
         "README.rst",
-        "images/claude.Dockerfile",
-        "images/opencode.Dockerfile"
+        "images/*.Dockerfile"
       ]
     }
   ]

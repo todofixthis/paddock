@@ -32,6 +32,6 @@ Search for stray references. `--hidden` is needed to reach `.github/workflows/`,
 rg -n "3\.\d{2}|py3\d{2}" . --hidden --glob "*.toml" --glob "*.yml" --glob "*.rst" --glob "*.md" --glob "!uv.lock" --glob "!docs/adr/**" --glob "!.git/**" --glob "!.venv/**" --glob "!.tox/**"
 ```
 
-Expect noise from dependency pins (e.g. `pytest-mock>=3.15.1`) and from skill files that mention versions in prose. Leave the Docker image's `PYTHON_VERSION` default (`images/Dockerfile`, and its mentions in `README.rst`) alone: it sets the container's Python, not the supported range. When dropping a version, every remaining hit for it should be one of those.
+Expect noise from dependency pins (e.g. `pytest-mock>=3.15.1`) and from skill files that mention versions in prose. Leave the Docker image's `PYTHON_VERSION` default (the Dockerfiles in `images/`, and its mentions in `README.rst`) alone: it sets the container's Python, not the supported range. When dropping a version, every remaining hit for it should be one of those.
 
 Then run `uv run tox run-parallel` and confirm it exits 0.

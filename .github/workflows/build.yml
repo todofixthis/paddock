@@ -102,7 +102,7 @@ jobs:
           uv build
           uvx twine@7.0.0 check --strict dist/*
 
-  # Builds the bundled Dockerfile once per agent and checks that each install
+  # Builds the bundled Dockerfiles, once per agent, and checks that each install
   # runs, so a Renovate bump that breaks the build fails here rather than for
   # users. The steps, not the job, skip when nothing changed: the job always
   # reports a result, so the gate need not tell a justified skip from a broken

@@ -7,8 +7,7 @@ build.
 
 ## Suggested change
 
-Build each bundled Dockerfile in CI and push the image to GitHub Container Registry,
-tagged by paddock version and by the agent version it pins. A user sets `image` to one
+Build each bundled Dockerfile in CI and push the image to GitHub Container Registry. A user sets `image` to one
 and builds nothing; a user who needs more starts their own Dockerfile `FROM` it.
 
 ## Open questions
@@ -20,6 +19,12 @@ and builds nothing; a user who needs more starts their own Dockerfile `FROM` it.
   lacks it too.
 - Whether the per-agent Dockerfiles then build `FROM` a published toolchain base,
   which ADR 022 rejected only for want of a registry to hold one.
+- What the published `claude` image is: `claude.Dockerfile` installs no agent unless
+  built with `AGENT=claude`, and whether the toolchain-only image it builds by default
+  is published too.
+- Whether CI then builds only the file that changed; today a change to either rebuilds
+  every image.
+- How long old tags are kept.
 - Platforms: `linux/amd64` alone, or `linux/arm64` too for Apple silicon.
 - What rebuilds an image whose apt packages have gone stale without any pin moving
   (ADR 016 leaves apt unpinned).

@@ -126,7 +126,7 @@ mounts a host directory over the server's, read-only, under
 read.
 
 **The server has no default image**, so `agents.opencode.server.image` is
-required. OpenCode publishes one, `ghcr.io/anomalyco/opencode`, and the bundled
+required. OpenCode publishes one, `ghcr.io/anomalyco/opencode`, and a bundled
 Dockerfile builds another; either as a default would start a server without the
 user's toolchain, which the agent's first tool call would then discover. A
 missing setting stops the run before anything starts.
