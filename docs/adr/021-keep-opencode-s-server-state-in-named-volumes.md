@@ -1,9 +1,9 @@
 ---
 status: Accepted
 date: 2026-11-17
-scope: [src/paddock/agents/, docs/usage/]
-summary: OpenCode's server keeps its data and state directories in two named Docker volumes that Paddock creates, and its client keeps its interface state in a named volume of its own; neither mounts the host's OpenCode directories, and the server has no default image, so agents.opencode.server.image is required.
-revisit-when: OpenCode gains a lock that stops two processes opening one database; users need the host's OpenCode sessions or sign-in inside Paddock; OpenCode moves credentials out of its data directory; Paddock publishes an image a server could default to; a version mismatch between client and server stops working.
+scope: [src/paddock/agents/, images/Dockerfile, docs/usage/]
+summary: OpenCode's server keeps its data and state directories in two named Docker volumes (paddock-server-opencode-data and -state, under /root/.local) and its client keeps its interface state in a third (paddock-client-opencode-state); the host's OpenCode directories are never mounted over them, the config and cache directories deliberately get no volume, and the server has no default image, so agents.opencode.server.image is required.
+revisit-when: OpenCode gains a lock that stops two processes opening one database; users need the host's OpenCode sessions inside Paddock; OpenCode moves its database, credentials or directory layout; Paddock runs containers as a user other than root; a server can have more than one instance; an image exists that carries a typical user's toolchain.
 ---
 
 # 021: Keep OpenCode's Server State in Named Volumes
@@ -13,16 +13,21 @@ revisit-when: OpenCode gains a lock that stops two processes opening one databas
 [ADR 018][] makes OpenCode a client and a server, and [ADR 019][] runs the server
 in one long-lived container that Paddock removes and recreates when it has stopped
 or when the user changes its mounts. Whatever the server keeps in its container's
-own filesystem is lost at that point, so its state needs a home outside it.
+own filesystem is lost at that point.
 
 Checked against OpenCode 2.3.0 in containers on 2026-11-17, running as root:
 
 - The server writes its database, `opencode.db`, with its logs, under
   `/root/.local/share/opencode`, and creates `/root/.config/opencode` and
-  `/root/.local/state/opencode`. The database holds sessions and, read in the
-  2.3.0 source on 2026-11-15, the provider credentials a user signs in with.
+  `/root/.local/state/opencode`, the last of which stayed empty. The database
+  holds sessions and the provider credentials a user signs in with, in plain
+  text.
+- The server writes its global settings, `opencode.json`, to its config directory
+  when asked to add an MCP server or a plugin. A client cannot ask: with
+  `--server`, `opencode mcp add` stops with "Unrecognized flag".
 - The interactive client writes only interface state, under
-  `/root/.local/state/opencode`, and a log.
+  `/root/.local/state/opencode` (prompt history, and open tabs keyed by
+  directory and holding the server's session IDs), and a log.
 - Nothing stops two processes opening one database. That is what corrupted state
   in the reverted first attempt ([#53][]).
 - An `opencode` started on the host without `--server` runs a background service
@@ -48,11 +53,13 @@ The server's data and state directories are two named volumes, and the client's
 state directory a third. No host directory of OpenCode's is mounted.
 
 **Pros:** State outlives the container. Only the one server ever opens the
-database.
+database. The agent, whose shell can read the database, sees only credentials
+entered for it.
 **Cons:** A host OpenCode and Paddock's do not share sessions, settings or
 sign-in. The files are reachable only through Docker.
-**Risks:** `docker volume prune -a` removes them once no container holds them,
-sign-in included; without `-a` Docker leaves named volumes alone.
+**Risks:** `docker volume prune -a` removes any that no container holds: the
+client's whenever no client is running, and the server's between removing the
+server and the next run. Without `-a` Docker leaves named volumes alone.
 
 ### Option 3: Mount the host's OpenCode directories
 
@@ -64,6 +71,7 @@ and its siblings, read-write, into the server.
 paths and state from a Linux container.
 **Risks:** A host `opencode` run beside a Paddock server puts two processes on
 one database, the fault #53 was reverted for, and nothing warns before it does.
+The agent can read the host's credentials.
 
 ## Decision
 
@@ -73,32 +81,46 @@ looks wrong. Sharing sign-in with the host is not worth a corruptible database.
 
 The volumes are named for the server, not the image, since there is one server:
 `paddock-server-opencode-data` and `paddock-server-opencode-state`, at
-`/root/.local/share/opencode` and `/root/.local/state/opencode`. The config
-directory, `/root/.config/opencode`, gets no volume: it holds settings a user
-writes, so it is theirs to mount. The client's is `paddock-client-opencode-state`,
-at `/root/.local/state/opencode`: one whatever the image, the state being the
-interface's and not the image's. The cache directory is left to the container.
+`/root/.local/share/opencode` and `/root/.local/state/opencode`. The second is
+precautionary: the server creates the directory and wrote nothing to it in
+testing. The client's is `paddock-client-opencode-state`, at
+`/root/.local/state/opencode`: one whatever the image, since what it holds
+refers to the one server's sessions and not to the image.
 
-**The server has no default image.** `agents.opencode.server.image` is required,
-and a run without it stops with ADR 019's message. Any default would be an image
-without the user's toolchain, which the first tool call would then expose; the
-bundled Dockerfile with `AGENT=opencode` is the documented starting point for
-both the server's image and the client's.
+**The config and cache directories get no volume.** The config directory holds
+settings the agent itself can rewrite, MCP commands among them, so without a
+volume its edits do not outlive the container. A user who wants settings there
+mounts a host directory over the server's, read-only, under
+`agents.opencode.server.volumes`; the client's copy of that directory is not
+read.
+
+**The server has no default image**, so `agents.opencode.server.image` is
+required. OpenCode publishes one, `ghcr.io/anomalyco/opencode`, and the bundled
+Dockerfile builds another; either as a default would start a server without the
+user's toolchain, which the agent's first tool call would then discover. A
+missing setting stops the run before anything starts.
 
 ## Consequences
 
 - Sign-in happens once, through a Paddock-launched client, and survives the
-  server being recreated. It does not carry over from a host install.
+  server being recreated. It does not carry over from a host install, short of
+  OpenCode's own `auth export` and `auth import`.
 - Removing the two server volumes resets OpenCode for every project. The docs
-  name them.
-- The paths assume the container runs as root with default XDG directories, as
-  Paddock's images already must. An image that sets `XDG_DATA_HOME` elsewhere
-  keeps its state in the container, where recreating the server loses it.
-- A user who wants the host's OpenCode settings in the server mounts that
-  directory themselves under `agents.opencode.server.volumes`, at
-  `/root/.config/opencode`; the database is the part that must not be shared.
-  Without that mount, anything OpenCode writes to its config directory is lost
-  when the server is recreated.
+  name all three.
+- Docker creates the volumes on first use, unlabelled, so Paddock cannot tell
+  them from a volume of the same name made by something else, and would use it.
+- Mounting anything else at a volume's path under
+  `agents.opencode.server.volumes` fails in Docker, with Docker's message.
+- The server's container is shared and long-lived, so a setting the agent
+  writes to the config directory in one project stays in force for every
+  project until the server is recreated.
+- Every project's client shares one state volume, so one project's prompt
+  history is readable from another's client container. Each already holds the
+  server's password.
+- An image that runs as another user, or sets `XDG_DATA_HOME`, keeps its state
+  outside the volumes, where recreating the server loses it.
+- The volumes outlive the image. An OpenCode upgrade that migrates the database
+  may leave an older image unable to open it.
 
 [#53]: https://github.com/todofixthis/paddock/pull/53
 [ADR 018]: 018-split-agents-into-clients-and-servers.md
