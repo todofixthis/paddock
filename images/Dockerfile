@@ -6,7 +6,7 @@ ARG AGENT=none
 
 # Version pins — updated by Renovate, which reads each pin's annotation
 # renovate: datasource=npm depName=@anthropic-ai/claude-code
-ARG CLAUDE_CODE_VERSION=2.1.311
+ARG CLAUDE_CODE_VERSION=2.1.323
 # renovate: datasource=node-version depName=node versioning=node
 ARG NODE_VERSION=26
 # renovate: datasource=python-version depName=python versioning=python
