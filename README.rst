@@ -217,7 +217,7 @@ Build arguments:
      - ``none``
      - ``claude`` or ``none``
    * - ``CLAUDE_CODE_VERSION``
-     - ``2.1.311``
+     - ``2.1.323``
      - Claude Code version, for ``AGENT=claude``
    * - ``NODE_VERSION``
      - ``26``
