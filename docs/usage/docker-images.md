@@ -13,7 +13,8 @@ docker run --rm -it --name paddock-<dir>-<agent> --workdir=<workdir> \
 ```
 
 `<command>` is the agent's command (`claude` for the `claude` agent, `/bin/bash` for
-`false`). A command before `--` replaces it (`paddock /bin/bash`); with none, arguments
+`false`, `opencode --server <url>` for `opencode`). A run with a server also passes
+`-e` flags and a `--network` for the server's network. A command before `--` replaces it (`paddock /bin/bash`); with none, arguments
 after `--` extend it (`paddock -- --continue` runs `claude --continue`). paddock never
 passes `--entrypoint`, so the image's own `ENTRYPOINT`, if it has one, receives
 `<command>` as its arguments.
@@ -22,7 +23,8 @@ A custom image therefore needs:
 
 - **The command on `PATH`.** Without an `ENTRYPOINT`, Docker looks the command up
   against the image's `ENV PATH` alone: shell profiles don't run. The `false` agent
-  needs `/bin/bash`.
+  needs `/bin/bash`. The `opencode` agent needs `opencode` in two images, the client's
+  and its server's; see [The `opencode` Agent](agents/opencode.md).
 - **An `ENTRYPOINT` that execs its arguments promptly**, if there is one. paddock
   attaches your terminal to the container, so an entrypoint that waits for something
   first leaves you at a blank screen.
@@ -34,8 +36,9 @@ The workdir mounts at the same absolute path as on the host, so paths in agent s
 
 ## Starting points
 
-paddock ships a Dockerfile in `images/` that installs Python, Node.js and the selected
-agent; see [Docker Image][docker-image]. Point [`build.dockerfile`](configuration.md#builddockerfile) at your
+paddock ships a Dockerfile for each bundled agent in `images/`, `claude.Dockerfile` and
+`opencode.Dockerfile`, each installing Python, Node.js and its agent; see
+[Docker Image][docker-image]. Point [`build.dockerfile`](configuration.md#builddockerfile) at your
 own Dockerfile to have paddock build it for you, or set
 [`image`](configuration.md#image) to a prebuilt one.
 
@@ -53,7 +56,10 @@ Three fixes, best first.
 ### Pin versions and let Renovate bump them
 
 Pin each install to a version in an `ARG`. Bumping the `ARG` changes the step, so the
-next build reruns it. For example, an agent step pinned this way:
+next build reruns it. Declare each `ARG` directly above the step that uses it, and put
+the steps you bump most often last: Docker passes an `ARG` to every `RUN` after its
+declaration, so one declared at the top of the file reruns every step when it
+changes. For example, an agent step pinned this way:
 
 ```dockerfile
 # renovate: datasource=npm depName=@anthropic-ai/claude-code
@@ -131,7 +137,7 @@ jobs:
       - uses: docker/build-push-action@v7
         with:
           context: .
-          file: images/Dockerfile
+          file: images/claude.Dockerfile
           pull: true
           push: true
           # Image names must be lowercase
@@ -227,6 +233,12 @@ an image without it, or with the login-shell entrypoint above.
 Docker couldn't find the command on the image's `ENV PATH`, usually because the image has
 no `ENTRYPOINT` and the tool is only on `PATH` once a shell profile runs. Add its
 directory with `ENV PATH`, or use the login-shell entrypoint above.
+
+The error names whichever command the agent runs, so `exec: "opencode": …` under the
+`opencode` agent. That agent's server runs `opencode` too, from its own image,
+[`agents.opencode.server.image`](configuration.md#agentsnameserver): when that image
+lacks it, the server never starts, and Docker's error arrives inside paddock's
+[`Could not start`](configuration.md#agent-servers) message instead.
 
 [docker-image]: https://phx-paddock.readthedocs.io/en/latest/#docker-image
 [leash]: https://github.com/strongdm/leash

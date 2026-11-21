@@ -17,9 +17,9 @@
     },
     {
       "customType": "regex",
-      "description": "Update the Dockerfile's annotated ARG version pins",
+      "description": "Update the bundled Dockerfiles' annotated ARG version pins",
       "managerFilePatterns": [
-        "/^images/Dockerfile$/"
+        "/^images/[^/]+\\.Dockerfile$/"
       ],
       "matchStrings": [
         "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)(?: versioning=(?<versioning>\\S+))?\\nARG [A-Z0-9_]+=(?<currentValue>\\S+)"
@@ -29,7 +29,7 @@
       "customType": "regex",
       "datasourceTemplate": "docker",
       "depNameTemplate": "ubuntu",
-      "description": "Update the Ubuntu tags in the user docs alongside the Dockerfile's base image (ADR 010)",
+      "description": "Update the Ubuntu tags in the user docs alongside the Dockerfiles' base image (ADR 010)",
       "managerFilePatterns": [
         "/^README\\.rst$/",
         "/^docs/usage/.+\\.md$/"
@@ -44,7 +44,7 @@
       "customType": "regex",
       "datasourceTemplate": "npm",
       "depNameTemplate": "@anthropic-ai/claude-code",
-      "description": "Update README.rst's CLAUDE_CODE_VERSION default alongside the Dockerfile's",
+      "description": "Update README.rst's CLAUDE_CODE_VERSION default alongside the Dockerfiles'",
       "managerFilePatterns": [
         "/^README\\.rst$/"
       ],
@@ -56,7 +56,7 @@
       "customType": "regex",
       "datasourceTemplate": "node-version",
       "depNameTemplate": "node",
-      "description": "Update README.rst's NODE_VERSION default alongside the Dockerfile's",
+      "description": "Update README.rst's NODE_VERSION default alongside the Dockerfiles'",
       "managerFilePatterns": [
         "/^README\\.rst$/"
       ],
@@ -67,9 +67,21 @@
     },
     {
       "customType": "regex",
+      "datasourceTemplate": "npm",
+      "depNameTemplate": "@opencode/cli",
+      "description": "Update README.rst's OPENCODE_VERSION default alongside the Dockerfiles'",
+      "managerFilePatterns": [
+        "/^README\\.rst$/"
+      ],
+      "matchStrings": [
+        "``OPENCODE_VERSION``\\n\\s+- ``(?<currentValue>[^`]+)``"
+      ]
+    },
+    {
+      "customType": "regex",
       "datasourceTemplate": "python-version",
       "depNameTemplate": "python",
-      "description": "Update README.rst's PYTHON_VERSION default alongside the Dockerfile's",
+      "description": "Update README.rst's PYTHON_VERSION default alongside the Dockerfiles'",
       "managerFilePatterns": [
         "/^README\\.rst$/"
       ],
@@ -92,6 +104,13 @@
       ]
     },
     {
+      "description": "Let an OpenCode release settle for three days: it has no stable channel and ships several times a week",
+      "matchPackageNames": [
+        "@opencode/cli"
+      ],
+      "minimumReleaseAge": "3 days"
+    },
+    {
       "description": "Keep PYTHON_VERSION at major.minor, which deadsnakes' package names use, and skip pre-releases",
       "extractVersion": "^(?<version>\\d+\\.\\d+)\\.\\d+$",
       "matchDatasources": [
@@ -102,7 +121,7 @@
       ],
       "matchFileNames": [
         "README.rst",
-        "images/Dockerfile"
+        "images/*.Dockerfile"
       ]
     }
   ]

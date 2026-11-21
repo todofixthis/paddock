@@ -306,7 +306,7 @@ def test_unknown_agent_exits_one(capsys, tmp_path: Path, mocker, monkeypatch):
     assert exc.value.code == 1
     captured = capsys.readouterr()
     assert captured.err.strip() == (
-        '[agent] Unknown agent "bogus"; installed agents: claude, false'
+        '[agent] Unknown agent "bogus"; installed agents: claude, false, opencode'
     )
     entered.assert_not_called()
     assert not (tmp_path / ".paddock").exists()
@@ -582,7 +582,7 @@ def test_unknown_agent_settings_warn_and_run(
     ]
     assert warnings == [
         '[agents.claud] No agent named "claud" is installed, so its settings '
-        "are ignored; installed agents: claude, false"
+        "are ignored; installed agents: claude, false, opencode"
     ]
 
 
@@ -595,7 +595,7 @@ def test_cli_client_override_runs_that_client(
     assert argv[-2:] == ["ubuntu:22.04", "/bin/bash"]
 
 
-_UNKNOWN_SERVER = '[agent.server] Unknown server "nope"; installed servers: none'
+_UNKNOWN_SERVER = '[agent.server] Unknown server "nope"; installed servers: opencode'
 
 
 def test_unknown_server_exits_one(capsys, tmp_path: Path, mocker, monkeypatch):

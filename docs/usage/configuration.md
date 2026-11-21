@@ -45,9 +45,12 @@ Merging is per key, not per source:
 
 - **Single values** (`image`, `network`, `build.policy` …): the highest-weight source
   that sets one wins.
+- **`agent`**: merges half by half when written as a table, so one source can name the
+  client and another the server; see [`agent`](#agent).
 - **`[agents]`**: merges per agent name, so sources can each configure a different
   agent. An agent's `extra_args` list is replaced whole by the highest-weight source
-  that sets it, never joined.
+  that sets it, never joined. An agent's [`server`](#agentsnameserver) settings have
+  one source, your user file's global section, so they never merge.
 - **`[build]`**: each key merges separately, and `build.args` merges per argument
   name. A per-project `build.policy` keeps your user-level `build.dockerfile`.
 - **`[volumes]`**: merge per host path. Sources add mounts; a higher-weight source can
@@ -93,6 +96,10 @@ your user file, and put a mount only some projects have in their
 paddock checks every [`projects`](#projects) entry's keys and values on each run, but
 checks paths only in the entry for this workdir. Another project's entry can't stop this
 run by naming a path that has gone, such as after that project moved.
+
+Paths under [`agents.<name>.server`](#agentsnameserver) follow two rules of their own.
+They must be absolute or start with `~`, since every project shares the server, and
+paddock checks that they exist only on a run that chooses that server.
 
 ## Reference table
 
@@ -161,6 +168,96 @@ PADDOCK_AGENT=claude
 <tr>
 <td>
 
+[`agent.client`](#agent)
+
+</td>
+<td>
+
+```toml
+[agent]
+client = "opencode"
+```
+
+</td>
+<td>
+
+```toml
+[projects."<workdir>".agent]
+client = "opencode"
+```
+
+</td>
+<td>
+
+```toml
+[agent]
+client = "opencode"
+```
+
+</td>
+<td>
+
+```shell
+PADDOCK_AGENT_CLIENT=opencode
+```
+
+</td>
+<td>
+
+```shell
+--agent-client=opencode
+```
+
+</td>
+</tr>
+<tr>
+<td>
+
+[`agent.server`](#agent)
+
+</td>
+<td>
+
+```toml
+[agent]
+server = "opencode"
+```
+
+</td>
+<td>
+
+```toml
+[projects."<workdir>".agent]
+server = "opencode"
+```
+
+</td>
+<td>
+
+```toml
+[agent]
+server = "opencode"
+```
+
+</td>
+<td>
+
+```shell
+PADDOCK_AGENT_SERVER=opencode
+```
+
+</td>
+<td>
+
+```shell
+--agent-server=opencode
+```
+
+</td>
+</tr>
+<tr>
+<td>
+
 [`agents.<name>.extra_args`](#agentsnameextra_args)
 
 </td>
@@ -186,6 +283,48 @@ extra_args = ["--verbose"]
 [agents.claude]
 extra_args = ["--verbose"]
 ```
+
+</td>
+<td>
+
+🚫
+
+</td>
+<td>
+
+🚫
+
+</td>
+</tr>
+<tr>
+<td>
+
+[`agents.<name>.server`](#agentsnameserver)
+
+</td>
+<td>
+
+```toml
+[agents.opencode.server]
+image = "paddock-opencode:latest"
+port = 4096
+
+[agents.opencode.server.build]
+dockerfile = "~/src/images/Dockerfile"
+
+[agents.opencode.server.volumes]
+"~/code" = "/home/alice/code:rw"
+```
+
+</td>
+<td>
+
+🚫
+
+</td>
+<td>
+
+🚫
 
 </td>
 <td>
@@ -629,9 +768,9 @@ source, takes no part in merging, and ignores the allowlist.
 |---|---|---|
 | Agent arguments | `paddock -- --continue` | Everything after `--` is appended to the agent's command, after any [`extra_args`](#agentsnameextra_args): `claude --continue`. |
 | Command | `paddock /bin/bash` | The first positional argument, and everything after it, replaces the agent's command. Put paddock flags first. |
-| Dry run | `--dry-run` | Prints the `docker run` command and exits 0 without building, pulling or running anything. |
+| Dry run | `--dry-run` | Prints the `docker run` command, and an [agent server](#agentsnameserver)'s if the run would start one, and exits 0 without building, pulling, creating or running anything. |
 | Help | `--help` | Prints usage and exits. |
-| Quiet | `--quiet` | Suppresses logging, warnings and the printed `docker run` command. Errors still print. |
+| Quiet | `--quiet` | Suppresses logging, warnings and the printed `docker run` commands. Errors still print. |
 | Version | `--version` | Prints the paddock version and exits. |
 | Workdir | `--workdir=PATH` | Mounts `PATH` as the workspace instead of the current directory. paddock resolves it to an absolute real path first, and that path is the key [`projects`](#projects) matches. |
 
@@ -646,35 +785,87 @@ Docker's when a build or pull fails, 1 on a config error and 2 on an unknown fla
 
 The coding agent to run in the container, or `false` for a plain bash shell.
 
-- **Type:** agent name (string), or `false`
+- **Type:** agent name (string), `false`, or a table naming `client`, `server` or both
 - **Default:** `"claude"`
-- **TOML:** `agent = "claude"`, or `agent = false` (the string `"false"` also works)
-- **Environment:** `PADDOCK_AGENT=claude`
-- **Command line:** `--agent=claude`
-- **Allowlist path:** `agent`
+- **TOML:** `agent = "claude"`, or `agent = false` (the string `"false"` also works);
+  as a table, `agent = { client = "opencode", server = "opencode" }`
+- **Environment:** `PADDOCK_AGENT=claude`; for one half, `PADDOCK_AGENT_CLIENT` or
+  `PADDOCK_AGENT_SERVER`
+- **Command line:** `--agent=claude`; for one half, `--agent-client` or `--agent-server`
+- **Allowlist path:** `agent`, which covers both halves
 
-The agent decides:
+Each bundled agent has a page of its own:
 
-- **The command.** `claude` runs `claude`; `false` runs `/bin/bash`.
-- **Extra mounts.** `claude` mounts your `~/.claude` read-write at `/root/.claude`, plus
-  `~/.claude.json` if it exists, so sign-in and settings persist between runs. `false`
-  mounts nothing extra.
-- **The `AGENT` build argument** passed when paddock [builds the image](#builddockerfile):
-  `claude` for `claude`, `none` for `false`.
-- **The container name**, `paddock-<workdir name>-<agent>`.
+| `agent` | Runs | Server | Page |
+|---|---|---|---|
+| `"claude"` | Claude Code: `claude` | none | [The `claude` Agent](agents/claude.md) |
+| `false` | A shell: `/bin/bash`, with no extra mounts | none | this section |
+| `"opencode"` | OpenCode's client: `opencode --server …` | `opencode` | [The `opencode` Agent](agents/opencode.md) |
+
+The agent decides the command, any extra mounts, the `AGENT` build argument passed when
+paddock [builds the image](#builddockerfile) (`none` for `false`), and the container
+name, `paddock-<workdir name>-<agent>`.
 
 Installed packages can add agents; see
 [Adding agents](https://phx-paddock.readthedocs.io/en/latest/#adding-agents). An unknown
 name stops the run and lists the installed agents:
 
 ```
-[agent] Unknown agent "claud"; installed agents: claude, false
+[agent] Unknown agent "claud"; installed agents: claude, false, opencode
 ```
 
 Use `false` to explore an image or debug it. With [`build.dockerfile`](#builddockerfile)
 set, though, a rebuild under `false` tags the same [`image`](#image) with `AGENT=none`,
 replacing an image that had the agent installed. To get a shell in your agent's image,
-pass a [command](#run-options) instead: `paddock /bin/bash`.
+pass a [command](#run-options) instead: `paddock /bin/bash`. For an agent with a
+server that is a shell in the client's container; the tools run in the server, which
+`docker exec -it paddock-server-<name> /bin/bash` reaches.
+
+#### Clients and servers
+
+An agent has two halves. The **client** is what runs in the container paddock starts
+for each run. The **server**, for an agent that has one, is a long-lived container
+every project shares, configured under [`agents.<name>.server`](#agentsnameserver).
+`claude` and `false` are clients with no server.
+
+A name on its own chooses a client and brings that client's default server with it:
+`agent = "opencode"` chooses the `opencode` client and the `opencode` server. That is
+all most configs need. The table form names a half on its own:
+
+| Half | TOML | Environment | Command line | Value |
+|---|---|---|---|---|
+| Client | `agent = { client = "opencode" }` | `PADDOCK_AGENT_CLIENT=opencode` | `--agent-client=opencode` | An agent name, or `false` for the shell |
+| Server | `agent = { server = "opencode" }` | `PADDOCK_AGENT_SERVER=opencode` | `--agent-server=opencode` | A server name, or `false` for none |
+
+A table may be written inline, as above, or under an `[agent]` header. An empty
+`PADDOCK_AGENT`, `PADDOCK_AGENT_CLIENT` or `PADDOCK_AGENT_SERVER` stops the run.
+
+Sources merge the two halves separately, the higher weight winning each:
+
+- **A half named alone leaves the other as lower sources set it.** With
+  `agent = "opencode"` in your user file, `--agent-server=false` keeps the `opencode`
+  client and switches its server off, which stops the run, since that client needs
+  its server.
+- **A whole value names the client and resets the server**, discarding one a lower
+  source named. `--agent=claude` over a user file's
+  `agent = { client = "opencode", server = "opencode" }` runs `claude` with no server.
+- **A server no source names is the default of the client the merge ends up with**,
+  not of a client that lost. `--agent-client=claude` over `agent = "opencode"` runs
+  `claude` with no server.
+- **Within one source, the whole value applies first and the halves over it**, whatever
+  order you write them in: `--agent-server=opencode --agent=false` is the shell beside
+  the `opencode` server. Only the command line and the environment can hold both; a
+  TOML file sets `agent` to a name or to a table, and one with `agent = "claude"`
+  cannot also have an `[agent]` header.
+
+A client that needs a server stops the run when it has none, or one of another kind:
+
+```
+[agent] Agent "opencode" needs a server that speaks "opencode", but none is chosen; set agent.server
+```
+
+A server chosen beside a client that does not use it, as in the last example above, is
+still started, and paddock logs that the two are not connected.
 
 ### `agents.<name>.extra_args`
 
@@ -737,6 +928,78 @@ Settings for a name no installed agent has are ignored with a
 [warning](#troubleshooting), so a config shared between machines still works where an
 agent's package is missing. Check the spelling if you see it unexpectedly.
 
+### `agents.<name>.server`
+
+Settings for an agent's server: the long-lived container every project's client
+connects to. Of the bundled agents only [`opencode`](agents/opencode.md) has one, and
+its page is the place to start.
+
+- **Type:** table with keys `build`, `image`, `port` and `volumes`
+- **Default:** none
+- **TOML:** under `[agents.opencode.server]`, in the global section of your user file
+  only
+- **Environment:** none. A `PADDOCK_AGENTS_…` variable stops paddock with an error
+- **Command line:** none
+- **Allowlist path:** none — no other source may set it
+
+`<name>` is the server's name, as the server half of [`agent`](#agent) spells it.
+
+| Key | Type | Default | Effect |
+|---|---|---|---|
+| `build` | table: `args`, `context`, `dockerfile`, `policy` | none | Builds or pulls `image` when paddock creates the server's container. The keys work as the top-level [`build.args`](#buildargs), [`build.context`](#buildcontext), [`build.dockerfile`](#builddockerfile) and [`build.policy`](#buildpolicy) do, and a build gets the server's own `AGENT` argument (`opencode` for `opencode`). |
+| `image` | non-empty string | the server's own, if it has one; `opencode` has none | The image the server runs. Separate from the top-level [`image`](#image), which the client runs. |
+| `port` | integer, 1 to 65535 | a free port Docker picks | The port on your machine's loopback address (`127.0.0.1`) the server is published on. |
+| `volumes` | table, host path to container path with an optional `:ro` or `:rw` mode | none | Host directories or files mounted into the server. Values work as the top-level [`volumes`](#volumes) do: a bare value is read-only, and `~` in the container path means `/root`. |
+
+```toml
+agent = "opencode"
+image = "paddock-opencode:latest"
+
+[agents.opencode.server]
+image = "paddock-opencode:latest"
+
+[agents.opencode.server.build]
+dockerfile = "~/src/paddock/images/opencode.Dockerfile"
+policy = "weekly"
+
+[agents.opencode.server.volumes]
+"~/code" = "/home/alice/code:rw"
+```
+
+**One source.** Every project shares the server, so no project may configure it:
+
+- In a `[projects]` entry, `server` is an error, in every project, until you remove it:
+  `[user:projects.<path>.agents.<name>.server] Unexpected key "server".`
+- In a project file, paddock discards it with a
+  [warning](project-config.md#warning-behaviour), whatever the allowlist grants, and
+  the rest of the file still applies.
+
+**Paths** (`build.context`, `build.dockerfile` and the host side of `volumes`) must be
+absolute or start with `~`, since a path relative to the workdir would differ by
+project. They must exist, but paddock checks only the server the run chooses, so a
+stale path under a server you aren't using stops nothing.
+
+**Settings reach the server when paddock creates its container**, which it does on the
+first run that finds none, or finds it stopped. A running server is used as it is: when
+its image, port or mounts differ from your config, the run warns and names the command
+that removes it, `docker rm -f paddock-server-<name>`, after which the next run creates
+it afresh. Removing a server ends every project's sessions in progress. `build` applies
+at the same moment, so a `policy` of `daily` or `weekly` rebuilds only when the server
+is next created, not while it runs.
+
+The server's `build` and the top-level one are independent, and paddock starts the
+server before it builds the client's image. To build one image for both from a
+Dockerfile, put the Dockerfile under the server's `build` and give the top-level
+[`image`](#image) the same tag with no top-level `build.dockerfile`: the client then
+runs the image the server's build produced.
+
+A mount in `volumes` at exactly the container path of one of the server's own mounts
+replaces it; that is how you
+[share OpenCode's data with the host](agents/opencode.md#sharing-opencodes-data-with-the-host).
+
+A run that chooses a server needs Docker Engine 25.0 or newer. Settings for a name no
+installed server has are ignored with a [warning](#agent-servers).
+
 ### `build.args`
 
 Build arguments (`docker build --build-arg`) for when paddock builds the image.
@@ -752,7 +1015,7 @@ Build arguments (`docker build --build-arg`) for when paddock builds the image.
 - **Allowlist path:** `build.args` (or `build`)
 
 Has no effect without [`build.dockerfile`](#builddockerfile). Use it to set the `ARG`s
-your Dockerfile declares; the bundled Dockerfile's `ARG`s are listed under
+your Dockerfile declares; the bundled Dockerfiles' `ARG`s are listed under
 [Docker Image](https://phx-paddock.readthedocs.io/en/latest/#docker-image).
 
 paddock also passes the agent's `AGENT` argument, which a `build.args.AGENT` overrides,
@@ -776,7 +1039,7 @@ The directory sent to Docker as the build context, when paddock builds the image
 - **Allowlist path:** `build.context` (or `build`)
 
 Has no effect without `build.dockerfile`. Set it when the Dockerfile `COPY`s files from
-outside its own directory; the bundled Dockerfile `COPY`s nothing, so it needs none.
+outside its own directory; the bundled Dockerfiles `COPY` nothing, so they need none.
 Relative paths resolve against the workdir; see [Validation](#validation).
 
 ### `build.dockerfile`
@@ -815,8 +1078,9 @@ docker build -t <image> -f <build.dockerfile> [--build-arg …] <build.context>
 [`build.args`](#buildargs) and [`build.context`](#buildcontext) have no effect without
 this one.
 
-To start from the bundled Dockerfile, copy it from
-[`images/`](https://github.com/todofixthis/paddock/tree/main/images). For what any
+To start from a bundled Dockerfile, copy your agent's from
+[`images/`](https://github.com/todofixthis/paddock/tree/main/images):
+`claude.Dockerfile` or `opencode.Dockerfile`. For what any
 image needs to work with paddock, see [Custom Docker Images](docker-images.md).
 
 ```toml
@@ -824,7 +1088,7 @@ image needs to work with paddock, see [Custom Docker Images](docker-images.md).
 image = "widgets-dev:latest"
 
 [projects."/home/alice/code/widgets".build]
-dockerfile = "~/src/paddock/images/Dockerfile"
+dockerfile = "~/src/paddock/images/claude.Dockerfile"
 policy = "weekly"
 ```
 
@@ -928,8 +1192,9 @@ List entries are the allowlist paths named under each directive: `agent`, `agent
 `build`,
 `build.args`, `build.context`, `build.dockerfile`, `build.policy`, `image`, `network`
 and `volumes`. `build` covers all of `build.*`. `agent` and
-`agents` are different grants: the first lets a source choose the agent, the second
-set any agent's arguments. paddock rejects any other entry when it
+`agents` are different grants: the first lets a source choose the agent and its
+server, the second set any agent's arguments. No grant lets a source set
+[`agents.<name>.server`](#agentsnameserver). paddock rejects any other entry when it
 loads the user file.
 
 paddock drops a blocked key with a warning rather than an error. The user file and
@@ -968,6 +1233,10 @@ at the same path in the container. Set `false` to let the agent keep state there
 runs. A `[projects."<workdir>"]` value beats the user-level one. See
 [The `.paddock` directory](project-config.md#the-paddock-directory).
 
+The setting covers the agent's own container. An agent with a server runs its tools in
+the server, which reaches `.paddock/` through its own mounts whatever this says; see
+the [`opencode` agent](agents/opencode.md#what-the-agent-can-reach).
+
 ### `image`
 
 The Docker image to run. Required.
@@ -984,10 +1253,16 @@ Without it, Docker pulls the image on first use if it isn't local, and
 [`build.policy`](#buildpolicy) can keep it current.
 
 The image must have the agent's command on its `PATH` and run as root; see
-[Custom Docker Images](docker-images.md). Set it in your user file, and per project
+[Custom Docker Images](docker-images.md). Set `image` in your user file, and per project
 where a project needs a different toolchain — but see
 [`build.dockerfile`](#builddockerfile) before combining a per-project image with a
 user-level build.
+
+An agent's server runs an image of its own,
+[`agents.<name>.server.image`](#agentsnameserver), which can be set only in the global
+section of your user file, never per project. Where the server runs the agent's tools,
+as `opencode`'s does, a per-project `image` changes the interface's container alone:
+every project shares the server's toolchain.
 
 ### `network`
 
@@ -1010,6 +1285,17 @@ off from any network, the agent's API included.
 An empty value removes a network set by a lower-weight source, leaving Docker's default
 bridge: `network = ""` in `[projects."<workdir>"]`, or `--network=`. An empty
 `PADDOCK_NETWORK` is ignored.
+
+A client paired with a [server](#agentsnameserver), as `opencode` is, joins the
+server's network, `paddock-server-<name>`, as well as this one. Docker can't combine a
+second network with `bridge`, `default`, `host`, `none` or `container:<name>`, so each
+of those stops a paired run:
+
+```
+[network] "host" cannot be combined with a server's network; agent "opencode" is paired with server "opencode"
+```
+
+Any network you created yourself works.
 
 ### `projects`
 
@@ -1060,7 +1346,9 @@ Extra host directories or files to mount into the container.
 - **Allowlist path:** `volumes`
 
 Use it to give the agent things outside the workdir: reference data, a sibling
-repository, a credentials file.
+repository, a credentials file. These mount into the run's own container. An agent
+whose tools run in a server, as `opencode`'s do, reaches only what the server mounts:
+list them under [`agents.<name>.server`](#agentsnameserver) instead.
 
 - **Host path** (the key): must exist when paddock starts. Expands a leading `~` to
   your home directory; relative paths resolve against the workdir (see
@@ -1121,8 +1409,11 @@ Messages that point at the project file or the allowlist are covered under
 
 Your user file has invalid TOML or a bad value; `<key>` names the field. Common causes:
 a misspelt key (`imgae`), `[agent.<name>]` written for
-[`[agents.<name>]`](#agentsnameextra_args) (reported at `agent`; when the file also sets
-`agent`, as `[user] This value is not valid TOML.`, repeated for `[project_overrides]`), an allowlist source other than `cli`, `env` and
+[`[agents.<name>]`](#agentsnameextra_args) (reported at `agent.<name>`; when the file
+also sets `agent` to a name, as `[user] This value is not valid TOML.`, repeated for
+`[project_overrides]`), an `[agent]` header in a file that also sets `agent` to a name
+(the same `not valid TOML` message; write `agent = { client = "…", server = "…" }`
+instead), an allowlist source other than `cli`, `env` and
 `project_toml`, or an allowlist value that isn't `true`, `false` or a list of
 [allowlist paths](#configallowlist).
 
@@ -1164,6 +1455,8 @@ but '…' is not a directory`). The path in brackets is the one paddock checked.
 **`[agent] Unknown agent "…"; installed agents: …`**
 
 Use one of the agents listed, or install the package that provides yours.
+`[agent.server] Unknown server "…"; installed servers: …` is the same for the server
+half of [`agent`](#agent).
 
 **`[final:image] Non-empty value expected.`**
 
@@ -1194,3 +1487,118 @@ without it reads only `~/.config/paddock/`.
 
 You have a user file in both places, and paddock reads only the XDG one. Merge what the
 old file still needs into the XDG one, then delete the old file.
+
+### Agent servers
+
+Messages from a run that chooses an [agent server](#agentsnameserver), in the order a
+run can meet them. Each stops the run with exit status 1 unless marked a warning.
+`<name>` is the server's name, e.g. `opencode`.
+
+**`[user:projects.<path>.agents.<name>.server] Unexpected key "server".`**
+
+Server settings sit in a `[projects]` entry. Every project shares the server, so move
+them to `[agents.<name>.server]` in the global section of your user file. Until you do,
+this stops runs in every project, not only `<path>`.
+
+**`project_toml: ignored agents.<name>.server — server settings are read only from the global section of your user config`**
+
+A warning. The project file tried to configure the shared server, and paddock discarded
+that table and applied the rest. If the file is not yours, treat it as a reason to look
+at what else it sets.
+
+**`[agents.<name>.server] No server named "<name>" is installed, so its settings are ignored; installed servers: …`**
+
+A warning. `<name>` is misspelt under `[agents.<name>.server]`, or names a server from a
+package this machine lacks.
+
+**`[user:agents.<name>.server.…] Path '…' must be absolute: a shared server's paths cannot depend on the workdir.`**
+
+A server's `build.context`, `build.dockerfile` or volume host path is relative. Write it
+in full, or from `~`.
+
+**`[agents.<name>.server.image] No image is set, and server "<name>" has no default`**
+
+Set `image` under `[agents.<name>.server]`. The top-level [`image`](#image) is the
+client's and does not stand in for it.
+
+**`[agents.<name>.server.volumes.<host path>] Path '…' does not exist or cannot be resolved (checked …).`**
+
+A host path the server mounts doesn't exist; create it or remove the entry. The same
+message at `agents.<name>.server.build.context` or `….build.dockerfile` names a missing
+build path, and `Expected a file, but '…' is a directory (…)` or `Expected a directory,
+but '…' is not a directory (…)` one of the wrong kind.
+
+**`[agent] Agent "…" needs a server that speaks "…", but none is chosen; set agent.server`**
+
+The client can't run without its server, and the server half of [`agent`](#agent) is
+`false`: look for `server = false`, `PADDOCK_AGENT_SERVER=false` or
+`--agent-server=false`. Remove it, or name the server. The variant ending
+`but server "…" speaks "…"` means the server chosen is another agent's.
+
+**`[network] "…" cannot be combined with a server's network; agent "…" is paired with server "…"`**
+
+[`network`](#network) is `bridge`, `default`, `host`, `none` or `container:…`, none of
+which Docker can combine with the server's network. Name a network you created, or
+unset it: `--network=` for one run.
+
+**`[docker] Agent servers need Docker Engine 25.0 or newer (API 1.44); found API …`**
+
+Upgrade Docker. The API version found is the older of the client's and the daemon's.
+
+**`[docker] Could not read the Docker version: …`**
+
+`docker version` failed, usually because no daemon is running; the text after the colon
+is Docker's own reason.
+
+**`[agent.server] A container named "paddock-server-<name>" exists that paddock did not create; remove or rename it`**
+
+Something else owns the name paddock gives the server. paddock won't touch a container
+it didn't create. `[docker] A network named "paddock-server-<name>" exists that paddock
+did not create; remove or rename it` is the same for the network.
+
+**`[agent.server] Server "<name>" does not have <workdir> mounted read-write at the same path; its mounts: …`**
+
+The server runs the agent's tools, so the workdir must be under one of its read-write
+mounts, at the same path as on the host. Add the mount under
+`[agents.<name>.server.volumes]`; if the message ends with a `docker rm -f` command, a
+server is running without it, and that command removes it so the next run can create
+one that has it. See
+[What the agent can reach](agents/opencode.md#what-the-agent-can-reach).
+
+**`[agent.server] Could not build or pull the image for server "<name>": docker exited …`**
+
+The server's `build` settings ran `docker build` or `docker pull`, and it failed.
+Docker's own output, above the message, says why.
+
+**`[docker] Could not start "paddock-server-<name>": …`**
+
+Docker refused to create the server's network or container; the text after the colon is
+Docker's reason. Common causes: the image doesn't exist locally and can't be pulled,
+or the [`port`](#agentsnameserver) you set is already in use.
+
+**`[agent.server] Server "<name>" stopped while starting; see: docker logs paddock-server-<name>`**
+
+The server's command exited. Read the logs before running paddock again: the next run
+removes the stopped container, and its logs with it.
+
+**`[agent.server] Server "<name>" was not ready after 30 seconds; see: docker logs paddock-server-<name>`**
+
+The container is running but the server isn't answering. The logs say what it is
+doing. A server that is only slow to start is left running, so running paddock again
+may find it ready.
+
+**`[agent.server] Server "<name>" was created but never started; it has been removed, so run again`**
+
+paddock found the container created but not started, waited 30 seconds, and removed it.
+Run again to create a new one.
+
+**`[agent.server] Server "<name>" is running without a secret paddock can read; to recreate it: docker rm -f paddock-server-<name>`**
+
+The running container lacks the secret paddock gives each server, so no client can
+connect. Run the command; it ends every project's sessions in progress.
+
+**`Server "<name>" is running with settings that differ from your config; they apply when it is recreated: docker rm -f paddock-server-<name>`**
+
+A warning: the run goes ahead against the server as it is. Its image, port or mounts
+differ from your config. Run the command when you are ready to end every project's
+sessions in progress; the next run creates the server from your settings.

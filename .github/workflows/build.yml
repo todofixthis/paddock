@@ -102,13 +102,14 @@ jobs:
           uv build
           uvx twine@7.0.0 check --strict dist/*
 
-  # Builds the bundled Dockerfile once per agent and checks that each install
+  # Builds the bundled Dockerfiles, once per agent, and checks that each install
   # runs, so a Renovate bump that breaks the build fails here rather than for
   # users. The steps, not the job, skip when nothing changed: the job always
   # reports a result, so the gate need not tell a justified skip from a broken
   # condition (ADR 015). Only an explicit 'false' skips them, so a missing or
   # misspelt output builds rather than passing unbuilt.
   image:
+    name: image (${{ matrix.agent }})
     needs: changes
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -116,7 +117,15 @@ jobs:
       # One agent failing shouldn't cancel the others' builds
       fail-fast: false
       matrix:
-        agent: [claude, none]
+        # Each agent builds from the Dockerfile that installs it; `none` is
+        # Claude's without the agent.
+        include:
+          - agent: claude
+            dockerfile: images/claude.Dockerfile
+          - agent: none
+            dockerfile: images/claude.Dockerfile
+          - agent: opencode
+            dockerfile: images/opencode.Dockerfile
 
     steps:
       - name: Report a skipped build
@@ -129,16 +138,18 @@ jobs:
         if: needs.changes.outputs.image != 'false'
         env:
           AGENT: ${{ matrix.agent }}
-        run: docker build --build-arg "AGENT=${AGENT}" -t "paddock-smoke:${AGENT}" -f images/Dockerfile images
+          DOCKERFILE: ${{ matrix.dockerfile }}
+        run: docker build --build-arg "AGENT=${AGENT}" -t "paddock-smoke:${AGENT}" -f "${DOCKERFILE}" images
       - name: Smoke test image
         if: needs.changes.outputs.image != 'false'
         timeout-minutes: 5
         env:
           AGENT: ${{ matrix.agent }}
+          DOCKERFILE: ${{ matrix.dockerfile }}
         run: |
           docker run --rm \
             -v "${PWD}/.github/scripts/smoke-test.sh:/tmp/smoke-test.sh:ro" \
-            -v "${PWD}/images/Dockerfile:/tmp/Dockerfile:ro" \
+            -v "${PWD}/${DOCKERFILE}:/tmp/Dockerfile:ro" \
             "paddock-smoke:${AGENT}" \
             bash /tmp/smoke-test.sh /tmp/Dockerfile "${AGENT}"
 

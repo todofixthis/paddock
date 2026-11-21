@@ -124,6 +124,65 @@ def test_mounts_are_the_servers_then_configured_then_scratch(docker):
     ]
 
 
+def test_a_configured_mount_replaces_the_servers_volume_at_that_path(docker):
+    server = _Srv()
+    server.own_volumes = {"/own": VolumeSpec("/shared", "ro")}
+    server.scratch_volumes = {
+        "data": VolumeSpec("/data", "rw"),
+        "state": VolumeSpec("/state", "rw"),
+    }
+    volumes = {
+        "/host/data": VolumeSpec("/data", "rw"),
+        "/host/s": VolumeSpec("/shared", "rw"),
+    }
+    result = _Run(server, volumes=volumes).launch()
+    assert result.run_argv is not None
+    assert _flags(result.run_argv, "-v") == [
+        "/host/data:/data:rw",
+        "/host/s:/shared:rw",
+        "state:/state:rw",
+    ]
+
+
+def test_a_trailing_slash_names_the_same_mount_point(docker):
+    server = _Srv()
+    server.scratch_volumes = {"data": VolumeSpec("/data", "rw")}
+    result = _Run(server, volumes={"/host/data": VolumeSpec("/data/", "rw")}).launch()
+    assert result.run_argv is not None
+    assert _flags(result.run_argv, "-v") == ["/host/data:/data/:rw"]
+
+
+def test_a_mount_at_a_parent_path_replaces_nothing(docker):
+    server = _Srv()
+    server.scratch_volumes = {"data": VolumeSpec("/root/data", "rw")}
+    result = _Run(server, volumes={"/host": VolumeSpec("/root", "rw")}).launch()
+    assert result.run_argv is not None
+    assert _flags(result.run_argv, "-v") == ["/host:/root:rw", "data:/root/data:rw"]
+
+
+@pytest.mark.parametrize("written", ["/data/../data", "//data", "/data/."])
+def test_a_container_path_written_another_way_still_replaces(docker, written):
+    server = _Srv()
+    server.scratch_volumes = {"data": VolumeSpec("/data", "rw")}
+    result = _Run(server, volumes={"/host/data": VolumeSpec(written, "rw")}).launch()
+    assert result.run_argv is not None
+    assert _flags(result.run_argv, "-v") == [f"/host/data:{written}:rw"]
+
+
+def test_replacing_a_running_servers_volume_is_drift(docker):
+    server = _Srv()
+    server.scratch_volumes = {"data": VolumeSpec("/data", "rw")}
+    _Run(server).launch()
+    replaced = _Run(server, volumes={"/host/data": VolumeSpec("/data", "rw")})
+    assert replaced.launch().drifted is True
+
+
+def test_a_mount_that_replaces_the_servers_own_can_hold_the_workdir(docker):
+    server = _Srv()
+    server.own_volumes = {"/elsewhere": VolumeSpec("/a", "ro")}
+    assert _Run(server, volumes=RW_A).launch("/a/project").created is True
+
+
 def test_a_configured_port_is_published(docker):
     result = _Run(port=4096).launch()
     assert result.run_argv is not None

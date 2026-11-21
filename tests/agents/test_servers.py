@@ -19,12 +19,8 @@ class MinimalServer(BaseServer):
         return True
 
 
-def test_server_registry_is_empty_without_plugins() -> None:
-    """No server is bundled yet.
-
-    This changes when the first bundled server is registered.
-    """
-    assert list(server_registry) == []
+def test_server_registry_holds_the_bundled_server() -> None:
+    assert list(server_registry) == ["opencode"]
 
 
 def test_base_server_defaults() -> None:

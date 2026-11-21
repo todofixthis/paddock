@@ -1,3 +1,4 @@
+import posixpath
 import secrets
 import subprocess
 import time
@@ -149,14 +150,46 @@ class ServerLauncher:
             env=ContainerEnvironment(
                 {**self._server.get_env(secret), SECRET_ENV: secret}, secret=secret
             ),
-            volumes=[
-                *self._server.get_volumes().items(),
-                *self._settings.volumes.items(),
-                *self._server.get_scratch_volumes().items(),
-            ],
+            volumes=self._volumes(),
             container_port=self._server.CONTAINER_PORT,
             host_port=self._settings.port,
         )
+
+    def _volumes(self) -> list[tuple[str, VolumeSpec]]:
+        """The server's mounts: its own, then configured, then scratch.
+
+        A configured mount replaces the server's own at the same container
+        path, which is how a user shares a directory the server would
+        otherwise keep in a named volume (ADR 021).
+        """
+        configured = self._settings.volumes
+        taken = {self._mount_point(spec) for spec in configured.values()}
+        return [
+            *self._unclaimed(self._server.get_volumes(), taken),
+            *configured.items(),
+            *self._unclaimed(self._server.get_scratch_volumes(), taken),
+        ]
+
+    @classmethod
+    def _unclaimed(
+        cls, volumes: dict[str, VolumeSpec], taken: set[PurePosixPath]
+    ) -> list[tuple[str, VolumeSpec]]:
+        """The volumes whose container path no configured mount has taken."""
+        return [
+            (source, spec)
+            for source, spec in volumes.items()
+            if cls._mount_point(spec) not in taken
+        ]
+
+    @staticmethod
+    def _mount_point(spec: VolumeSpec) -> PurePosixPath:
+        """The path Docker mounts a volume at, however it was written.
+
+        Docker cleans a container path before it mounts there, so a
+        trailing slash, ``..`` or a doubled leading slash names the same
+        mount point, and two volumes that differ only so are duplicates.
+        """
+        return PurePosixPath(posixpath.normpath("/" + spec.container_path.lstrip("/")))
 
     def _mint(self) -> str:
         """Mint the secret a new server container is started with."""

@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
-# Smoke test for images/Dockerfile. Runs inside the built image, with the
+# Smoke test for the Dockerfiles in images/. Runs inside the built image, with its
 # Dockerfile mounted beside it, and checks each install runs and reports the
 # version its ARG default names. Most of those versions a successful build
 # already guarantees; the Node.js major is the one that can differ, since
 # NodeSource missing a release leaves Ubuntu's own nodejs (ADR 016).
 #
-# Usage: smoke-test.sh <Dockerfile> <claude|none>
+# Usage: smoke-test.sh <Dockerfile> <claude|none|opencode>
 set -euo pipefail
 
-dockerfile="${1:?usage: smoke-test.sh <Dockerfile> <claude|none>}"
-agent="${2:?usage: smoke-test.sh <Dockerfile> <claude|none>}"
+dockerfile="${1:?usage: smoke-test.sh <Dockerfile> <claude|none|opencode>}"
+agent="${2:?usage: smoke-test.sh <Dockerfile> <claude|none|opencode>}"
 
 fail() {
   echo "❌ $1" >&2
@@ -72,8 +72,14 @@ case "${agent}" in
     check_output "${claude_code_version}" timeout 60 claude --version
     ;;
   none)
-    ! command -v claude >/dev/null 2>&1 || fail "claude installed with AGENT=none"
+    for cmd in claude opencode; do
+      ! command -v "${cmd}" >/dev/null 2>&1 || fail "${cmd} installed with AGENT=none"
+    done
     echo "✅ no agent installed"
+    ;;
+  opencode)
+    opencode_version=$(arg_default OPENCODE_VERSION)
+    check_output "${opencode_version}" timeout 60 opencode --version
     ;;
   *)
     fail "unknown agent: ${agent}"

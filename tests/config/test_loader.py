@@ -894,7 +894,7 @@ def test_resolve_warns_about_settings_for_an_uninstalled_agent(
         ConfigLoader().resolve(_empty_parsed(), workdir=tmp_path, environ={})
     assert [rec.getMessage() for rec in caplog.records] == [
         '[agents.claud] No agent named "claud" is installed, so its settings '
-        "are ignored; installed agents: claude, false"
+        "are ignored; installed agents: claude, false, opencode"
     ]
 
 
@@ -1249,8 +1249,11 @@ def test_server_settings_warning_reads_none_without_servers(
     _setup_home(
         tmp_path, monkeypatch, 'image = "i"\n[agents.claude.server]\nimage = "i"\n'
     )
+    no_servers: ClassRegistry = ClassRegistry(attr_name="SERVER_KEY")
     with caplog.at_level(logging.WARNING, logger="paddock"):
-        ConfigLoader().resolve(_empty_parsed(), workdir=tmp_path, environ={})
+        ConfigLoader(servers=no_servers).resolve(
+            _empty_parsed(), workdir=tmp_path, environ={}
+        )
     assert [rec.getMessage() for rec in caplog.records] == [
         '[agents.claude.server] No server named "claude" is installed, so its '
         "settings are ignored; installed servers: none"

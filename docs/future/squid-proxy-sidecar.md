@@ -15,6 +15,14 @@ Coding agents can make arbitrary outbound HTTP/S requests. Without a proxy, ther
 - A policy file (mounted from the host) controls which domains/URLs are allowed or blocked.
 - The sidecar's admin interfaces (Squid manager, web UI) are not reachable from within the paddock container — only from the host.
 
+## Starting points
+
+The agent-server work built most of what a sidecar needs:
+
+- `ManagedContainer` (`src/paddock/docker/managed.py`) already runs a named, labelled, long-lived container on a network of its own, and knows nothing about agents. A sidecar would reuse it rather than grow a second lifecycle.
+- A container on two networks needs Docker Engine 25.0 or newer. `DockerVersion` makes that check only for a run that chooses an agent server (ADR 019), so a sidecar must make it itself.
+- A sidecar is a container every client shares. ADR 018 leaves that case open: it needs a decision of its own, not a reuse of the agent-server one.
+
 ## Open questions
 
 - Which web UI? (squidguard, SquidAnalyzer, or a lightweight custom viewer)

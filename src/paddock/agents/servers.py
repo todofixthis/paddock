@@ -83,7 +83,8 @@ class BaseServer(ABC):
         """
         Host-path-keyed volume mounts the server itself needs.
 
-        Mounts the user configures are separate and need not be repeated.
+        A mount the user configures at the same container path replaces one
+        returned here.
         """
         return {}
 
@@ -92,7 +93,9 @@ class BaseServer(ABC):
         Named Docker volumes (not host paths) for the server's own state.
 
         Keys are volume names, values are
-        :class:`~paddock.config.filters.VolumeSpec` instances.
+        :class:`~paddock.config.filters.VolumeSpec` instances. A mount the
+        user configures at the same container path replaces one returned
+        here.
         """
         return {}
 
