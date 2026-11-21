@@ -56,7 +56,9 @@ Three fixes, best first.
 ### Pin versions and let Renovate bump them
 
 Pin each install to a version in an `ARG`. Bumping the `ARG` changes the step, so the
-next build reruns it. For example, an agent step pinned this way:
+next build reruns it. Declare each `ARG` directly above the step that uses it, and put
+the steps you bump most often last: Docker passes an `ARG` to every `RUN` after its
+declaration, so one declared at the top of the file reruns every step when it changes. For example, an agent step pinned this way:
 
 ```dockerfile
 # renovate: datasource=npm depName=@anthropic-ai/claude-code

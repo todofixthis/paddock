@@ -45,7 +45,7 @@ conditional, and the file stops being readable as an example of anything.
 ### Option 2: One Dockerfile per agent (Accepted)
 
 `images/<agent>.Dockerfile`, each complete in itself: `claude.Dockerfile`, which
-is the released file under a new name, and `opencode.Dockerfile`.
+builds what the released file built, and `opencode.Dockerfile`.
 
 **Pros:** Each file is a whole, copyable example for its agent, and the unit a
 published image would be built from.
@@ -94,8 +94,8 @@ run. One image for both removes the mismatch.
 
 **`AGENT` stays.** Each bundled agent still passes its build its name, because
 a user's own Dockerfile may branch on it, so every bundled file declares it.
-`claude.Dockerfile` is the released file unchanged, the OpenCode case having
-been added and removed again before any release: it keeps its `claude` and `none`
+`claude.Dockerfile` builds what the released file built, the OpenCode case
+having been added and removed again before any release: it keeps its `claude` and `none`
 cases, `none` being the image `agent = false` builds, and its default of `none`.
 That default sits oddly under the file's name, since a bare `docker build` of
 it installs no agent; the bundled agents always pass the argument, and changing what
