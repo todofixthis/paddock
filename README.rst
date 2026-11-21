@@ -253,7 +253,7 @@ says:
      - Default
      - Description
    * - ``OPENCODE_VERSION``
-     - ``2.3.0``
+     - ``2.3.2``
      - OpenCode version
 
 Build an image manually:
