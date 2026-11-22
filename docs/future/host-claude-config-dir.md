@@ -2,8 +2,8 @@
 
 Claude Code keeps its settings and sign-in in `~/.claude`, and its onboarding state in
 `~/.claude.json` beside it, unless `CLAUDE_CONFIG_DIR` names another directory, in which
-case both live there. The `claude` agent always mounts the host's
-`~/.claude` and `~/.claude.json`, whatever that variable says. A user who sets `CLAUDE_CONFIG_DIR`
+case both live there. The `claude` agent mounts the host's `~/.claude`,
+and `~/.claude.json` where it exists, whatever that variable says. A user who sets `CLAUDE_CONFIG_DIR`
 on the host gets a container that mounts an empty or stale `~/.claude` and starts at
 onboarding, with nothing saying why.
 

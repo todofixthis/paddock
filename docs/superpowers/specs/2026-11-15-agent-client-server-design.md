@@ -335,6 +335,20 @@ where they differ:
   (`docs/future/agent-environment-settings.md`).
 - **The release that carries it is a beta** until it has been used in the field.
 
+The spikes answered the four questions below: a client gets a token without an
+interactive login by paddock logging in over HTTP and writing Omnigent's token file;
+`bwrap` does not run in an unprivileged container, and the Claude harness never calls
+it; `omnigent claude` attaches correctly under `docker run -it`; and the server is
+named by `--server` after the subcommand.
+
+Still open, and the account-per-project decision rests on the first:
+
+- A full turn on a non-admin account's own login token has not been run.
+- Whether two containers can share one `~/.omnigent` at once, which decides whether
+  that directory is kept per project or per run.
+- Whether Claude Code can be signed in, and stays signed in, from an empty config
+  volume through `omnigent claude`.
+
 The intended shape before the spikes:
 
 - **Client `omnigent`:** `DEFAULT_SERVER = "omnigent"`, `PROTOCOL = "omnigent"`, command
