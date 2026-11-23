@@ -80,7 +80,7 @@ def test_abstract_load_cannot_be_omitted() -> None:
             SOURCE_KEY = "bad"
             WEIGHT = 99
 
-        _Bad()  # noqa: F841
+        _Bad()
 
 
 def test_discarded_names_a_path_and_why() -> None:

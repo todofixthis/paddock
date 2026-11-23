@@ -10,9 +10,11 @@ from paddock.config.project_dir import ProjectDirManager
 
 def test_not_a_directory_raises_environment_error(tmp_path: Path) -> None:
     (tmp_path / ".paddock").write_text("oops")
-    with pytest.raises(PaddockEnvironmentError):
-        with ProjectDirManager(tmp_path, readonly=True, enabled=True):
-            pass
+    with (
+        pytest.raises(PaddockEnvironmentError),
+        ProjectDirManager(tmp_path, readonly=True, enabled=True),
+    ):
+        pass
 
 
 def test_disabled_yields_none_and_no_dir(tmp_path: Path) -> None:
@@ -57,9 +59,11 @@ def test_enter_existing_directory_left_in_place_after_exit(tmp_path: Path) -> No
 def test_exit_nonempty_created_dir_warns_and_keeps(
     tmp_path: Path, caplog: pytest.LogCaptureFixture
 ) -> None:
-    with caplog.at_level(logging.WARNING, logger="paddock"):
-        with ProjectDirManager(tmp_path, readonly=True, enabled=True):
-            (tmp_path / ".paddock" / "leftover").write_text("oops")
+    with (
+        caplog.at_level(logging.WARNING, logger="paddock"),
+        ProjectDirManager(tmp_path, readonly=True, enabled=True),
+    ):
+        (tmp_path / ".paddock" / "leftover").write_text("oops")
     d = tmp_path / ".paddock"
     assert d.exists()
     assert any("contents" in r.message.lower() for r in caplog.records)
@@ -76,11 +80,13 @@ def test_symlink_to_directory_raises_and_is_left_untouched(tmp_path: Path) -> No
     target.mkdir()
     link = tmp_path / ".paddock"
     link.symlink_to(target)
-    with pytest.raises(
-        PaddockEnvironmentError, match="is a symlink; paddock will not mount"
+    with (
+        pytest.raises(
+            PaddockEnvironmentError, match="is a symlink; paddock will not mount"
+        ),
+        ProjectDirManager(tmp_path, readonly=False, enabled=True),
     ):
-        with ProjectDirManager(tmp_path, readonly=False, enabled=True):
-            pass
+        pass
     assert link.is_symlink()
     assert link.readlink() == target
 
@@ -90,11 +96,13 @@ def test_symlink_to_file_raises_and_is_left_untouched(tmp_path: Path) -> None:
     target.write_text("secret")
     link = tmp_path / ".paddock"
     link.symlink_to(target)
-    with pytest.raises(
-        PaddockEnvironmentError, match="is a symlink; paddock will not mount"
+    with (
+        pytest.raises(
+            PaddockEnvironmentError, match="is a symlink; paddock will not mount"
+        ),
+        ProjectDirManager(tmp_path, readonly=True, enabled=True),
     ):
-        with ProjectDirManager(tmp_path, readonly=True, enabled=True):
-            pass
+        pass
     assert link.is_symlink()
     assert target.read_text() == "secret"
 
@@ -102,11 +110,13 @@ def test_symlink_to_file_raises_and_is_left_untouched(tmp_path: Path) -> None:
 def test_dangling_symlink_raises_and_is_left_untouched(tmp_path: Path) -> None:
     link = tmp_path / ".paddock"
     link.symlink_to(tmp_path / "gone")
-    with pytest.raises(
-        PaddockEnvironmentError, match="is a symlink; paddock will not mount"
+    with (
+        pytest.raises(
+            PaddockEnvironmentError, match="is a symlink; paddock will not mount"
+        ),
+        ProjectDirManager(tmp_path, readonly=True, enabled=True),
     ):
-        with ProjectDirManager(tmp_path, readonly=True, enabled=True):
-            pass
+        pass
     assert link.is_symlink()
 
 
@@ -158,9 +168,11 @@ def test_exit_persistent_permission_error_warns_and_keeps(
 ) -> None:
     sleep = mocker.patch("paddock.config.project_dir.sleep")
     rmdir = _flaky_rmdir(mocker, PermissionError(13, "denied"), failures=10)
-    with caplog.at_level(logging.WARNING, logger="paddock"):
-        with ProjectDirManager(tmp_path, readonly=True, enabled=True):
-            pass
+    with (
+        caplog.at_level(logging.WARNING, logger="paddock"),
+        ProjectDirManager(tmp_path, readonly=True, enabled=True),
+    ):
+        pass
     assert (tmp_path / ".paddock").is_dir()
     assert rmdir.call_count == 10
     # No sleep after the last attempt.
@@ -173,9 +185,11 @@ def test_exit_other_os_error_from_rmdir_warns_without_retry(
 ) -> None:
     sleep = mocker.patch("paddock.config.project_dir.sleep")
     rmdir = _flaky_rmdir(mocker, OSError(16, "busy"), failures=1)
-    with caplog.at_level(logging.WARNING, logger="paddock"):
-        with ProjectDirManager(tmp_path, readonly=True, enabled=True):
-            pass
+    with (
+        caplog.at_level(logging.WARNING, logger="paddock"),
+        ProjectDirManager(tmp_path, readonly=True, enabled=True),
+    ):
+        pass
     assert (tmp_path / ".paddock").is_dir()
     assert rmdir.call_count == 1
     sleep.assert_not_called()
@@ -187,9 +201,11 @@ def test_exit_rmdir_file_not_found_is_silent(
 ) -> None:
     mocker.patch("paddock.config.project_dir.sleep")
     rmdir = _flaky_rmdir(mocker, FileNotFoundError(2, "gone"), failures=1)
-    with caplog.at_level(logging.WARNING, logger="paddock"):
-        with ProjectDirManager(tmp_path, readonly=True, enabled=True):
-            pass
+    with (
+        caplog.at_level(logging.WARNING, logger="paddock"),
+        ProjectDirManager(tmp_path, readonly=True, enabled=True),
+    ):
+        pass
     assert rmdir.call_count == 1
     assert not caplog.records
 
@@ -200,8 +216,10 @@ def test_exit_iterdir_permission_error_warns(
     mocker.patch.object(
         Path, "iterdir", autospec=True, side_effect=PermissionError(13, "denied")
     )
-    with caplog.at_level(logging.WARNING, logger="paddock"):
-        with ProjectDirManager(tmp_path, readonly=True, enabled=True):
-            pass
+    with (
+        caplog.at_level(logging.WARNING, logger="paddock"),
+        ProjectDirManager(tmp_path, readonly=True, enabled=True),
+    ):
+        pass
     assert (tmp_path / ".paddock").is_dir()
     assert any(str(tmp_path / ".paddock") in r.getMessage() for r in caplog.records)

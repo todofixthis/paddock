@@ -166,6 +166,7 @@ class DockerCommandBuilder:
             ["docker", "ps", "-a", "--filter", f"name=^{name}$", "--format={{.Names}}"],
             capture_output=True,
             text=True,
+            check=False,
         )
         return name not in result.stdout.splitlines()
 

@@ -1,5 +1,5 @@
 import subprocess
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -54,7 +54,7 @@ def _log(tmp_path: Path, pulled_ago: timedelta | None = None) -> PullLog:
     """
     log = PullLog(tmp_path / "state" / "pulls.json")
     if pulled_ago is not None:
-        log.record(IMAGE, datetime.now(timezone.utc) - pulled_ago)
+        log.record(IMAGE, datetime.now(UTC) - pulled_ago)
     return log
 
 
@@ -70,7 +70,7 @@ def test_default_path_falls_back_to_local_state(value: str) -> None:
 
 
 def test_log_round_trips_a_pull_time(tmp_path: Path) -> None:
-    pulled_at = datetime(2026, 10, 16, 9, 30, tzinfo=timezone.utc)
+    pulled_at = datetime(2026, 10, 16, 9, 30, tzinfo=UTC)
     log = _log(tmp_path)
     log.record(IMAGE, pulled_at)
     assert PullLog(log.path).last_pulled_at(IMAGE) == pulled_at
@@ -78,7 +78,7 @@ def test_log_round_trips_a_pull_time(tmp_path: Path) -> None:
 
 def test_log_keeps_other_images(tmp_path: Path) -> None:
     log = _log(tmp_path, pulled_ago=timedelta(hours=1))
-    log.record("other:latest", datetime.now(timezone.utc))
+    log.record("other:latest", datetime.now(UTC))
     assert log.last_pulled_at(IMAGE) is not None
 
 
@@ -94,7 +94,7 @@ def test_log_treats_corrupt_file_as_empty(tmp_path: Path, contents: str) -> None
     log.path.parent.mkdir(parents=True)
     log.path.write_text(contents)
     assert log.last_pulled_at(IMAGE) is None
-    log.record(IMAGE, datetime.now(timezone.utc))
+    log.record(IMAGE, datetime.now(UTC))
     assert log.last_pulled_at(IMAGE) is not None
 
 
@@ -109,7 +109,7 @@ def test_refresh_daily_pulls_stale_image(
     assert f"Pulling {IMAGE} (build.policy = daily)" in caplog.text
     pulled_at = log.last_pulled_at(IMAGE)
     assert pulled_at is not None
-    assert datetime.now(timezone.utc) - pulled_at < timedelta(minutes=1)
+    assert datetime.now(UTC) - pulled_at < timedelta(minutes=1)
 
 
 def test_refresh_daily_skips_fresh_image(mocker: MockerFixture, tmp_path: Path) -> None:

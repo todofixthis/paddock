@@ -1,4 +1,5 @@
 import pytest
+from filters.base import FilterError
 
 from paddock.config.extract import ExtractProject
 
@@ -25,5 +26,5 @@ def test_returns_empty_when_projects_section_missing() -> None:
 
 def test_invalid_input_type() -> None:
     """Non-dict input raises a filter error."""
-    with pytest.raises(Exception):
+    with pytest.raises(FilterError):
         ExtractProject(project="/x").apply("not-a-dict")

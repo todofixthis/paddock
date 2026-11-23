@@ -115,10 +115,12 @@ def test_default_user_config_path_falls_back_to_legacy_with_warning(
         path = ConfigContext.default_user_config_path({"XDG_CONFIG_HOME": str(xdg)})
     assert path == legacy
     assert [rec.message for rec in caplog.records] == [
-        f"Reading user config from {legacy} because XDG_CONFIG_HOME is set and "
-        f"{xdg / 'paddock' / 'config.toml'} does not exist. This fallback is "
-        "deprecated and will be removed in paddock 2.0; move the file to "
-        f"{xdg / 'paddock' / 'config.toml'}."
+        (
+            f"Reading user config from {legacy} because XDG_CONFIG_HOME is set and "
+            f"{xdg / 'paddock' / 'config.toml'} does not exist. This fallback is "
+            "deprecated and will be removed in paddock 2.0; move the file to "
+            f"{xdg / 'paddock' / 'config.toml'}."
+        )
     ]
 
 
@@ -136,9 +138,11 @@ def test_default_user_config_path_prefers_xdg_and_warns_about_legacy(
         )
     assert path == xdg_config
     assert [rec.message for rec in caplog.records] == [
-        f"Ignoring {legacy} because XDG_CONFIG_HOME is set; reading user config "
-        f"from {xdg_config}. Remove {legacy}, merging anything it still needs "
-        "into the XDG file."
+        (
+            f"Ignoring {legacy} because XDG_CONFIG_HOME is set; reading user config "
+            f"from {xdg_config}. Remove {legacy}, merging anything it still needs "
+            "into the XDG file."
+        )
     ]
 
 

@@ -1,6 +1,6 @@
 import json
 import subprocess
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -32,7 +32,7 @@ def test_refresh_builds_when_due(mocker: MockerFixture) -> None:
 
 def test_refresh_skips_fresh_image(mocker: MockerFixture) -> None:
     mocker.patch.object(
-        ImageBuilder, "get_image_built_at", return_value=datetime.now(timezone.utc)
+        ImageBuilder, "get_image_built_at", return_value=datetime.now(UTC)
     )
     mock_run_build = mocker.patch.object(ImageBuilder, "run_build")
     assert not _builder(BuildPolicy.DAILY).refresh("myapp:latest")
@@ -59,7 +59,7 @@ def test_run_build_with_args(mocker: MockerFixture) -> None:
 
 def test_run_build_stamps_build_time(mocker: MockerFixture) -> None:
     mock_run = mocker.patch("paddock.docker.build.subprocess.run")
-    before = datetime.now(timezone.utc)
+    before = datetime.now(UTC)
     _builder(build_args={}).run_build("myapp:latest")
     call_args = mock_run.call_args[0][0]
     key, _, value = call_args[call_args.index("--label") + 1].partition("=")
@@ -98,7 +98,7 @@ def test_get_image_built_at_prefers_built_at_label(mocker: MockerFixture) -> Non
             }
         ),
     )
-    assert built_at == datetime(2026, 10, 13, 22, 30, tzinfo=timezone.utc)
+    assert built_at == datetime(2026, 10, 13, 22, 30, tzinfo=UTC)
 
 
 def test_get_image_built_at_falls_back_to_created(mocker: MockerFixture) -> None:
@@ -122,7 +122,7 @@ def test_get_image_built_at_ignores_invalid_label(mocker: MockerFixture) -> None
             }
         ),
     )
-    assert built_at == datetime(2026, 10, 10, 2, 18, 25, tzinfo=timezone.utc)
+    assert built_at == datetime(2026, 10, 10, 2, 18, 25, tzinfo=UTC)
 
 
 def test_get_image_built_at_missing_image(mocker: MockerFixture) -> None:

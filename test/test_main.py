@@ -663,8 +663,10 @@ def test_unknown_agent_settings_warn_and_run(
         if record.levelno == logging.WARNING
     ]
     assert warnings == [
-        '[agents.claud] No agent named "claud" is installed, so its settings '
-        "are ignored; installed agents: claude, false, opencode"
+        (
+            '[agents.claud] No agent named "claud" is installed, so its settings '
+            "are ignored; installed agents: claude, false, opencode"
+        )
     ]
 
 
@@ -921,8 +923,10 @@ def test_drift_warns_with_the_recreate_command(
     with caplog.at_level(logging.WARNING, logger="paddock"):
         assert _ServerRun(mocker, tmp_path, monkeypatch, result=result).run() == 0
     assert [r.getMessage() for r in caplog.records] == [
-        'Server "srv" is running with settings that differ from your config; '
-        "they apply when it is recreated: docker rm -f paddock-server-srv"
+        (
+            'Server "srv" is running with settings that differ from your config; '
+            "they apply when it is recreated: docker rm -f paddock-server-srv"
+        )
     ]
 
 

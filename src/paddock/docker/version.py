@@ -28,6 +28,7 @@ class DockerVersion:
             ["docker", "version", "--format", "{{json .}}"],
             capture_output=True,
             text=True,
+            check=False,
         )
         try:
             versions = json.loads(result.stdout)

@@ -177,6 +177,7 @@ class ManagedContainer:
             capture_output=True,
             env={**os.environ, **self._spec.env.secrets},
             text=True,
+            check=False,
         )
         if result.returncode == 0:
             return True
@@ -193,7 +194,9 @@ class ManagedContainer:
         Args:
             container_id: The ID a status reading reported.
         """
-        subprocess.run(["docker", "rm", container_id], capture_output=True, text=True)
+        subprocess.run(
+            ["docker", "rm", container_id], capture_output=True, text=True, check=False
+        )
 
     def published_port(self) -> int | None:
         """Read the loopback port the container's port is published on.
@@ -206,6 +209,7 @@ class ManagedContainer:
             ["docker", "port", self._spec.name, f"{self._spec.container_port}/tcp"],
             capture_output=True,
             text=True,
+            check=False,
         )
         lines = result.stdout.split()
         if result.returncode != 0 or not lines:
@@ -279,6 +283,7 @@ class ManagedContainer:
             ],
             capture_output=True,
             text=True,
+            check=False,
         )
         if result.returncode != 0 and not self._network_exists():
             raise self._could_not_start(result.stderr)
@@ -296,6 +301,7 @@ class ManagedContainer:
             ["docker", kind, "inspect", self._spec.name],
             capture_output=True,
             text=True,
+            check=False,
         )
         if result.returncode != 0:
             return None

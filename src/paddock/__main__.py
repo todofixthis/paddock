@@ -37,6 +37,7 @@ def _log_network_peers(network: str) -> None:
         ["docker", "ps", "--filter", f"network={network}", "--format={{.Names}}"],
         capture_output=True,
         text=True,
+        check=False,
     )
     if result.returncode == 0 and result.stdout.strip():
         for name in result.stdout.strip().splitlines():
@@ -257,7 +258,9 @@ def run(
                 sys.exit(0)
 
             result = subprocess.run(
-                docker_argv, env={**os.environ, **command_builder.environment.secrets}
+                docker_argv,
+                env={**os.environ, **command_builder.environment.secrets},
+                check=False,
             )
             sys.exit(result.returncode)
     except PaddockEnvironmentError as e:

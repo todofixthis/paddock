@@ -368,8 +368,8 @@ class ConfigLoader:
             The merged config dict with defaults applied.
         """
         merged: dict[str, Any] = {}
-        for key in sanitised:
-            merged = self._deep_merge(merged, sanitised[key])
+        for source_config in sanitised.values():
+            merged = self._deep_merge(merged, source_config)
         return self._apply_defaults(merged)
 
     def _extract_meta(self, results: dict[str, LoadResult]) -> tuple[Allowlist, bool]:

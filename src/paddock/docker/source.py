@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 from typing import ClassVar
 
@@ -30,7 +30,7 @@ class BuildPolicy(StrEnum):
                 max_age = timedelta(hours=24)
             case BuildPolicy.WEEKLY:
                 max_age = timedelta(days=7)
-        return last_at is None or datetime.now(timezone.utc) - last_at > max_age
+        return last_at is None or datetime.now(UTC) - last_at > max_age
 
 
 class ImageSource(ABC):

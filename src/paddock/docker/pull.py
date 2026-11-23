@@ -4,7 +4,7 @@ import os
 import subprocess
 import tempfile
 from collections.abc import Mapping
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import filters as f
@@ -15,7 +15,7 @@ logger = logging.getLogger("paddock")
 
 # Stands in for the last-pull time of an image present locally that paddock has
 # no record of pulling, so every periodic policy reads it as due.
-NEVER_PULLED = datetime.min.replace(tzinfo=timezone.utc)
+NEVER_PULLED = datetime.min.replace(tzinfo=UTC)
 
 
 class PullLog:
@@ -136,7 +136,7 @@ class ImagePuller(ImageSource):
         subprocess.run(["docker", "pull", image], check=True)
         # An unwritable log costs a redundant pull next time, not this run.
         try:
-            self.log.record(image, datetime.now(timezone.utc))
+            self.log.record(image, datetime.now(UTC))
         except OSError as e:
             logger.warning("Couldn't record the pull in %s: %s", self.log.path, e)
         return True
@@ -148,5 +148,6 @@ class ImagePuller(ImageSource):
             ["docker", "image", "inspect", image],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
+            check=False,
         )
         return result.returncode == 0

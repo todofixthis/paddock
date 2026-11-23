@@ -168,8 +168,10 @@ def test_env_build_args_suffixed_name_is_fatal(
         )
     messages = [str(e) for e in exc.value.exceptions]
     assert messages == [
-        "[env:PADDOCK_BUILD_ARGS_NODE_VERSION] Unexpected key "
-        '"PADDOCK_BUILD_ARGS_NODE_VERSION".'
+        (
+            "[env:PADDOCK_BUILD_ARGS_NODE_VERSION] Unexpected key "
+            '"PADDOCK_BUILD_ARGS_NODE_VERSION".'
+        )
     ]
 
 
@@ -749,8 +751,10 @@ def test_matching_entry_missing_path_reported_once(
     with pytest.raises(ExceptionGroup) as exc_info:
         ConfigLoader().resolve(_empty_parsed(), workdir=workdir, environ={})
     assert [str(e) for e in exc_info.value.exceptions] == [
-        "[project_overrides:volumes.data] Path 'data' does not exist or cannot"
-        f" be resolved (checked {workdir / 'data'})."
+        (
+            "[project_overrides:volumes.data] Path 'data' does not exist or cannot"
+            f" be resolved (checked {workdir / 'data'})."
+        )
     ]
 
 
@@ -859,8 +863,10 @@ def test_env_cannot_set_agents(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) 
             environ={"PADDOCK_AGENTS_CLAUDE_EXTRA_ARGS": "x"},
         )
     assert [str(e) for e in exc.value.exceptions] == [
-        "[env:PADDOCK_AGENTS_CLAUDE_EXTRA_ARGS] Unexpected key "
-        '"PADDOCK_AGENTS_CLAUDE_EXTRA_ARGS".'
+        (
+            "[env:PADDOCK_AGENTS_CLAUDE_EXTRA_ARGS] Unexpected key "
+            '"PADDOCK_AGENTS_CLAUDE_EXTRA_ARGS".'
+        )
     ]
 
 
@@ -886,8 +892,10 @@ def test_project_toml_agents_dropped_unless_allowlisted(
         r = ConfigLoader().resolve(_empty_parsed(), workdir=tmp_path, environ={})
     assert "agents" not in r.config
     assert [rec.message for rec in caplog.records] == [
-        "project_toml: dropped non-allowlisted keys agents — add them to "
-        "[config.allowlist].project_toml to keep them"
+        (
+            "project_toml: dropped non-allowlisted keys agents — add them to "
+            "[config.allowlist].project_toml to keep them"
+        )
     ]
 
 
@@ -975,8 +983,10 @@ def test_resolve_warns_about_settings_for_an_uninstalled_agent(
     with caplog.at_level(logging.WARNING, logger="paddock"):
         ConfigLoader().resolve(_empty_parsed(), workdir=tmp_path, environ={})
     assert [rec.getMessage() for rec in caplog.records] == [
-        '[agents.claud] No agent named "claud" is installed, so its settings '
-        "are ignored; installed agents: claude, false, opencode"
+        (
+            '[agents.claud] No agent named "claud" is installed, so its settings '
+            "are ignored; installed agents: claude, false, opencode"
+        )
     ]
 
 
@@ -1240,8 +1250,10 @@ def test_project_toml_agent_dropped_whole_unless_allowlisted(
         )
     assert r.server_key is None
     assert [rec.getMessage() for rec in caplog.records] == [
-        "project_toml: dropped non-allowlisted keys agent — add them to "
-        "[config.allowlist].project_toml to keep them"
+        (
+            "project_toml: dropped non-allowlisted keys agent — add them to "
+            "[config.allowlist].project_toml to keep them"
+        )
     ]
 
 
@@ -1353,10 +1365,14 @@ def test_settings_warn_per_registry(
             _empty_parsed(), workdir=tmp_path, environ={}
         )
     assert [rec.getMessage() for rec in caplog.records] == [
-        '[agents.c.server] No server named "c" is installed, so its settings '
-        "are ignored; installed servers: y",
-        '[agents.y] No agent named "y" is installed, so its settings are '
-        "ignored; installed agents: c, claude, false",
+        (
+            '[agents.c.server] No server named "c" is installed, so its settings '
+            "are ignored; installed servers: y"
+        ),
+        (
+            '[agents.y] No agent named "y" is installed, so its settings are '
+            "ignored; installed agents: c, claude, false"
+        ),
     ]
 
 
@@ -1373,8 +1389,10 @@ def test_server_settings_warning_reads_none_without_servers(
             _empty_parsed(), workdir=tmp_path, environ={}
         )
     assert [rec.getMessage() for rec in caplog.records] == [
-        '[agents.claude.server] No server named "claude" is installed, so its '
-        "settings are ignored; installed servers: none"
+        (
+            '[agents.claude.server] No server named "claude" is installed, so its '
+            "settings are ignored; installed servers: none"
+        )
     ]
 
 
@@ -1429,8 +1447,10 @@ def test_project_file_cannot_grant_itself_access(
     assert r.config["image"] == "user"
     assert [rec.getMessage() for rec in caplog.records] == [
         "project_toml: ignored config — only your user config may set it",
-        "project_toml: dropped non-allowlisted keys image — add them to "
-        "[config.allowlist].project_toml to keep them",
+        (
+            "project_toml: dropped non-allowlisted keys image — add them to "
+            "[config.allowlist].project_toml to keep them"
+        ),
     ]
 
 

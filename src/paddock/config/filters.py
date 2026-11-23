@@ -180,9 +180,8 @@ class Filepath(BaseFilter[Path]):
                 path = path.resolve(strict=self._must_exist)
             except OSError:
                 return self._invalid_path(value, path, self.CODE_DOES_NOT_EXIST)
-        elif self._must_exist:
-            if not path.exists():
-                return self._invalid_path(value, path, self.CODE_DOES_NOT_EXIST)
+        elif self._must_exist and not path.exists():
+            return self._invalid_path(value, path, self.CODE_DOES_NOT_EXIST)
 
         if self._is_dir is not None and path.exists():
             if self._is_dir and not path.is_dir():
