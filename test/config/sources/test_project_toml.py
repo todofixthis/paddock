@@ -3,7 +3,7 @@ from pathlib import Path
 from paddock.cli import ParsedArgs
 from paddock.config.agent_choice import UNNAMED_SERVER
 from paddock.config.context import ConfigContext
-from paddock.config.sources.base import Discarded
+from paddock.config.sources.base import Discarded, LoadResult
 from paddock.config.sources.project_toml import ProjectTomlSource
 
 # The reasons come from the source: the loader tests pin their wording, as part
@@ -12,7 +12,7 @@ _SERVER_REASON = ProjectTomlSource.SERVER_SETTINGS_REASON
 _USER_ONLY_REASON = ProjectTomlSource.USER_ONLY_REASON
 
 
-def _ctx(tmp_path) -> ConfigContext:
+def _ctx(tmp_path: Path) -> ConfigContext:
     parsed = ParsedArgs(
         agent=None,
         agent_args=[],
@@ -77,7 +77,7 @@ def test_load_invalid_toml(tmp_path: Path) -> None:
     assert not result.instance.is_valid()
 
 
-def _load_project_file(tmp_path: Path, contents: str):
+def _load_project_file(tmp_path: Path, contents: str) -> LoadResult:
     """Write a project file and load it."""
     d = tmp_path / ".paddock"
     d.mkdir()

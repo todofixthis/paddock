@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -7,12 +8,14 @@ from paddock.config.filters import VolumeSpec
 from paddock.config.server_settings import ServerSettings
 
 
-def _settings(config: dict, default_image: str | None = None) -> ServerSettings:
+def _settings(
+    config: dict[str, Any], default_image: str | None = None
+) -> ServerSettings:
     """Check ``config`` as server ``srv``'s merged settings table."""
     return ServerSettings.from_config(config, key="srv", default_image=default_image)
 
 
-def _messages(config: dict, default_image: str | None = None) -> list[str]:
+def _messages(config: dict[str, Any], default_image: str | None = None) -> list[str]:
     """Return the message of every error ``config`` raises."""
     with pytest.raises(ExceptionGroup) as exc:
         _settings(config, default_image)

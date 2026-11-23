@@ -1,22 +1,23 @@
 import json
 import subprocess
+from typing import Any, TypedDict, Unpack
 
 import pytest
-from pytest_mock import MockerFixture
+from pytest_mock import MockerFixture, MockType
 
 from paddock.config.errors import PaddockEnvironmentError
 from paddock.docker.version import DockerVersion
 
 
 def _stub_version(
-    mocker,
+    mocker: MockerFixture,
     *,
     client: str | None = "1.44",
     server: str | None = "1.44",
     returncode: int = 0,
     stderr: str = "",
     stdout: str | None = None,
-):
+) -> MockType:
     """Stub ``docker version``'s JSON output.
 
     Args:
@@ -38,13 +39,23 @@ def _stub_version(
             }
         )
 
-    def fake_run(argv, **kwargs):
+    def fake_run(argv: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
         return subprocess.CompletedProcess(argv, returncode, stdout, stderr)
 
     return mocker.patch("paddock.docker.version.subprocess.run", side_effect=fake_run)
 
 
-def _error(mocker, **kwargs) -> str:
+class _VersionStub(TypedDict, total=False):
+    """The keyword arguments ``_stub_version`` takes after ``mocker``."""
+
+    client: str | None
+    server: str | None
+    returncode: int
+    stderr: str
+    stdout: str | None
+
+
+def _error(mocker: MockerFixture, **kwargs: Unpack[_VersionStub]) -> str:
     """The message ``require_minimum`` raises for a stubbed version."""
     _stub_version(mocker, **kwargs)
     with pytest.raises(PaddockEnvironmentError) as exc:

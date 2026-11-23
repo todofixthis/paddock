@@ -5,7 +5,7 @@ from paddock.config.context import ConfigContext
 from paddock.config.sources.project_overrides import ProjectOverridesSource
 
 
-def _ctx(tmp_path, user_path) -> ConfigContext:
+def _ctx(tmp_path: Path, user_path: Path) -> ConfigContext:
     parsed = ParsedArgs(
         agent=None,
         agent_args=[],

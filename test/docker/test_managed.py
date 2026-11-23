@@ -1,4 +1,5 @@
 import json
+from typing import Any
 
 import pytest
 
@@ -17,9 +18,9 @@ from .conftest import FakeDocker
 VOLUMES = [("/host/a", VolumeSpec("/a", "rw")), ("state", VolumeSpec("/state", "rw"))]
 
 
-def _spec(**overrides) -> ContainerSpec:
+def _spec(**overrides: object) -> ContainerSpec:
     """A spec for container ``n`` owned by ``server:srv``."""
-    values: dict = {
+    values: dict[str, Any] = {
         "name": "n",
         "owner": "server:srv",
         "image": "img",

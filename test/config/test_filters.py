@@ -167,7 +167,7 @@ def test_agent_half_pass_none(
 
 
 @pytest.fixture(autouse=True)
-def _filepath_set_home(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+def _filepath_set_home(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """Set HOME to tmp_path for every test in this file.
 
     autouse=True means this applies to all tests in test_filters.py, not

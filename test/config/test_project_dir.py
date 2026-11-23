@@ -2,7 +2,7 @@ import logging
 from pathlib import Path
 
 import pytest
-from pytest_mock import MockerFixture
+from pytest_mock import MockerFixture, MockType
 
 from paddock.config.errors import PaddockEnvironmentError
 from paddock.config.project_dir import ProjectDirManager
@@ -118,7 +118,7 @@ def test_disabled_ignores_a_symlinked_project_dir(tmp_path: Path) -> None:
         assert vol is None
 
 
-def _flaky_rmdir(mocker, error: OSError, failures: int):
+def _flaky_rmdir(mocker: MockerFixture, error: OSError, failures: int) -> MockType:
     """Patch ``Path.rmdir`` to raise ``error`` ``failures`` times, then succeed.
 
     Args:

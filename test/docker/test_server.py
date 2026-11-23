@@ -2,9 +2,11 @@ import logging
 import re
 import subprocess
 from pathlib import Path
+from typing import Any
+from unittest.mock import Mock
 
 import pytest
-from pytest_mock import MockerFixture
+from pytest_mock import MockerFixture, MockType
 
 from paddock.agents.servers import BaseServer, ServerConnection
 from paddock.config.errors import PaddockEnvironmentError
@@ -61,9 +63,14 @@ class _Srv(BaseServer):
         return {"SRV_MODE": self.mode, "SRV_PASSWORD": secret}
 
 
-def _settings(**overrides) -> ServerSettings:
+def _settings(**overrides: object) -> ServerSettings:
     """Settings for image ``img`` with nothing else configured."""
-    values: dict = {"image": "img", "build": None, "port": None, "volumes": {}}
+    values: dict[str, Any] = {
+        "image": "img",
+        "build": None,
+        "port": None,
+        "volumes": {},
+    }
     values.update(overrides)
     return ServerSettings(**values)
 
@@ -71,7 +78,7 @@ def _settings(**overrides) -> ServerSettings:
 class _Run:
     """One launcher with its fake server and recorded sleeps."""
 
-    def __init__(self, server: _Srv | None = None, **settings) -> None:
+    def __init__(self, server: _Srv | None = None, **settings: object) -> None:
         self.server = server or _Srv()
         self.sleeps: list[float] = []
         self.launcher = ServerLauncher(
@@ -95,9 +102,9 @@ def _flags(argv: list[str], flag: str) -> list[str]:
     return [argv[i + 1] for i, a in enumerate(argv[:-1]) if a == flag]
 
 
-def _running(docker, **kwargs) -> dict:
+def _running(docker: FakeDocker) -> dict[str, Any]:
     """A running, owned container holding secret ``theirs``."""
-    return docker.container_entry(env=[f"{SECRET_ENV}=theirs"], **kwargs)
+    return docker.container_entry(env=[f"{SECRET_ENV}=theirs"])
 
 
 def test_launch_creates_a_missing_server(docker: FakeDocker) -> None:
@@ -169,7 +176,7 @@ def test_a_mount_at_a_parent_path_replaces_nothing(docker: FakeDocker) -> None:
 
 @pytest.mark.parametrize("written", ["/data/../data", "//data", "/data/."])
 def test_a_container_path_written_another_way_still_replaces(
-    docker: FakeDocker, written
+    docker: FakeDocker, written: str
 ) -> None:
     server = _Srv()
     server.scratch_volumes = {"data": VolumeSpec("/data", "rw")}
@@ -284,6 +291,7 @@ def test_stopped_server_is_removed_by_id_and_recreated(docker: FakeDocker) -> No
     result = _Run().launch()
     assert result.created is True
     rm = docker.calls.index(["docker", "rm", "dead1"])
+    assert result.run_argv is not None
     assert rm < docker.calls.index(result.run_argv)
 
 
@@ -332,7 +340,7 @@ def test_foreign_container_is_refused(docker: FakeDocker) -> None:
     assert docker.ran("docker", "run") == []
 
 
-def _lose_the_name(docker, winner: dict) -> None:
+def _lose_the_name(docker: FakeDocker, winner: dict[str, Any]) -> None:
     """Make ``docker run`` fail as it does when ``winner`` took the name."""
     docker.run_returncode = 125
     docker.run_stderr = (
@@ -374,8 +382,9 @@ def test_readiness_times_out(docker: FakeDocker) -> None:
     assert docker.ran("docker", "rm") == []
 
 
-def _stop(docker) -> None:
+def _stop(docker: FakeDocker) -> None:
     """Mark the fake's container as exited."""
+    assert docker.container is not None
     docker.container["State"] = {"Error": "", "Running": False, "Status": "exited"}
 
 
@@ -426,7 +435,7 @@ def test_stopped_before_the_port_is_read_is_reported(docker: FakeDocker) -> None
     assert run.server.seen == []
 
 
-def _image_source(mocker):
+def _image_source(mocker: MockerFixture) -> tuple[MockType, Mock]:
     """Patch the image source factory; return ``(from_config, source)``."""
     source = mocker.Mock()
     from_config = mocker.patch(
@@ -435,7 +444,12 @@ def _image_source(mocker):
     return from_config, source
 
 
-BUILD: dict = {"args": {}, "context": None, "dockerfile": None, "policy": "daily"}
+BUILD: dict[str, Any] = {
+    "args": {},
+    "context": None,
+    "dockerfile": None,
+    "policy": "daily",
+}
 
 
 def test_image_is_prepared_only_on_create(

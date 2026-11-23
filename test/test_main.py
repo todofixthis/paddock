@@ -11,6 +11,7 @@ from paddock.__main__ import run
 from paddock.agents import BaseAgent
 from paddock.agents.servers import BaseServer, ServerConnection
 from paddock.config.errors import PaddockEnvironmentError
+from paddock.config.filters import VolumeSpec
 from paddock.config.project_dir import ProjectDirManager
 from paddock.docker.server import LaunchResult, ServerLauncher
 from paddock.docker.version import DockerVersion
@@ -195,7 +196,9 @@ def test_dry_run_skips_image_build(
     mock_build.assert_not_called()
 
 
-def _write_pull_config(tmp_path: Path, mocker, monkeypatch) -> None:
+def _write_pull_config(
+    tmp_path: Path, mocker: MockerFixture, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Configure a daily policy with no Dockerfile, so paddock pulls ``image``.
 
     Args:
@@ -531,7 +534,9 @@ _EXTRA_ARGS_CONFIG = (
 )
 
 
-def _dry_run_argv(capsys, mocker, argv: list[str]) -> list[str]:
+def _dry_run_argv(
+    capsys: pytest.CaptureFixture[str], mocker: MockerFixture, argv: list[str]
+) -> list[str]:
     """Run paddock with ``--dry-run`` and return the printed docker argv.
 
     Args:
@@ -739,7 +744,7 @@ class _Client(BaseAgent):
     def get_command(self) -> list[str]:
         return ["paired"]
 
-    def get_volumes(self) -> dict:
+    def get_volumes(self) -> dict[str, VolumeSpec]:
         return {}
 
     def get_server_args(self, connection: ServerConnection) -> list[str]:
@@ -799,9 +804,9 @@ class _ServerRun:
 
     def __init__(
         self,
-        mocker,
+        mocker: MockerFixture,
         tmp_path: Path,
-        monkeypatch,
+        monkeypatch: pytest.MonkeyPatch,
         *,
         config: str = 'agent = "paired"\n',
         server: type[BaseServer] = _Srv,
@@ -809,10 +814,10 @@ class _ServerRun:
     ) -> None:
         _write_user_config(tmp_path, 'image = "img"\n' + config)
         monkeypatch.chdir(tmp_path)
-        self.agents: ClassRegistry = ClassRegistry(attr_name="AGENT_KEY")
+        self.agents: ClassRegistry[BaseAgent] = ClassRegistry(attr_name="AGENT_KEY")
         self.agents.register(_Paired)
         self.agents.register(_Plain)
-        self.servers: ClassRegistry = ClassRegistry(attr_name="SERVER_KEY")
+        self.servers: ClassRegistry[BaseServer] = ClassRegistry(attr_name="SERVER_KEY")
         self.servers.register(server)
         self.workdir = tmp_path.resolve()
         self.docker = mocker.patch("paddock.__main__.subprocess.run")

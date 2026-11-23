@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Any
 
 import filters as f
 import pytest
@@ -8,7 +9,7 @@ from paddock.config.context import ConfigContext
 from paddock.config.sources.env import EnvConfigSource
 
 
-def _ctx(tmp_path: Path, environ: dict) -> ConfigContext:
+def _ctx(tmp_path: Path, environ: dict[str, Any]) -> ConfigContext:
     parsed = ParsedArgs(
         agent=None,
         agent_args=[],
@@ -97,7 +98,7 @@ def test_non_paddock_vars_ignored(tmp_path: Path) -> None:
         "PADDOCK_VOLUMES_TMP",
     ],
 )
-def test_unknown_name_rejected(tmp_path: Path, name) -> None:
+def test_unknown_name_rejected(tmp_path: Path, name: str) -> None:
     """A PADDOCK_* name with no directive is an error, keyed on the name itself.
 
     Covers the free-form maps (``build.args``, ``volumes``), whose suffixed
@@ -115,11 +116,12 @@ def test_unknown_name_rejected_when_empty(tmp_path: Path) -> None:
     }
 
 
-def _agent(tmp_path, environ: dict):
+def _agent(tmp_path: Path, environ: dict[str, str]) -> dict[str, str | bool]:
     """Load the env source with the given variables and return its agent."""
     result = EnvConfigSource().load(_ctx(tmp_path, environ))
     assert result.instance.is_valid(), result.instance.errors
-    return result.instance.cleaned_data["agent"]
+    agent: dict[str, str | bool] = result.instance.cleaned_data["agent"]
+    return agent
 
 
 def test_agent_whole_then_half(tmp_path: Path) -> None:

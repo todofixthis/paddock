@@ -43,7 +43,7 @@ class _Fake(ConfigSource):
     SOURCE_KEY = "fake_test_only"
     WEIGHT = 5
 
-    def load(self, context):
+    def load(self, context: ConfigContext) -> LoadResult:
         # Return an empty valid result — non-empty content would pollute
         # the registry-driven loader and interfere with other tests.
         return LoadResult(f.FilterRunner(f.Type(dict), {}), {})
@@ -76,7 +76,7 @@ def test_annotate_source_explicit_override(tmp_path: Path) -> None:
 def test_abstract_load_cannot_be_omitted() -> None:
     with pytest.raises(TypeError):
 
-        class _Bad(ConfigSource):  # type: ignore[misc]
+        class _Bad(ConfigSource):
             SOURCE_KEY = "bad"
             WEIGHT = 99
 

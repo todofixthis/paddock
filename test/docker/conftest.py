@@ -1,8 +1,13 @@
 import json
 import subprocess
+from collections.abc import Callable, Mapping
+from typing import Any
 
 import pytest
 from pytest_mock import MockerFixture
+
+# One fake ``docker`` subcommand: argv and env in; exit code, stdout, stderr out.
+_Handler = Callable[[list[str], Mapping[str, str]], tuple[int, str, str]]
 
 
 class FakeDocker:
@@ -13,14 +18,16 @@ class FakeDocker:
     environment, so a test can read back what the code under test wrote.
     """
 
-    def __init__(self, mocker, module: str = "paddock.docker.managed") -> None:
+    def __init__(
+        self, mocker: MockerFixture, module: str = "paddock.docker.managed"
+    ) -> None:
         self.calls: list[list[str]] = []
         self.envs: list[dict[str, str] | None] = []
-        self.container: dict | None = None
-        self.network: dict | None = None
+        self.container: dict[str, Any] | None = None
+        self.network: dict[str, Any] | None = None
         # Served by successive ``docker container inspect`` calls, ahead of
         # ``container``; the last entry then becomes ``container``.
-        self.inspect_script: list[dict | None] = []
+        self.inspect_script: list[dict[str, Any] | None] = []
         # Served by successive ``docker port`` calls, ahead of ``port``.
         self.port_script: list[str | None] = []
         self.port: str | None = "127.0.0.1:32768"
@@ -28,11 +35,11 @@ class FakeDocker:
         self.run_stderr = ""
         # The container another process is taken to have created when this
         # one's ``docker run`` fails.
-        self.container_after_failed_run: dict | None = None
+        self.container_after_failed_run: dict[str, Any] | None = None
         self.network_create_returncode = 0
         # The network another process is taken to have created when this
         # one's ``docker network create`` fails.
-        self.network_after_failed_create: dict | None = None
+        self.network_after_failed_create: dict[str, Any] | None = None
         self.rm_returncode: int | None = None
         self._created = 0
         mocker.patch(f"{module}.subprocess.run", side_effect=self._run)
@@ -49,36 +56,45 @@ class FakeDocker:
                 return env
         raise AssertionError(f"no call starting {prefix}")
 
-    def _run(self, argv, **kwargs):
+    def _run(self, argv: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
         self.calls.append(list(argv))
         self.envs.append(kwargs.get("env"))
-        handler = {
+        # Keyed by tuple[str, ...], since slicing argv loses the pair's length.
+        by_subcommand: dict[tuple[str, ...], _Handler] = {
             ("container", "inspect"): self._container_inspect,
             ("network", "inspect"): self._network_inspect,
             ("network", "create"): self._network_create,
-        }.get(tuple(argv[1:3])) or {
-            "run": self._docker_run,
-            "rm": self._rm,
-            "port": self._port,
-        }[
-            argv[1]
-        ]
+        }
+        handler = (
+            by_subcommand.get(tuple(argv[1:3]))
+            or {
+                "run": self._docker_run,
+                "rm": self._rm,
+                "port": self._port,
+            }[argv[1]]
+        )
         code, out, err = handler(argv, kwargs.get("env") or {})
         return subprocess.CompletedProcess(argv, code, stdout=out, stderr=err)
 
-    def _container_inspect(self, argv, env):
+    def _container_inspect(
+        self, argv: list[str], env: Mapping[str, str]
+    ) -> tuple[int, str, str]:
         if self.inspect_script:
             self.container = self.inspect_script.pop(0)
         if self.container is None:
             return 1, "[]\n", "Error response from daemon: No such container\n"
         return 0, json.dumps([self.container]), ""
 
-    def _network_inspect(self, argv, env):
+    def _network_inspect(
+        self, argv: list[str], env: Mapping[str, str]
+    ) -> tuple[int, str, str]:
         if self.network is None:
             return 1, "[]\n", "Error response from daemon: network not found\n"
         return 0, json.dumps([self.network]), ""
 
-    def _network_create(self, argv, env):
+    def _network_create(
+        self, argv: list[str], env: Mapping[str, str]
+    ) -> tuple[int, str, str]:
         if self.network_create_returncode:
             self.network = self.network_after_failed_create
             return self.network_create_returncode, "", "Error: network exists\n"
@@ -86,7 +102,9 @@ class FakeDocker:
         self.network = {"Labels": labels}
         return 0, "netid\n", ""
 
-    def _docker_run(self, argv, env):
+    def _docker_run(
+        self, argv: list[str], env: Mapping[str, str]
+    ) -> tuple[int, str, str]:
         if self.run_returncode:
             self.container = self.container_after_failed_run
             return self.run_returncode, "", self.run_stderr
@@ -104,7 +122,7 @@ class FakeDocker:
         )
         return 0, f"created{self._created}\n", ""
 
-    def _rm(self, argv, env):
+    def _rm(self, argv: list[str], env: Mapping[str, str]) -> tuple[int, str, str]:
         if self.rm_returncode is not None:
             return self.rm_returncode, "", "Error\n"
         if self.container is None or self.container["Id"] != argv[-1]:
@@ -114,7 +132,7 @@ class FakeDocker:
         self.container = None
         return 0, argv[-1] + "\n", ""
 
-    def _port(self, argv, env):
+    def _port(self, argv: list[str], env: Mapping[str, str]) -> tuple[int, str, str]:
         port = self.port_script.pop(0) if self.port_script else self.port
         running = self.container is not None and self.container["State"]["Running"]
         if port is None or not running:
@@ -135,7 +153,7 @@ class FakeDocker:
         env: list[str] | None = None,
         labels: dict[str, str] | None = None,
         container_id: str = "abc123",
-    ) -> dict:
+    ) -> dict[str, Any]:
         """One element of ``docker container inspect``'s JSON array.
 
         Args:
@@ -156,7 +174,7 @@ class FakeDocker:
         }
 
     @staticmethod
-    def network_entry(owner: str | None = "server:srv") -> dict:
+    def network_entry(owner: str | None = "server:srv") -> dict[str, Any]:
         """One element of ``docker network inspect``'s JSON array."""
         return {"Labels": {} if owner is None else {"paddock.managed": owner}}
 

@@ -2,6 +2,7 @@ import json
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
 from pytest_mock import MockerFixture
 
@@ -10,7 +11,8 @@ from paddock.docker.source import BuildPolicy
 
 
 def _builder(
-    policy: BuildPolicy = BuildPolicy.IF_MISSING, build_args: dict | None = None
+    policy: BuildPolicy = BuildPolicy.IF_MISSING,
+    build_args: dict[str, Any] | None = None,
 ) -> ImageBuilder:
     """An ``ImageBuilder`` for ``/path/Dockerfile`` with the given policy."""
     return ImageBuilder(
@@ -66,7 +68,9 @@ def test_run_build_stamps_build_time(mocker: MockerFixture) -> None:
     assert "--no-cache" not in call_args
 
 
-def _inspect(mocker, stdout: str, returncode: int = 0) -> datetime | None:
+def _inspect(
+    mocker: MockerFixture, stdout: str, returncode: int = 0
+) -> datetime | None:
     """Run ``get_image_built_at`` against a stubbed ``docker image inspect``.
 
     Args:

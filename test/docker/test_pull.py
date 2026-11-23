@@ -1,9 +1,10 @@
 import subprocess
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from typing import Any
 
 import pytest
-from pytest_mock import MockerFixture
+from pytest_mock import MockerFixture, MockType
 
 from paddock.docker.pull import ImagePuller, PullLog
 from paddock.docker.source import BuildPolicy
@@ -11,7 +12,9 @@ from paddock.docker.source import BuildPolicy
 IMAGE = "ghcr.io/example/agent:python"
 
 
-def _stub_docker(mocker, *, present: bool, pull_returncode: int = 0):
+def _stub_docker(
+    mocker: MockerFixture, *, present: bool, pull_returncode: int = 0
+) -> MockType:
     """Stub ``subprocess.run`` for ``docker image inspect`` and ``docker pull``.
 
     Args:
@@ -23,7 +26,7 @@ def _stub_docker(mocker, *, present: bool, pull_returncode: int = 0):
         The ``subprocess.run`` mock.
     """
 
-    def fake_run(argv, **kwargs):
+    def fake_run(argv: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
         if argv[:3] == ["docker", "image", "inspect"]:
             return subprocess.CompletedProcess(argv, 0 if present else 1)
         if pull_returncode and kwargs.get("check"):
@@ -33,7 +36,7 @@ def _stub_docker(mocker, *, present: bool, pull_returncode: int = 0):
     return mocker.patch("paddock.docker.pull.subprocess.run", side_effect=fake_run)
 
 
-def _pulled(mock_run) -> bool:
+def _pulled(mock_run: MockType) -> bool:
     """Whether the stubbed ``subprocess.run`` saw a ``docker pull``."""
     return any(c.args[0][:2] == ["docker", "pull"] for c in mock_run.call_args_list)
 
@@ -61,7 +64,7 @@ def test_default_path_uses_xdg_state_home(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize("value", ["", "relative/state"])
-def test_default_path_falls_back_to_local_state(value) -> None:
+def test_default_path_falls_back_to_local_state(value: str) -> None:
     path = PullLog.default_path({"XDG_STATE_HOME": value})
     assert path == Path.home() / ".local" / "state" / "paddock" / "pulls.json"
 
@@ -86,7 +89,7 @@ def test_log_without_file_has_no_record(tmp_path: Path) -> None:
 @pytest.mark.parametrize(
     "contents", ["not json", "[]", '{"ghcr.io/example/agent:python": "soon"}']
 )
-def test_log_treats_corrupt_file_as_empty(tmp_path: Path, contents) -> None:
+def test_log_treats_corrupt_file_as_empty(tmp_path: Path, contents: str) -> None:
     log = _log(tmp_path)
     log.path.parent.mkdir(parents=True)
     log.path.write_text(contents)

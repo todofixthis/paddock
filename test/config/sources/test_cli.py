@@ -1,5 +1,6 @@
 from dataclasses import replace
 from pathlib import Path
+from typing import TypedDict, Unpack
 
 from paddock.cli import ParsedArgs
 from paddock.config.context import ConfigContext
@@ -68,11 +69,20 @@ def test_build_args_extracted(tmp_path: Path) -> None:
     assert result.instance.cleaned_data["build"]["args"] == {"FOO": "bar"}
 
 
-def _agent(tmp_path, **halves):
+class _AgentFlags(TypedDict, total=False):
+    """The ``ParsedArgs`` fields ``_agent`` lets a test set."""
+
+    agent: str | bool | None
+    agent_client: str | bool | None
+    agent_server: str | bool | None
+
+
+def _agent(tmp_path: Path, **halves: Unpack[_AgentFlags]) -> dict[str, str | bool]:
     """Load the CLI source with the given agent flags and return its agent."""
     result = CliConfigSource().load(_ctx(tmp_path, replace(_empty(), **halves)))
     assert result.instance.is_valid(), result.instance.errors
-    return result.instance.cleaned_data["agent"]
+    agent: dict[str, str | bool] = result.instance.cleaned_data["agent"]
+    return agent
 
 
 def test_agent_whole_then_half(tmp_path: Path) -> None:

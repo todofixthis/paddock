@@ -1,9 +1,11 @@
+from collections.abc import Mapping
 from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
 from pytest_mock import MockerFixture
 
+from paddock.agents import BaseAgent
 from paddock.agents.servers import Secret, ServerConnection
 from paddock.config.errors import PaddockEnvironmentError
 from paddock.config.filters import VolumeSpec
@@ -21,12 +23,12 @@ def test_sanitise_volume_name() -> None:
 
 
 def make_agent(
-    command=None,
-    volumes=None,
-    scratch_volumes=None,
-    server_args=None,
-    server_env=None,
-):
+    command: list[str] | None = None,
+    volumes: dict[str, VolumeSpec] | None = None,
+    scratch_volumes: dict[str, VolumeSpec] | None = None,
+    server_args: list[str] | None = None,
+    server_env: Mapping[str, str | Secret] | None = None,
+) -> MagicMock:
     agent = MagicMock()
     agent.AGENT_KEY = "claude"
     agent.get_command.return_value = command or ["claude"]
@@ -325,8 +327,13 @@ CONNECTION = ServerConnection(
 
 
 def _paired_builder(
-    mocker, tmp_path: Path, *, network=None, agent=None, connection=CONNECTION
-):
+    mocker: MockerFixture,
+    tmp_path: Path,
+    *,
+    network: str | None = None,
+    agent: BaseAgent | None = None,
+    connection: ServerConnection | None = CONNECTION,
+) -> DockerCommandBuilder:
     """A builder for a client, paired with ``connection`` unless it is None."""
     mocker.patch(
         "paddock.docker.builder.DockerCommandBuilder._container_name_available",

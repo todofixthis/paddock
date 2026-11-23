@@ -5,6 +5,7 @@ from paddock.agents import BaseAgent
 from paddock.agents.errors import AgentError
 from paddock.agents.pairing import AgentPairing
 from paddock.agents.servers import BaseServer, ServerConnection
+from paddock.config.filters import VolumeSpec
 
 
 class _Client(BaseAgent):
@@ -13,7 +14,7 @@ class _Client(BaseAgent):
     def get_command(self) -> list[str]:
         return [self.AGENT_KEY]
 
-    def get_volumes(self) -> dict:
+    def get_volumes(self) -> dict[str, VolumeSpec]:
         return {}
 
 
@@ -48,15 +49,15 @@ class _Other(_Server):
     PROTOCOL = "q"
 
 
-def _agents() -> ClassRegistry:
-    registry: ClassRegistry = ClassRegistry(attr_name="AGENT_KEY")
+def _agents() -> ClassRegistry[BaseAgent]:
+    registry: ClassRegistry[BaseAgent] = ClassRegistry(attr_name="AGENT_KEY")
     registry.register(_Paired)
     registry.register(_Plain)
     return registry
 
 
-def _servers(*classes: type[BaseServer]) -> ClassRegistry:
-    registry: ClassRegistry = ClassRegistry(attr_name="SERVER_KEY")
+def _servers(*classes: type[BaseServer]) -> ClassRegistry[BaseServer]:
+    registry: ClassRegistry[BaseServer] = ClassRegistry(attr_name="SERVER_KEY")
     for cls in classes:
         registry.register(cls)
     return registry

@@ -1,8 +1,10 @@
 from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 import filters as f
 import pytest
+from filters.base import BaseFilter
 from filters.handlers import FilterRunner
 from filters.pytest import skip_value_check
 
@@ -18,7 +20,7 @@ from paddock.config.schema import (
 )
 
 
-def _validate(config: dict) -> dict:
+def _validate(config: dict[str, Any]) -> dict[str, Any]:
     """Run ConfigSchema with the cwd as base; these configs hold no relative
     paths, so the base only satisfies the required argument."""
     return ConfigSchema().validate(config, base_dir=Path.cwd())
@@ -374,7 +376,7 @@ def test_every_directive_is_accepted_by_the_schema(tmp_path: Path) -> None:
     }
     for directive in allowlist_directives():
         parts = directive.split(".")
-        config: dict = {}
+        config: dict[str, Any] = {}
         node = config
         for part in parts[:-1]:
             node = node.setdefault(part, {})
@@ -402,7 +404,7 @@ def test_unknown_nested_key_is_rejected() -> None:
     assert not runner.is_valid()
 
 
-def _per_source_schema():
+def _per_source_schema() -> BaseFilter[dict[str, Any]]:
     """The per-source standard schema; these configs hold no relative paths."""
     return standard_config_schema(base_dir=Path.cwd(), merged=False)
 
@@ -427,7 +429,7 @@ def test_agents_keeps_an_empty_list(
     assert_filter_passes: Callable[..., FilterRunner],
 ) -> None:
     """An empty extra_args survives DropEmpty, so it can clear a lower list."""
-    config: dict = {"agents": {"claude": {"extra_args": []}}}
+    config: dict[str, Any] = {"agents": {"claude": {"extra_args": []}}}
     assert_filter_passes(_per_source_schema(), config, config)
 
 
@@ -513,14 +515,14 @@ def test_agent_rejects_an_empty_table(
     )
 
 
-def _server_schema():
+def _server_schema() -> BaseFilter[dict[str, Any]]:
     """The per-source schema as the user config's global section sees it."""
     return standard_config_schema(
         base_dir=Path.cwd(), merged=False, server_settings=True
     )
 
 
-def _server(settings: dict) -> dict:
+def _server(settings: dict[str, Any]) -> dict[str, Any]:
     """Wrap server settings as config for a server named ``x``."""
     return {"agents": {"x": {"server": settings}}}
 

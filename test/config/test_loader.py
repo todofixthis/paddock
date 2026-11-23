@@ -14,6 +14,7 @@ from paddock.agents.servers import BaseServer, ServerConnection
 from paddock.cli import ParsedArgs
 from paddock.config.agent_choice import UNNAMED_SERVER
 from paddock.config.errors import ConfigError
+from paddock.config.filters import VolumeSpec
 from paddock.config.loader import ConfigLoader, ResolvedConfig
 from paddock.config.sources.env import _env_schema
 
@@ -38,7 +39,7 @@ def _empty_parsed() -> ParsedArgs:
     )
 
 
-def _setup_home(tmp_path, monkeypatch, contents: str) -> Path:
+def _setup_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, contents: str) -> Path:
     home = tmp_path
     cfg = home / ".config" / "paddock" / "config.toml"
     cfg.parent.mkdir(parents=True, exist_ok=True)
@@ -985,7 +986,7 @@ class _FakeAgent(BaseAgent):
     def get_command(self) -> list[str]:
         return [self.AGENT_KEY]
 
-    def get_volumes(self) -> dict:
+    def get_volumes(self) -> dict[str, VolumeSpec]:
         return {}
 
 
@@ -1006,9 +1007,9 @@ class _FakeShell(_FakeAgent):
     AGENT_KEY = "false"
 
 
-def _fake_agents() -> ClassRegistry:
+def _fake_agents() -> ClassRegistry[BaseAgent]:
     """A registry of fake clients: paired, plain, claude and false."""
-    registry: ClassRegistry = ClassRegistry(attr_name="AGENT_KEY")
+    registry: ClassRegistry[BaseAgent] = ClassRegistry(attr_name="AGENT_KEY")
     for cls in (_FakePaired, _FakePlain, _FakeClaude, _FakeShell):
         registry.register(cls)
     return registry
@@ -1029,14 +1030,16 @@ class _FakeSrv(BaseServer):
         return True
 
 
-def _fake_servers() -> ClassRegistry:
+def _fake_servers() -> ClassRegistry[BaseServer]:
     """A registry holding the one fake server, ``srv``."""
-    registry: ClassRegistry = ClassRegistry(attr_name="SERVER_KEY")
+    registry: ClassRegistry[BaseServer] = ClassRegistry(attr_name="SERVER_KEY")
     registry.register(_FakeSrv)
     return registry
 
 
-def _resolve_agent_config(tmp_path: Path, monkeypatch, config: str) -> ResolvedConfig:
+def _resolve_agent_config(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, config: str
+) -> ResolvedConfig:
     """Resolve a user config against the fake clients.
 
     Args:
@@ -1333,10 +1336,10 @@ def test_settings_warn_per_registry(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
     """extra_args needs a client of that name, server a server of that name."""
-    agents: ClassRegistry = ClassRegistry(attr_name="AGENT_KEY")
+    agents: ClassRegistry[BaseAgent] = ClassRegistry(attr_name="AGENT_KEY")
     for cls in (_FakeClientC, _FakeClaude, _FakeShell):
         agents.register(cls)
-    servers: ClassRegistry = ClassRegistry(attr_name="SERVER_KEY")
+    servers: ClassRegistry[BaseServer] = ClassRegistry(attr_name="SERVER_KEY")
     servers.register(_FakeServerY)
     _setup_home(
         tmp_path,
@@ -1364,7 +1367,7 @@ def test_server_settings_warning_reads_none_without_servers(
     _setup_home(
         tmp_path, monkeypatch, 'image = "i"\n[agents.claude.server]\nimage = "i"\n'
     )
-    no_servers: ClassRegistry = ClassRegistry(attr_name="SERVER_KEY")
+    no_servers: ClassRegistry[BaseServer] = ClassRegistry(attr_name="SERVER_KEY")
     with caplog.at_level(logging.WARNING, logger="paddock"):
         ConfigLoader(servers=no_servers).resolve(
             _empty_parsed(), workdir=tmp_path, environ={}
@@ -1393,9 +1396,9 @@ def test_server_settings_for_an_installed_server_do_not_warn(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
     """A name holding only server settings needs no client of that name."""
-    agents: ClassRegistry = ClassRegistry(attr_name="AGENT_KEY")
+    agents: ClassRegistry[BaseAgent] = ClassRegistry(attr_name="AGENT_KEY")
     agents.register(_FakeClaude)
-    servers: ClassRegistry = ClassRegistry(attr_name="SERVER_KEY")
+    servers: ClassRegistry[BaseServer] = ClassRegistry(attr_name="SERVER_KEY")
     servers.register(_FakeServerY)
     _setup_home(tmp_path, monkeypatch, 'image = "i"\n[agents.y.server]\nimage = "i"\n')
     with caplog.at_level(logging.WARNING, logger="paddock"):
