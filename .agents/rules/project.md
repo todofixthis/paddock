@@ -19,7 +19,7 @@ In the template-owned `pyproject.toml`, paddock's own content is `[project]`'s d
 
 ## CI
 
-Paddock's own jobs are in `.github/workflows/project.yml`: `changes` and `image`, which build and smoke-test each bundled Dockerfile when a change touches the bundled images (ADR 016), and `readme`, which checks that PyPI renders `README.rst`. `.github/workflows/weekly.yml` calls the same workflow on a schedule, so a broken upstream input surfaces without a commit. A file that changes what the bundled images contain or how they're tested goes in `changes`' path list. A new bundled agent also needs, beside its `images/<agent>.Dockerfile` (ADR 022), an entry in `image`'s matrix, a `case` in `.github/scripts/smoke-test.sh` and Renovate managers for its pins: without the matrix entry its Dockerfile is never built, and the check still passes.
+Paddock's own jobs are in `.github/workflows/project.yml`: `changes` and `image`, which build and smoke-test each bundled Dockerfile when a change touches the bundled images (ADR 016), and `readme`, which checks that PyPI renders `README.rst`. `.github/workflows/weekly.yml` calls the same workflow on a schedule, so a broken upstream input surfaces without a commit. A file that changes what the bundled images contain or how they're tested goes in `changes`' path list. A new bundled agent also needs, beside its `images/<agent>.Dockerfile` (ADR 022), an entry in `image`'s matrix, a `case` and usage lines in `.github/scripts/smoke-test.sh`, a `# renovate:` annotation above each `ARG` pin (the existing Dockerfile manager picks it up), and a custom manager for each pin `README.rst` repeats: without the matrix entry its Dockerfile is never built, and the check still passes.
 
 ## Docs
 
@@ -27,7 +27,7 @@ The docs landing page includes `README.rst`, so the README must render on GitHub
 
 ## Releases
 
-The `main and develop` ruleset requires a pull request for every change and allows only merge commits. So in the `release` skill, open the version bump as a pull request into `develop` rather than pushing it, and skip the final rebase of `develop` onto `main`, which the ruleset rejects and the bump on `develop` makes unnecessary (ADR 024). A migration guide's upgrade-alert bullet goes in `README.rst` alone, which `docs/index.rst` includes, linked by absolute URL on `/en/latest/` like any README link (ADR 025); `docs/index.rst` lists the guide only in its toctree.
+The `main and develop` ruleset requires a pull request for every change and allows only merge commits. So in the `release` skill, open the version bump as a pull request into `develop` rather than pushing it, and open the release pull request only once it merges; skip the final rebase of `develop` onto `main`, which the ruleset rejects and the bump on `develop` makes unnecessary (ADR 024). A migration guide's upgrade-alert bullet goes in `README.rst` alone, which `docs/index.rst` includes, linked by absolute URL on `/en/latest/` like any README link (ADR 025); `docs/index.rst` lists the guide only in its toctree.
 
 ## Tests
 
