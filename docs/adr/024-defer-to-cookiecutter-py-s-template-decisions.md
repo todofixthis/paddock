@@ -1,8 +1,8 @@
 ---
 status: Accepted
 date: 2026-11-23
-scope: [.agents/rules/template-owned.md, .agents/skills/release/, .copier-answers.yml, .github/workflows/, AGENTS.md, pyproject.toml, renovate.json]
-summary: Paddock follows the copier template todofixthis/cookiecutter-py, which writes and owns the files .agents/rules/template-owned.md lists, and defers to its decisions in them; cookiecutter-py ADR 019 replaces ADR 009 (ADR tooling), its ADRs 003, 013 and 018 replace ADR 010 (Renovate and the phx-adr pins), and its ADRs 018 and 021 replace ADR 015 (one `gate` job, conditional jobs skipping steps), with paddock's own CI jobs in .github/workflows/project.yml; releases follow the template's release skill, with no release or hotfix branches; diverging from a template decision on purpose needs an ADR here naming the cookiecutter-py ADR it departs from.
+scope: [.agents/rules/template-owned.md, .agents/skills/release/, .agents/skills/rotate-python-versions/, .autohooks/, .claude/settings.json, .copier-answers.yml, .github/workflows/, AGENTS.md, docs/adr/, pyproject.toml, renovate.json]
+summary: Paddock follows the copier template todofixthis/cookiecutter-py, which writes and owns the files .agents/rules/template-owned.md lists, and defers to its decisions in them; cookiecutter-py ADR 019 replaces ADR 009 (ADR tooling), its ADRs 003, 013 and 018 replace ADR 010 (Renovate and the phx-adr pins), and its ADRs 018 and 021 replace ADR 015 (one `gate` job, conditional jobs skipping steps), with paddock's own CI jobs in .github/workflows/project.yml, whose conditional steps skip only on an explicit 'false'; releases follow the template's release skill, with no release or hotfix branches; diverging from a template decision on purpose needs an ADR here naming the cookiecutter-py ADR it departs from.
 revisit-when: Paddock stops taking template updates; the template supersedes or renumbers one of the ADRs named here; ADRs here are routinely authored in a harness other than Claude Code; a fix to a release can't wait for develop's unreleased changes.
 ---
 
@@ -21,7 +21,7 @@ Three of paddock's ADRs decide what the template now decides:
 
 - [ADR 009][] relies on the phx plugin for ADR tooling, never a repo-local
   generator, pre-commit hook or vendored copy. [cookiecutter-py ADR 019][]
-  decides the same, rejecting the same alternatives.
+  decides the same.
 - [ADR 010][] keeps dependencies current with Renovate, pinning Actions by
   digest and bumping the phx-adr pins with one regex manager.
   [cookiecutter-py ADR 003][], [ADR 013][cookiecutter-py ADR 013] and
@@ -64,7 +64,10 @@ index, where only its maintainer meets them. This ADR names template ADRs
 by number, which goes stale if the template supersedes or renumbers one;
 the links pin the 1.4.0 tag, so they still lead to the decision paddock
 adopted. A fix to the latest release ships with `develop`'s unreleased
-changes or waits for them.
+changes or waits for them. The `main and develop` ruleset requires a pull
+request for every change and allows only merge commits, so the template
+skill's direct push of the version bump to `develop` and its closing
+rebase of `develop` onto `main` both fail under it.
 
 ### Option 3: Defer to the template but keep paddock's release flow
 
@@ -93,10 +96,19 @@ routinely authored outside Claude Code, and a fix that can't wait for
 - Paddock's own CI jobs live in `.github/workflows/project.yml`; its
   weekly image build is `.github/workflows/weekly.yml`, calling the same
   workflow.
-- The `main and develop` ruleset must require `gate`, which keeps its
-  name, and nothing else. The template's release skill pushes the version
-  bump straight to `develop`, so the ruleset must allow that push, or the
-  bump goes through a pull request.
+- A conditional step skips only on an explicit negative output
+  (`!= 'false'`, never `== 'true'`), so broken change detection builds
+  rather than passing unbuilt. ADR 015 decided this, and cookiecutter-py
+  ADR 021 doesn't say it, so it stays paddock's own.
+- The `main and develop` ruleset requires seven checks by name, among them
+  `typecheck`, which the template's CI renames `type-check`. It must
+  require `gate` alone before this adoption merges, or every pull request
+  waits on a check that never reports.
+- Under that ruleset, the release skill's version bump goes to `develop`
+  through a pull request, and its rebase of `develop` onto `main` is
+  skipped: with the bump already on `develop`, the next release pull
+  request doesn't conflict on the version, which was the old back-merge's
+  reason to exist. `.agents/rules/project.md` says so.
 
 [ADR 009]: 009-rely-on-the-phx-plugin-for-adr-tooling.md
 [ADR 010]: 010-keep-dependencies-current-with-renovate.md

@@ -25,6 +25,10 @@ Paddock's own jobs are in `.github/workflows/project.yml`: `changes` and `image`
 
 The docs landing page includes `README.rst`, so the README must render on GitHub, PyPI and Sphinx alike (ADR 025): link from it to a docs page by absolute URL on `/en/latest/`, and to a repository file by GitHub URL, never by relative path, which resolves differently in each. The user pages are RST under `docs/usage/`. Two changes in template-owned files are paddock's own, each with its comment: `README.rst` in the docs pre-commit hook's `INCLUDE`, and `html_css_files` in `docs/conf.py`.
 
+## Releases
+
+The `main and develop` ruleset requires a pull request for every change and allows only merge commits. So in the `release` skill, open the version bump as a pull request into `develop` rather than pushing it, and skip the final rebase of `develop` onto `main`, which the ruleset rejects and the bump on `develop` makes unnecessary (ADR 024). A migration guide's upgrade-alert bullet goes in `README.rst` alone, which `docs/index.rst` includes, linked by absolute URL on `/en/latest/` like any README link (ADR 025); `docs/index.rst` lists the guide only in its toctree.
+
 ## Tests
 
 Tests are flat functions, never methods on a class, even when testing class behaviour. Never put a lambda in `pytest.mark.parametrize`: cases that need one deserve separate named tests. Isolate a test from the environment by redirecting `$HOME` and stripping `PADDOCK_*` variables, not by patching Python internals such as module-level constants, so tests exercise the path resolution real users hit.
