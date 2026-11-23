@@ -95,12 +95,8 @@ include = ["src/paddock"]
 path = "src/paddock/__init__.py"
 
 [tool.mypy]
-check_untyped_defs = true
-files = ["src"]
-
-[[tool.mypy.overrides]]
-module = ["filters", "filters.*"]
-ignore_missing_imports = true
+files = ["src", "test"]
+strict = true
 
 # phx-filters rejects a value by returning `_invalid_value()`'s result (`Any`,
 # `None` by default) from a non-Optional `_apply`. Re-enable both codes once
@@ -112,6 +108,12 @@ disable_error_code = ["no-any-return", "return-value"]
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["test"]
+
+[tool.ruff.lint]
+# phx-filters' BaseFilter declares `templates` as an instance attribute, so a
+# subclass annotating it `ClassVar`, as RUF012 asks, fails mypy's override
+# check.
+ignore = ["RUF012"]
 
 [tool.tox]
 env_list = ["3.12", "3.13", "3.14"]

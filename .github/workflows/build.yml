@@ -224,7 +224,7 @@ jobs:
       - name: Install dependencies
         run: uv sync --locked
       - name: Type check
-        run: uv run --no-sync mypy src/
+        run: uv run --no-sync mypy src test
 
   # The single required status check, in the main and develop ruleset, so the
   # ruleset needn't list every job or matrix leg. It fails on any job that
