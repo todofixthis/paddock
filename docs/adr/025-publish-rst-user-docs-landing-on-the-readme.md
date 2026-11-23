@@ -1,7 +1,7 @@
 ---
 status: Accepted
 date: 2026-11-23
-scope: [.agents/skills/release/, .autohooks/docs_build.py, .github/workflows/project.yml, README.rst, docs/]
+scope: [.agents/rules/project.md, .agents/skills/release/, .autohooks/docs_build.py, .github/workflows/project.yml, README.rst, docs/]
 summary: Publish the docs with Sphinx (not MkDocs), the user pages under docs/usage/ in reStructuredText (not Markdown through myst-parser), and a landing page that includes README.rst rather than copying it, so the README must render on GitHub, PyPI and Sphinx alike, which project.yml's readme job checks with twine; strict builds, intersphinx and the rest of docs/conf.py follow cookiecutter-py's template (its ADR 020), which has no nitpicky.
 revisit-when: The docs stop being hosted on ReadTheDocs; the README needs a construct GitHub, PyPI or Sphinx cannot render; the README stops being RST; the template's docs/conf.py gains nitpicky; cookiecutter-py declines nitpicky; an unresolved cross-reference reaches the published docs.
 ---
@@ -26,7 +26,7 @@ owns.
 
 ### Option 1: Do nothing
 
-Keep ADR 023 as it stands in the template's `conf.py`: `nitpicky` with its
+Keep ADR 023's settings in the template's `conf.py`: `nitpicky` with its
 ignore list, no intersphinx, and the unpublished directories excluded.
 
 **Cons:** A template-owned file diverges in several places, conflicting on
@@ -80,9 +80,13 @@ alternatives.
   and to repository files by GitHub URL, since a relative path resolves
   differently in each renderer. Nothing checks these links, and an older
   release's PyPI page links to the latest docs.
-- The README's headings are the landing page's sections, and two headings
-  with the same text fail the strict build through `autosectionlabel`,
-  though GitHub and PyPI accept them.
+- The README's headings are the landing page's sections, and its
+  `contents` directive the landing page's only in-page navigation. Two
+  headings with the same text fail the strict build through
+  `autosectionlabel`, though GitHub and PyPI accept them.
+- Sphinx applies smart quotes and docutils does not, so a bare `--` or `'`
+  in README prose, link text included, renders differently on the docs
+  site.
 - A page directly under `docs/usage/` or `docs/usage/agents/` is published
   through the landing page's glob toctrees; a page nested deeper needs a
   glob of its own.

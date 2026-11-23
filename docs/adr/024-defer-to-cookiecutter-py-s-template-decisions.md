@@ -1,7 +1,7 @@
 ---
 status: Accepted
 date: 2026-11-23
-scope: [.agents/rules/template-owned.md, .agents/skills/release/, .agents/skills/rotate-python-versions/, .autohooks/, .claude/settings.json, .copier-answers.yml, .github/workflows/, AGENTS.md, docs/adr/, pyproject.toml, renovate.json]
+scope: [.agents/rules/project.md, .agents/rules/template-owned.md, .agents/skills/release/, .agents/skills/rotate-python-versions/, .autohooks/, .claude/settings.json, .copier-answers.yml, .github/workflows/, AGENTS.md, docs/adr/, pyproject.toml, renovate.json]
 summary: Paddock follows the copier template todofixthis/cookiecutter-py, which writes and owns the files .agents/rules/template-owned.md lists, and defers to its decisions in them; cookiecutter-py ADR 019 replaces ADR 009 (ADR tooling), its ADRs 003, 013 and 018 replace ADR 010 (Renovate and the phx-adr pins), and its ADRs 018 and 021 replace ADR 015 (one `gate` job, conditional jobs skipping steps), with paddock's own CI jobs in .github/workflows/project.yml, whose conditional steps skip only on an explicit 'false'; releases follow the template's release skill, with no release or hotfix branches; diverging from a template decision on purpose needs an ADR here naming the cookiecutter-py ADR it departs from.
 revisit-when: Paddock stops taking template updates; the template supersedes or renumbers one of the ADRs named here; ADRs here are routinely authored in a harness other than Claude Code; a fix to a release can't wait for develop's unreleased changes.
 ---
@@ -29,7 +29,8 @@ Three of paddock's ADRs decide what the template now decides:
   refresh and a three-day release age. The regex managers for the bundled
   Dockerfiles' pins and their copies in the docs are paddock's own, and
   [ADR 016][] decides them.
-- [ADR 015][] makes `gate` the only required check, failing on any skip,
+- [ADR 015][] makes `gate` the only required check (a ruleset change
+  never applied), failing on any skip,
   with a conditional job skipping its steps rather than itself.
   cookiecutter-py ADR 018 makes the same `gate` the required check, and
   [ADR 021][cookiecutter-py ADR 021] moves a project's own jobs into
