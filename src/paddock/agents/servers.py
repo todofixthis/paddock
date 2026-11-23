@@ -7,7 +7,9 @@ from class_registry.entry_points import EntryPointClassRegistry
 
 from paddock.config.filters import VolumeSpec
 
-server_registry: EntryPointClassRegistry = EntryPointClassRegistry("paddock.servers")
+server_registry: EntryPointClassRegistry["BaseServer"] = EntryPointClassRegistry(
+    "paddock.servers"
+)
 
 
 @dataclass(frozen=True)

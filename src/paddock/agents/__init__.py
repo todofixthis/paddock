@@ -7,7 +7,9 @@ from class_registry.entry_points import EntryPointClassRegistry
 from paddock.agents.servers import Secret, ServerConnection
 from paddock.config.filters import VolumeSpec
 
-agent_registry: EntryPointClassRegistry = EntryPointClassRegistry("paddock.agents")
+agent_registry: EntryPointClassRegistry["BaseAgent"] = EntryPointClassRegistry(
+    "paddock.agents"
+)
 
 
 class BaseAgent(ABC):

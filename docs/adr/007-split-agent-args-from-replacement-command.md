@@ -1,7 +1,7 @@
 ---
 status: Accepted
 date: 2026-09-26
-scope: [.agents/skills/e2e-testing/, README.rst, docs/usage/docker-images.rst, src/paddock/__main__.py, src/paddock/cli.py, src/paddock/docker/builder.py, tests/docker/test_builder.py, tests/test_cli.py, tests/test_main.py]
+scope: [.agents/skills/e2e-testing/, README.rst, docs/usage/docker-images.rst, src/paddock/__main__.py, src/paddock/cli.py, src/paddock/docker/builder.py, test/docker/test_builder.py, test/test_cli.py, test/test_main.py]
 summary: Tokens after the first -- are appended to the agent's command and never replace it; a positional before -- replaces the command, keeps any later -- verbatim, and is never appended to.
 revisit-when: An agent needs its args inserted into its command rather than appended, such as a subcommand before the prompt.
 ---

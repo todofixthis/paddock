@@ -13,7 +13,7 @@ class AgentChoice:
         *,
         client: str | bool | None = None,
         server: str | bool | None = None,
-    ) -> dict | None:
+    ) -> dict[str, str | bool] | None:
         """Combine a whole ``agent`` value with either half, unvalidated.
 
         Within one source the whole value applies first: it names the client
@@ -30,7 +30,7 @@ class AgentChoice:
             A table holding the halves that were named, or ``None`` when
             nothing was given.
         """
-        halves: dict = {}
+        halves: dict[str, str | bool] = {}
         if whole is not None:
             halves = {"client": whole, "server": UNNAMED_SERVER}
         if client is not None:

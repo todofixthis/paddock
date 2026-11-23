@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Any
 
 import filters as f
 
@@ -55,7 +56,7 @@ class ProjectTomlSource(ConfigSource):
         ]
         return LoadResult(f.FilterRunner(schema, data), {}, discarded)
 
-    def _discard_user_only_sections(self, data: dict) -> list[Discarded]:
+    def _discard_user_only_sections(self, data: dict[str, Any]) -> list[Discarded]:
         """Remove the sections only the user config may hold (ADR 020).
 
         A committed file cannot grant itself access or configure other
@@ -75,7 +76,7 @@ class ProjectTomlSource(ConfigSource):
                 discarded.append(Discarded(key, self.USER_ONLY_REASON))
         return discarded
 
-    def _discard_server_settings(self, data: dict) -> list[Discarded]:
+    def _discard_server_settings(self, data: dict[str, Any]) -> list[Discarded]:
         """Remove every ``agents.<name>.server`` from decoded project config.
 
         A project file may never set a shared server's settings, whatever the
@@ -95,7 +96,7 @@ class ProjectTomlSource(ConfigSource):
             return []
 
         discarded: list[Discarded] = []
-        kept: dict = {}
+        kept: dict[str, Any] = {}
         for name, settings in agents.items():
             if isinstance(settings, dict) and "server" in settings:
                 settings = {k: v for k, v in settings.items() if k != "server"}

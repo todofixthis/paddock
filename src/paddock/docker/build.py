@@ -1,6 +1,6 @@
 import json
 import subprocess
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import filters as f
@@ -61,6 +61,7 @@ class ImageBuilder(ImageSource):
             ["docker", "image", "inspect", "--format={{json .}}", image],
             capture_output=True,
             text=True,
+            check=False,
         )
         if result.returncode != 0:
             return None
@@ -85,7 +86,7 @@ class ImageBuilder(ImageSource):
         Args:
             image: The tag to build.
         """
-        built_at = datetime.now(timezone.utc).isoformat()
+        built_at = datetime.now(UTC).isoformat()
         argv: list[str | Path] = ["docker", "build", "-t", image, "-f", self.dockerfile]
         argv += ["--label", f"{BUILT_AT_LABEL}={built_at}"]
         for key, value in self.build_args.items():

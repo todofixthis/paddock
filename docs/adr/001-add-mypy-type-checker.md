@@ -70,7 +70,7 @@ tightened incrementally later.
 
 ## Consequences
 
-- `[tool.mypy]` in `pyproject.toml` sets `files = ["src"]`, so `tests/` is not
+- `[tool.mypy]` in `pyproject.toml` sets `files = ["src"]`, so `test/` is not
   type-checked.
 - `[[tool.mypy.overrides]]` sets `ignore_missing_imports = true` for `filters`
   and `filters.*`. This is broader than the `import-untyped` marker: it silences

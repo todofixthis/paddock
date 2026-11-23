@@ -1,10 +1,10 @@
 import os
 import sys
 from pathlib import Path
-from typing import cast
+from typing import Any, cast
 
 import filters as f
-from filters.base import BaseFilter
+from filters.base import BaseFilter, FilterCompatible
 from filters.macros import filter_macro
 
 from paddock.config.filters import (
@@ -15,13 +15,14 @@ from paddock.config.filters import (
     ServerVolumeMap,
     Volume,
     VolumeMap,
+    VolumeSpec,
 )
 
 BUILD_POLICIES = ("always", "daily", "if-missing", "weekly")
 CONTAINER_HOME = "/root"
 
 
-class DropEmpty(BaseFilter):
+class DropEmpty(BaseFilter[Any]):
     """Recursively strips ``None`` and empty-``dict`` values from a dict.
 
     Applied after :class:`f.FilterMapper` so that absent fields don't pollute
@@ -29,10 +30,10 @@ class DropEmpty(BaseFilter):
     sources). Non-dict inputs are returned unchanged.
     """
 
-    def _apply(self, value):
+    def _apply(self, value: Any) -> Any:
         if not isinstance(value, dict):
             return value
-        out: dict = {}
+        out: dict[str, Any] = {}
         for key, sub in value.items():
             if sub is None:
                 continue
@@ -45,7 +46,7 @@ class DropEmpty(BaseFilter):
         return out
 
 
-def _build_schema(base_dir: Path, check_paths: bool):
+def _build_schema(base_dir: Path, check_paths: bool) -> f.FilterMapper:
     """Build-section schema; every field is optional.
 
     A ``policy`` without a ``dockerfile`` pulls the image instead of building
@@ -93,7 +94,7 @@ _server_settings_schema = f.FilterMapper(
 )
 
 
-def _agents_schema(server_settings: bool):
+def _agents_schema(server_settings: bool) -> BaseFilter[dict[str, Any]]:
     """Per-agent settings, keyed by registry key (ADR 017).
 
     The names are not checked against a registry here: a name nothing
@@ -105,7 +106,9 @@ def _agents_schema(server_settings: bool):
             the user config's global section may (ADR 019).
     """
     # f.Type(str) goes ahead of f.Unicode, which alone would coerce 1 to "1".
-    settings: dict = {"extra_args": f.Array | f.FilterRepeater(f.Type(str) | f.Unicode)}
+    settings: dict[str, FilterCompatible] = {
+        "extra_args": f.Array | f.FilterRepeater(f.Type(str) | f.Unicode)
+    }
     if server_settings:
         settings["server"] = _server_settings_schema
     return f.Type(dict) | f.FilterRepeater(
@@ -113,7 +116,9 @@ def _agents_schema(server_settings: bool):
     )
 
 
-def _volumes_schema(base_dir: Path, check_paths: bool):
+def _volumes_schema(
+    base_dir: Path, check_paths: bool
+) -> BaseFilter[dict[str, VolumeSpec]]:
     """Volumes schema. Without ``check_paths``, host paths (the keys) are kept
     as written, since ``FilterRepeater`` validates only the values.
     """
@@ -127,7 +132,7 @@ def _standard_fields(
     base_dir: Path,
     check_paths: bool = True,
     server_settings: bool = False,
-) -> dict[str, object]:
+) -> dict[str, FilterCompatible]:
     """Top-level standard config fields. Mode-aware.
 
     In merged mode required fields disallow ``None``; in per-source mode they
@@ -156,10 +161,10 @@ def standard_config_schema(
     *,
     base_dir: Path,
     check_paths: bool = True,
-    extra_keys: dict | None = None,
+    extra_keys: dict[str, FilterCompatible] | None = None,
     merged: bool = False,
     server_settings: bool = False,
-):
+) -> BaseFilter[dict[str, Any]]:
     """Macro returning the standard-config filter chain.
 
     Args:
@@ -220,7 +225,9 @@ config_meta_schema = f.FilterMapper(
 
 
 @filter_macro
-def project_entry_schema(base_dir: Path, check_paths: bool = True):
+def project_entry_schema(
+    base_dir: Path, check_paths: bool = True
+) -> BaseFilter[dict[str, Any]]:
     """Macro validating one ``[projects."<path>"]`` entry (per-source).
 
     Allows ``[config]`` as well as the standard config fields.
@@ -239,7 +246,7 @@ def project_entry_schema(base_dir: Path, check_paths: bool = True):
     )
 
 
-class ProjectKeys(BaseFilter):
+class ProjectKeys(BaseFilter[dict[str, Any]]):
     """Validates the keys of ``[projects]``, leaving entries to the next filter.
 
     Each key must be a normalised absolute path, the only form that can equal
@@ -256,10 +263,13 @@ class ProjectKeys(BaseFilter):
         ),
     }
 
-    def _apply(self, value):
-        value = cast(dict, self._filter(value, f.Type(dict)))
+    def _apply(self, value: Any) -> dict[str, Any]:
+        value = cast(dict[str, Any], self._filter(value, f.Type(dict)))
         if self._has_errors:
-            return None
+            # phx-filters rejects a value by returning None from a non-Optional
+            # `_apply`; drop this ignore once todofixthis/filters#121 makes
+            # rejection raise instead.
+            return None  # type: ignore[return-value]
 
         # A custom filter only because FilterRepeater filters values, not keys;
         # refactor once https://github.com/todofixthis/filters/issues/92 lands.
@@ -272,11 +282,14 @@ class ProjectKeys(BaseFilter):
                 or key.startswith("//")
             ):
                 self._invalid_value(key, self.CODE_NOT_A_WORKDIR, sub_key=key)
-        return value if not self._has_errors else None
+        # phx-filters rejects a value by returning None from a non-Optional
+        # `_apply`; drop this ignore once todofixthis/filters#121 makes
+        # rejection raise instead.
+        return value if not self._has_errors else None  # type: ignore[no-any-return]
 
 
 @filter_macro
-def user_config_schema(base_dir: Path):
+def user_config_schema(base_dir: Path) -> BaseFilter[dict[str, Any]]:
     """Macro validating a whole user config file, from its TOML text.
 
     Args:
@@ -308,7 +321,7 @@ class ConfigSchema:
     backwards-compatible call sites. The loader uses the same schema directly.
     """
 
-    def validate(self, config: dict, *, base_dir: Path) -> dict:
+    def validate(self, config: dict[str, Any], *, base_dir: Path) -> dict[str, Any]:
         """Validates the config dict and returns the cleaned result.
 
         Args:

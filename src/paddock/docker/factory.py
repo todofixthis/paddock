@@ -1,4 +1,5 @@
 from collections.abc import Mapping
+from typing import Any
 
 from paddock.docker.build import ImageBuilder
 from paddock.docker.pull import ImagePuller, PullLog
@@ -10,7 +11,7 @@ class ImageSourceFactory:
 
     @staticmethod
     def from_config(
-        build_config: dict,
+        build_config: dict[str, Any],
         *,
         agent_build_args: dict[str, str],
         environ: Mapping[str, str],

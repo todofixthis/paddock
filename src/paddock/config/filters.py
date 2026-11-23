@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import NamedTuple, cast
+from typing import Any, NamedTuple, cast
 
 import filters as f
 from filters.base import BaseFilter
@@ -9,7 +9,7 @@ from paddock.config.agent_choice import AgentChoice
 from paddock.config.fields import allowlist_directives
 
 
-class AgentHalf(BaseFilter):
+class AgentHalf(BaseFilter[str | bool]):
     """Validates one half of an ``agent`` value: a name, or ``False``.
 
     ``False`` is the shell for the client half and no server for the server
@@ -23,7 +23,7 @@ class AgentHalf(BaseFilter):
         CODE_INVALID: "Expected a non-empty name string, or False.",
     }
 
-    def _apply(self, value):
+    def _apply(self, value: Any) -> str | bool:
         # Boolean True is always invalid.
         if value is True:
             return self._invalid_value(value, self.CODE_INVALID)
@@ -34,10 +34,13 @@ class AgentHalf(BaseFilter):
 
         # Anything else must already be a string: f.Unicode would stringify
         # a table or a number into a name.
-        return self._filter(value, f.Type(str) | f.Unicode | f.NotEmpty)
+        # Assigned first: returned directly, mypy infers the chain against
+        # this filter's own output type and rejects it.
+        name = self._filter(value, f.Type(str) | f.Unicode | f.NotEmpty)
+        return name
 
 
-class Agent(BaseFilter):
+class Agent(BaseFilter[dict[str, str | bool]]):
     """Validates an ``agent`` value into its client and server halves.
 
     Accepts a client name, ``False`` for the shell, or a table naming either
@@ -55,7 +58,7 @@ class Agent(BaseFilter):
         ),
     }
 
-    def _apply(self, value):
+    def _apply(self, value: Any) -> dict[str, str | bool]:
         # Boolean True is always invalid.
         if value is True:
             return self._invalid_value(value, self.CODE_INVALID)
@@ -67,12 +70,15 @@ class Agent(BaseFilter):
         if not isinstance(value, dict):
             value = AgentChoice.from_parts(value)
 
-        halves = self._filter(
-            value,
-            f.FilterMapper(
-                {"client": AgentHalf, "server": AgentHalf},
-                allow_extra_keys=False,
-                allow_missing_keys=True,
+        halves = cast(
+            dict[str, str | bool | None],
+            self._filter(
+                value,
+                f.FilterMapper(
+                    {"client": AgentHalf, "server": AgentHalf},
+                    allow_extra_keys=False,
+                    allow_missing_keys=True,
+                ),
             ),
         )
         if self._has_errors:
@@ -82,7 +88,7 @@ class Agent(BaseFilter):
         return {key: half for key, half in halves.items() if half is not None}
 
 
-class Filepath(BaseFilter):
+class Filepath(BaseFilter[Path]):
     """Expands a tilde prefix, anchors a relative path, and returns a ``Path``.
 
     Accepts ``str`` or ``Path`` input. Place after ``f.Unicode`` in a chain
@@ -146,7 +152,7 @@ class Filepath(BaseFilter):
         is_dir: bool | None = None,
         must_exist: bool | None = None,
         resolve: bool | None = None,
-    ):
+    ) -> None:
         super().__init__()
         self._base_dir = Path(base_dir) if base_dir is not None else None
         self._home_dir = Path(home_dir) if home_dir is not None else None
@@ -156,7 +162,7 @@ class Filepath(BaseFilter):
             must_exist is None and home_dir is None
         )
 
-    def _apply(self, value):
+    def _apply(self, value: Any) -> Path:
         value = cast(str | Path, self._filter(value, f.Type((str, Path))))
         if self._has_errors:
             return None
@@ -176,9 +182,8 @@ class Filepath(BaseFilter):
                 path = path.resolve(strict=self._must_exist)
             except OSError:
                 return self._invalid_path(value, path, self.CODE_DOES_NOT_EXIST)
-        elif self._must_exist:
-            if not path.exists():
-                return self._invalid_path(value, path, self.CODE_DOES_NOT_EXIST)
+        elif self._must_exist and not path.exists():
+            return self._invalid_path(value, path, self.CODE_DOES_NOT_EXIST)
 
         if self._is_dir is not None and path.exists():
             if self._is_dir and not path.is_dir():
@@ -188,7 +193,7 @@ class Filepath(BaseFilter):
 
         return path
 
-    def _invalid_path(self, value: str | Path, path: Path, reason: str):
+    def _invalid_path(self, value: str | Path, path: Path, reason: str) -> Any:
         """Records ``reason`` against ``value``, naming the path checked.
 
         A relative value is checked against ``base_dir``, so the message names
@@ -198,7 +203,9 @@ class Filepath(BaseFilter):
 
 
 @filter_macro
-def HostPath(base_dir: str | Path, check_paths: bool, is_dir: bool | None = None):
+def HostPath(
+    base_dir: str | Path, check_paths: bool, is_dir: bool | None = None
+) -> BaseFilter[Path] | type[f.NoOp]:
     """Validates a host path, on disk or for shape only.
 
     With ``check_paths``, this is ``Filepath`` anchored to ``base_dir``. Without
@@ -235,7 +242,7 @@ class VolumeSpec(NamedTuple):
 
 
 @filter_macro
-def Volume(home_dir: str | Path | None = None):
+def Volume(home_dir: str | Path | None = None) -> BaseFilter[VolumeSpec]:
     """Validates a Docker volume container path spec.
 
     Accepts paths of the form ``/container/path``, ``/container/path:ro``,
@@ -276,7 +283,7 @@ def Volume(home_dir: str | Path | None = None):
     )
 
 
-class VolumeMap(BaseFilter):
+class VolumeMap(BaseFilter[dict[str, VolumeSpec]]):
     """Validates a volumes mapping from host paths to container path specs.
 
     Keys (host paths) are validated through ``f.Unicode | Filepath`` —
@@ -304,15 +311,15 @@ class VolumeMap(BaseFilter):
         self,
         container_home_dir: str | Path | None = None,
         host_base_dir: str | Path | None = None,
-    ):
+    ) -> None:
         super().__init__()
         self._container_home_dir = (
             Path(container_home_dir) if container_home_dir is not None else None
         )
         self._host_base_dir = host_base_dir
 
-    def _apply(self, value):
-        value = cast(dict, self._filter(value, f.Type(dict)))
+    def _apply(self, value: Any) -> dict[str, VolumeSpec]:
+        value = cast(dict[str, Any], self._filter(value, f.Type(dict)))
         if self._has_errors:
             return None
 
@@ -341,7 +348,7 @@ class VolumeMap(BaseFilter):
         return result if not self._has_errors else None
 
 
-class AbsoluteHostPath(BaseFilter):
+class AbsoluteHostPath(BaseFilter[str]):
     """Requires a host path to be absolute, without looking it up.
 
     For a shared server's paths, which cannot depend on the workdir (ADR 019).
@@ -359,7 +366,7 @@ class AbsoluteHostPath(BaseFilter):
         ),
     }
 
-    def _apply(self, value):
+    def _apply(self, value: Any) -> str:
         value = self._filter(value, f.Type(str))
         if self._has_errors:
             return None
@@ -372,7 +379,7 @@ class AbsoluteHostPath(BaseFilter):
         return value
 
 
-class ServerVolumeMap(BaseFilter):
+class ServerVolumeMap(BaseFilter[dict[str, VolumeSpec]]):
     """Validates a server's volumes mapping, for shape only.
 
     Keys (host paths) must be absolute and are kept as written; values
@@ -388,12 +395,12 @@ class ServerVolumeMap(BaseFilter):
             specs. When ``None`` (default), ``Path.home()`` is used.
     """
 
-    def __init__(self, container_home_dir: str | Path | None = None):
+    def __init__(self, container_home_dir: str | Path | None = None) -> None:
         super().__init__()
         self._container_home_dir = container_home_dir
 
-    def _apply(self, value):
-        value = cast(dict, self._filter(value, f.Type(dict)))
+    def _apply(self, value: Any) -> dict[str, VolumeSpec]:
+        value = cast(dict[str, Any], self._filter(value, f.Type(dict)))
         if self._has_errors:
             return None
 
@@ -413,7 +420,7 @@ class ServerVolumeMap(BaseFilter):
         return result if not self._has_errors else None
 
 
-class AllowlistEntry(BaseFilter):
+class AllowlistEntry(BaseFilter[bool | list[str]]):
     """Validates a single ``[config.allowlist]`` entry.
 
     Accepts ``True``, ``False``, or a list of dotted-path strings naming keys
@@ -431,7 +438,7 @@ class AllowlistEntry(BaseFilter):
         super().__init__()
         self._directives = allowlist_directives()
 
-    def _apply(self, value):
+    def _apply(self, value: Any) -> bool | list[str]:
         if isinstance(value, bool):
             return value
         if isinstance(value, list):

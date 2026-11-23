@@ -67,7 +67,7 @@ class _NoRedirects(urllib.request.HTTPRedirectHandler):
 
     def http_error_302(self, *args: object, **kwargs: object) -> None:
         """Decline, which leaves the reply to be raised as an HTTP error."""
-        return None
+        return
 
     http_error_301 = http_error_303 = http_error_307 = http_error_308 = http_error_302
 

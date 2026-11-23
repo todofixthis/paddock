@@ -3,6 +3,7 @@ import subprocess
 from collections.abc import Sequence
 from functools import cached_property
 from pathlib import Path
+from typing import Any
 
 from paddock.agents import BaseAgent
 from paddock.agents.servers import ServerConnection
@@ -24,7 +25,7 @@ class DockerCommandBuilder:
     def __init__(
         self,
         *,
-        config: dict,
+        config: dict[str, Any],
         agent: BaseAgent,
         workdir: Path,
         project_dir_volume: tuple[str, VolumeSpec] | None = None,
@@ -165,6 +166,7 @@ class DockerCommandBuilder:
             ["docker", "ps", "-a", "--filter", f"name=^{name}$", "--format={{.Names}}"],
             capture_output=True,
             text=True,
+            check=False,
         )
         return name not in result.stdout.splitlines()
 

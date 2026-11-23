@@ -34,11 +34,11 @@ when their local environment is misconfigured.
 
 Tests:
 
-- `tests/config/test_context.py`: rename and rewrite
+- `test/config/test_context.py`: rename and rewrite
   `test_default_user_config_path_falls_back_to_legacy_with_warning` to assert
   the missing XDG path is returned, with the reworded warning. The other
   `default_user_config_path` tests stay as they are.
-- `tests/config/test_loader.py`: rename and invert
+- `test/config/test_loader.py`: rename and invert
   `test_resolve_falls_back_to_legacy_user_config`. With no user config loaded,
   `resolve()` raises `ExceptionGroup("config validation failed")` for the
   missing image, so either expect that or supply the image another way

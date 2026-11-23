@@ -4,6 +4,7 @@ import os
 import subprocess
 from dataclasses import dataclass, field
 from enum import Enum
+from typing import Any
 
 from paddock.config.errors import PaddockEnvironmentError
 from paddock.config.filters import VolumeSpec
@@ -176,6 +177,7 @@ class ManagedContainer:
             capture_output=True,
             env={**os.environ, **self._spec.env.secrets},
             text=True,
+            check=False,
         )
         if result.returncode == 0:
             return True
@@ -192,7 +194,9 @@ class ManagedContainer:
         Args:
             container_id: The ID a status reading reported.
         """
-        subprocess.run(["docker", "rm", container_id], capture_output=True, text=True)
+        subprocess.run(
+            ["docker", "rm", container_id], capture_output=True, text=True, check=False
+        )
 
     def published_port(self) -> int | None:
         """Read the loopback port the container's port is published on.
@@ -205,6 +209,7 @@ class ManagedContainer:
             ["docker", "port", self._spec.name, f"{self._spec.container_port}/tcp"],
             capture_output=True,
             text=True,
+            check=False,
         )
         lines = result.stdout.split()
         if result.returncode != 0 or not lines:
@@ -227,7 +232,7 @@ class ManagedContainer:
             volumes.append((source, VolumeSpec(container_path, mode)))
         return volumes
 
-    def _state(self, state: dict, labels: dict[str, str]) -> ContainerState:
+    def _state(self, state: dict[str, Any], labels: dict[str, str]) -> ContainerState:
         """Classify an inspected container.
 
         Args:
@@ -278,11 +283,12 @@ class ManagedContainer:
             ],
             capture_output=True,
             text=True,
+            check=False,
         )
         if result.returncode != 0 and not self._network_exists():
             raise self._could_not_start(result.stderr)
 
-    def _inspect(self, kind: str) -> dict | None:
+    def _inspect(self, kind: str) -> dict[str, Any] | None:
         """Inspect the container or the network of this name.
 
         Args:
@@ -295,10 +301,12 @@ class ManagedContainer:
             ["docker", kind, "inspect", self._spec.name],
             capture_output=True,
             text=True,
+            check=False,
         )
         if result.returncode != 0:
             return None
-        return json.loads(result.stdout)[0]
+        entries: list[dict[str, Any]] = json.loads(result.stdout)
+        return entries[0]
 
     def _could_not_start(self, stderr: str) -> PaddockEnvironmentError:
         """Build the error for a Docker failure, from the line giving the reason.

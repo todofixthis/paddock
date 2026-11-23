@@ -1,0 +1,861 @@
+from collections.abc import Callable
+from pathlib import Path
+
+import filters as f
+import pytest
+from filters.handlers import FilterRunner
+
+from paddock.config.agent_choice import UNNAMED_SERVER
+from paddock.config.filters import (
+    AbsoluteHostPath,
+    Agent,
+    AgentHalf,
+    Filepath,
+    HostPath,
+    ServerVolumeMap,
+    Volume,
+    VolumeMap,
+    VolumeSpec,
+)
+
+
+def test_volume_pass_none(assert_filter_passes: Callable[..., FilterRunner]) -> None:
+    """None is always a pass-through."""
+    assert_filter_passes(Volume, None)
+
+
+def test_volume_pass_explicit_ro(
+    assert_filter_passes: Callable[..., FilterRunner],
+) -> None:
+    """':ro' mode is valid."""
+    assert_filter_passes(
+        Volume, "/container/path:ro", VolumeSpec("/container/path", "ro")
+    )
+
+
+def test_volume_pass_explicit_rw(
+    assert_filter_passes: Callable[..., FilterRunner],
+) -> None:
+    """':rw' mode is valid."""
+    assert_filter_passes(
+        Volume, "/container/path:rw", VolumeSpec("/container/path", "rw")
+    )
+
+
+def test_volume_pass_implicit_ro(
+    assert_filter_passes: Callable[..., FilterRunner],
+) -> None:
+    """A bare path normalises to mode 'ro'."""
+    assert_filter_passes(Volume, "/container/path", VolumeSpec("/container/path", "ro"))
+
+
+def test_volume_pass_casefold(
+    assert_filter_passes: Callable[..., FilterRunner],
+) -> None:
+    """Mode is case-folded; ':RO' normalises to 'ro'."""
+    assert_filter_passes(
+        Volume, "/container/path:RO", VolumeSpec("/container/path", "ro")
+    )
+
+
+def test_volume_fail_too_many_colons(
+    assert_filter_errors: Callable[..., FilterRunner],
+) -> None:
+    """A value with more than one colon-separated segment is invalid."""
+    assert_filter_errors(Volume, "not:a:valid:path", [f.Len.CODE_TOO_LONG])
+
+
+def test_volume_fail_bad_mode(
+    assert_filter_errors: Callable[..., FilterRunner],
+) -> None:
+    """An unrecognised mode suffix is invalid."""
+    assert_filter_errors(
+        Volume, "/container/path:rz", {"mode": [f.Choice.CODE_INVALID]}
+    )
+
+
+def test_volume_fail_empty(assert_filter_errors: Callable[..., FilterRunner]) -> None:
+    """An empty string is invalid."""
+    assert_filter_errors(Volume, "", [f.NotEmpty.CODE_EMPTY])
+
+
+def test_agent_string() -> None:
+    """A name is the client, and resets the server to unnamed."""
+    assert f.FilterRunner(Agent, "claude").cleaned_data == {
+        "client": "claude",
+        "server": UNNAMED_SERVER,
+    }
+
+
+def test_agent_false_string() -> None:
+    """The string 'false' is the shell client."""
+    assert f.FilterRunner(Agent, "false").cleaned_data == {
+        "client": False,
+        "server": UNNAMED_SERVER,
+    }
+
+
+def test_agent_true_rejected(assert_filter_errors: Callable[..., FilterRunner]) -> None:
+    """Boolean True is not a valid agent value."""
+    assert_filter_errors(Agent, True, [Agent.CODE_INVALID])
+
+
+def test_agent_false_bool() -> None:
+    """Boolean False is the shell client."""
+    assert f.FilterRunner(Agent, False).cleaned_data == {
+        "client": False,
+        "server": UNNAMED_SERVER,
+    }
+
+
+def test_agent_table_names_only_its_halves(
+    assert_filter_passes: Callable[..., FilterRunner],
+) -> None:
+    """A table names the halves it lists and no others."""
+    assert_filter_passes(Agent, {"client": "x"}, {"client": "x"})
+    assert_filter_passes(Agent, {"server": "false"}, {"server": False})
+    assert_filter_passes(Agent, {"client": "false"}, {"client": False})
+
+
+def test_agent_is_idempotent(assert_filter_passes: Callable[..., FilterRunner]) -> None:
+    """Cleaned values pass through unchanged, as a second schema pass needs."""
+    for cleaned in (
+        {"client": "claude", "server": UNNAMED_SERVER},
+        {"client": False, "server": UNNAMED_SERVER},
+        {"client": "x"},
+        {"server": False},
+        {"client": False},
+    ):
+        assert_filter_passes(Agent, cleaned, cleaned)
+
+
+def test_agent_rejects_an_unknown_half(
+    assert_filter_errors: Callable[..., FilterRunner],
+) -> None:
+    """A misspelt half is an error, not a silent default."""
+    assert_filter_errors(
+        Agent, {"clinet": "x"}, {"clinet": [f.FilterMapper.CODE_EXTRA_KEY]}
+    )
+
+
+def test_agent_rejects_a_non_string_half(
+    assert_filter_errors: Callable[..., FilterRunner],
+) -> None:
+    """A half is a name or False; nothing is converted to a name."""
+    assert_filter_errors(Agent, {"client": 1}, {"client": [f.Type.CODE_WRONG_TYPE]})
+    assert_filter_errors(Agent, {"client": ""}, {"client": [f.NotEmpty.CODE_EMPTY]})
+    assert_filter_errors(Agent, {"server": True}, {"server": [AgentHalf.CODE_INVALID]})
+
+
+def test_agent_rejects_a_list(
+    assert_filter_errors: Callable[..., FilterRunner],
+) -> None:
+    """Anything but a name, False or a table is the wrong type."""
+    assert_filter_errors(Agent, ["claude"], [f.Type.CODE_WRONG_TYPE])
+
+
+def test_agent_half_pass_none(
+    assert_filter_passes: Callable[..., FilterRunner],
+) -> None:
+    """``None`` always passes."""
+    assert_filter_passes(AgentHalf, None)
+
+
+# ---------------------------------------------------------------------------
+# Filepath
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(autouse=True)
+def _filepath_set_home(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Set HOME to tmp_path for every test in this file.
+
+    autouse=True means this applies to all tests in test_filters.py, not
+    just the Filepath section. That is intentional and harmless — no other
+    filter in this file reads HOME — but if a future filter does, move this
+    fixture to a conftest scoped to a Filepath-only subdirectory or convert
+    it to an explicit fixture.
+    """
+    monkeypatch.setenv("HOME", str(tmp_path))
+
+
+def test_pass_none(assert_filter_passes: Callable[..., FilterRunner]) -> None:
+    """None is always a pass-through."""
+    assert_filter_passes(Filepath, None, None)
+
+
+# -- tilde expansion --------------------------------------------------------
+
+
+def test_pass_tilde_expansion_applied_tilde_only(
+    assert_filter_passes: Callable[..., FilterRunner], tmp_path: Path
+) -> None:
+    """Bare ~ expands to HOME."""
+    assert_filter_passes(Filepath, "~", tmp_path.resolve())
+
+
+def test_pass_tilde_expansion_applied_tilde_slash(
+    assert_filter_passes: Callable[..., FilterRunner], tmp_path: Path
+) -> None:
+    """~/ expands to HOME."""
+    assert_filter_passes(Filepath, "~/", tmp_path.resolve())
+
+
+def test_pass_tilde_expansion_applied_str(
+    assert_filter_passes: Callable[..., FilterRunner], tmp_path: Path
+) -> None:
+    """~/foo expands to HOME/foo (str input)."""
+    target = tmp_path / "foo"
+    target.mkdir()
+    assert_filter_passes(Filepath, "~/foo", target.resolve())
+
+
+def test_pass_tilde_expansion_applied_path_tilde_only(
+    assert_filter_passes: Callable[..., FilterRunner], tmp_path: Path
+) -> None:
+    """Path("~") expands to HOME."""
+    assert_filter_passes(Filepath, Path("~"), tmp_path.resolve())
+
+
+def test_pass_tilde_expansion_applied_path_with_segment(
+    assert_filter_passes: Callable[..., FilterRunner], tmp_path: Path
+) -> None:
+    """Path("~/foo") expands to HOME/foo."""
+    target = tmp_path / "foo"
+    target.mkdir()
+    assert_filter_passes(Filepath, Path("~/foo"), target.resolve())
+
+
+def test_pass_tilde_expansion_not_applied_abs(
+    assert_filter_passes: Callable[..., FilterRunner], tmp_path: Path
+) -> None:
+    """An absolute path without a leading tilde is returned as a Path object."""
+    target = tmp_path / "file.txt"
+    target.write_text("")
+    assert_filter_passes(Filepath, str(target), target.resolve())
+
+
+def test_pass_tilde_expansion_not_applied_tilde_in_middle(
+    assert_filter_passes: Callable[..., FilterRunner], tmp_path: Path
+) -> None:
+    """A tilde not at the start of a path is treated as a literal character."""
+    tilde_dir = tmp_path / "~in"
+    tilde_dir.mkdir()
+    target = tilde_dir / "middle"
+    target.write_text("")
+    assert_filter_passes(Filepath, str(target), target.resolve())
+
+
+def test_pass_tilde_expansion_custom_home_dir(
+    assert_filter_passes: Callable[..., FilterRunner],
+) -> None:
+    """A custom home_dir overrides Path.home() for tilde expansion."""
+    assert_filter_passes(
+        Filepath(home_dir="/custom/home"),
+        "~/project",
+        Path("/custom/home/project"),
+    )
+
+
+# -- wrong type -------------------------------------------------------------
+
+
+def test_fail_wrong_type(assert_filter_errors: Callable[..., FilterRunner]) -> None:
+    """A value that is neither str nor Path is rejected."""
+    assert_filter_errors(Filepath(home_dir="/h"), 42, [f.Type.CODE_WRONG_TYPE])
+
+
+# -- resolve ----------------------------------------------------------------
+
+
+def test_pass_resolve_dot_segment(
+    assert_filter_passes: Callable[..., FilterRunner], tmp_path: Path
+) -> None:
+    """resolve=True resolves '.' segments in paths."""
+    target = tmp_path / "target.txt"
+    target.write_text("")
+
+    # Use an f-string so the '.' reaches the filter as a string — Path() would
+    # normalise it away before the filter sees it.
+    assert_filter_passes(
+        Filepath(home_dir=tmp_path, resolve=True),
+        f"{tmp_path}/./target.txt",
+        target.resolve(),
+    )
+
+
+def test_pass_resolve_dotdot_segment(
+    assert_filter_passes: Callable[..., FilterRunner], tmp_path: Path
+) -> None:
+    """resolve=True resolves '..' segments in paths."""
+    subdir = tmp_path / "sub"
+    subdir.mkdir()
+    target = tmp_path / "target.txt"
+    target.write_text("")
+
+    assert_filter_passes(
+        Filepath(home_dir=tmp_path, resolve=True),
+        str(subdir / ".." / "target.txt"),
+        target.resolve(),
+    )
+
+
+def test_pass_resolve_symlink(
+    assert_filter_passes: Callable[..., FilterRunner], tmp_path: Path
+) -> None:
+    """resolve=True follows symlinks to their real target."""
+    target = tmp_path / "target.txt"
+    target.write_text("")
+
+    link = tmp_path / "link.txt"
+    link.symlink_to(target)
+
+    assert_filter_passes(
+        Filepath(home_dir=tmp_path, resolve=True),
+        link,
+        target.resolve(),
+    )
+
+
+# -- resolve: behaviour when home_dir is not set ----------------------------
+
+
+def test_pass_resolve_default_home_dir_activates(
+    assert_filter_passes: Callable[..., FilterRunner], tmp_path: Path
+) -> None:
+    """When home_dir is not set, resolve is enabled automatically."""
+    subdir = tmp_path / "sub"
+    subdir.mkdir()
+    target = tmp_path / "target.txt"
+    target.write_text("")
+
+    assert_filter_passes(
+        Filepath,
+        "~/sub/../target.txt",
+        target.resolve(),
+    )
+
+
+def test_pass_resolve_false_skips_resolution(
+    assert_filter_passes: Callable[..., FilterRunner], tmp_path: Path
+) -> None:
+    """Explicit resolve=False returns the tilde-expanded Path without resolution."""
+    subdir = tmp_path / "sub"
+    subdir.mkdir()
+    target = tmp_path / "target.txt"
+    target.write_text("")
+
+    assert_filter_passes(
+        Filepath(resolve=False),
+        "~/sub/../target.txt",
+        tmp_path / "sub" / ".." / "target.txt",
+    )
+
+
+# -- resolve: behaviour when home_dir is set --------------------------------
+
+
+def test_pass_resolve_defaults_off_with_home_dir(
+    assert_filter_passes: Callable[..., FilterRunner], tmp_path: Path
+) -> None:
+    """When home_dir is set, resolve is disabled by default."""
+    subdir = tmp_path / "sub"
+    subdir.mkdir()
+
+    assert_filter_passes(
+        Filepath(home_dir=tmp_path),
+        "~/sub/../target.txt",
+        tmp_path / "sub" / ".." / "target.txt",
+    )
+
+
+def test_pass_resolve_explicit_true_with_home_dir(
+    assert_filter_passes: Callable[..., FilterRunner], tmp_path: Path
+) -> None:
+    """Explicit resolve=True resolves paths even when home_dir is set."""
+    subdir = tmp_path / "sub"
+    subdir.mkdir()
+
+    assert_filter_passes(
+        Filepath(home_dir=tmp_path, resolve=True),
+        "~/sub/../target.txt",
+        (tmp_path / "target.txt").resolve(),
+    )
+
+
+# -- must_exist -------------------------------------------------------------
+
+
+def test_pass_must_exist_explicit_true_valid(
+    assert_filter_passes: Callable[..., FilterRunner], tmp_path: Path
+) -> None:
+    """must_exist=True passes when the path exists."""
+    target = tmp_path / "target.txt"
+    target.write_text("")
+
+    assert_filter_passes(Filepath(home_dir=tmp_path, must_exist=True), target)
+
+
+def test_fail_must_exist_explicit_true_invalid(
+    assert_filter_errors: Callable[..., FilterRunner], tmp_path: Path
+) -> None:
+    """must_exist=True is invalid when the path does not exist."""
+    assert_filter_errors(
+        Filepath(home_dir=tmp_path, must_exist=True),
+        tmp_path / "target.txt",
+        [Filepath.CODE_DOES_NOT_EXIST],
+    )
+
+
+def test_fail_must_exist_broken_symlink(
+    assert_filter_errors: Callable[..., FilterRunner], tmp_path: Path
+) -> None:
+    """A broken symlink is invalid when must_exist=True and resolve=True."""
+    link = tmp_path / "link.txt"
+    link.symlink_to(tmp_path / "target.txt")
+
+    assert_filter_errors(
+        Filepath(home_dir=tmp_path, resolve=True, must_exist=True),
+        link,
+        [Filepath.CODE_DOES_NOT_EXIST],
+    )
+
+
+def test_fail_must_exist_resolve_false_broken_symlink(
+    assert_filter_errors: Callable[..., FilterRunner], tmp_path: Path
+) -> None:
+    """A broken symlink is invalid when must_exist=True and resolve=False."""
+    link = tmp_path / "link.txt"
+    link.symlink_to(tmp_path / "target.txt")
+
+    assert_filter_errors(
+        Filepath(home_dir=tmp_path, resolve=False, must_exist=True),
+        link,
+        [Filepath.CODE_DOES_NOT_EXIST],
+    )
+
+
+def test_pass_must_exist_false_missing(
+    assert_filter_passes: Callable[..., FilterRunner], tmp_path: Path
+) -> None:
+    """must_exist=False skips the existence check."""
+    assert_filter_passes(
+        Filepath(home_dir=tmp_path, must_exist=False),
+        "~/./target.txt",
+        tmp_path / "target.txt",
+    )
+
+
+def test_pass_must_exist_resolve_false_valid(
+    assert_filter_passes: Callable[..., FilterRunner], tmp_path: Path
+) -> None:
+    """must_exist=True with resolve=False: .exists() passes but the symlink is not followed."""
+    target = tmp_path / "target.txt"
+    target.write_text("")
+    link = tmp_path / "link.txt"
+    link.symlink_to(target)
+
+    assert_filter_passes(
+        Filepath(home_dir=tmp_path, must_exist=True, resolve=False),
+        link,
+    )
+
+
+def test_fail_must_exist_resolve_false_invalid(
+    assert_filter_errors: Callable[..., FilterRunner], tmp_path: Path
+) -> None:
+    """must_exist=True with resolve=False: .exists() check rejects a missing path."""
+    assert_filter_errors(
+        Filepath(home_dir=tmp_path, must_exist=True, resolve=False),
+        "~/./target.txt",
+        [Filepath.CODE_DOES_NOT_EXIST],
+    )
+
+
+# -- must_exist: behaviour when home_dir is not set -------------------------
+
+
+def test_pass_must_exist_default_activates(
+    assert_filter_passes: Callable[..., FilterRunner], tmp_path: Path
+) -> None:
+    """When home_dir is not set, must_exist is enabled automatically."""
+    target = tmp_path / "target.txt"
+    target.write_text("")
+
+    assert_filter_passes(Filepath, "~/target.txt", target.resolve())
+
+
+def test_fail_must_exist_default_activates_missing(
+    assert_filter_errors: Callable[..., FilterRunner], tmp_path: Path
+) -> None:
+    """When home_dir is not set, missing paths are rejected automatically."""
+    assert_filter_errors(
+        Filepath,
+        "~/missing.txt",
+        [Filepath.CODE_DOES_NOT_EXIST],
+    )
+
+
+def test_pass_must_exist_false_overrides_default(
+    assert_filter_passes: Callable[..., FilterRunner], tmp_path: Path
+) -> None:
+    """Explicit must_exist=False bypasses the default existence check."""
+    assert_filter_passes(
+        Filepath(must_exist=False, resolve=False),
+        "~/missing.txt",
+        tmp_path / "missing.txt",
+    )
+
+
+# -- is_dir -----------------------------------------------------------------
+
+
+def test_pass_is_dir_true_directory(
+    assert_filter_passes: Callable[..., FilterRunner], tmp_path: Path
+) -> None:
+    """is_dir=True passes when the path is a directory."""
+    target = tmp_path / "mydir"
+    target.mkdir()
+    assert_filter_passes(
+        Filepath(home_dir=tmp_path, is_dir=True, must_exist=True), target
+    )
+
+
+def test_fail_is_dir_true_file(
+    assert_filter_errors: Callable[..., FilterRunner], tmp_path: Path
+) -> None:
+    """is_dir=True fails when the path is a file."""
+    target = tmp_path / "file.txt"
+    target.write_text("")
+    assert_filter_errors(
+        Filepath(home_dir=tmp_path, is_dir=True, must_exist=True),
+        target,
+        [Filepath.CODE_NOT_A_DIRECTORY],
+    )
+
+
+def test_pass_is_dir_false_file(
+    assert_filter_passes: Callable[..., FilterRunner], tmp_path: Path
+) -> None:
+    """is_dir=False passes when the path is a regular file."""
+    target = tmp_path / "file.txt"
+    target.write_text("")
+    assert_filter_passes(
+        Filepath(home_dir=tmp_path, is_dir=False, must_exist=True), target
+    )
+
+
+def test_fail_is_dir_false_directory(
+    assert_filter_errors: Callable[..., FilterRunner], tmp_path: Path
+) -> None:
+    """is_dir=False fails when the path is a directory."""
+    target = tmp_path / "mydir"
+    target.mkdir()
+    assert_filter_errors(
+        Filepath(home_dir=tmp_path, is_dir=False, must_exist=True),
+        target,
+        [Filepath.CODE_IS_A_DIRECTORY],
+    )
+
+
+def test_pass_is_dir_nonexistent_skips_check(
+    assert_filter_passes: Callable[..., FilterRunner], tmp_path: Path
+) -> None:
+    """is_dir check is skipped for non-existent paths (must_exist=False)."""
+    assert_filter_passes(
+        Filepath(home_dir=tmp_path, is_dir=True, must_exist=False),
+        tmp_path / "missing",
+    )
+
+
+# ---------------------------------------------------------------------------
+# Volume with home_dir
+# ---------------------------------------------------------------------------
+
+
+def test_volume_home_dir_tilde_expansion(
+    assert_filter_passes: Callable[..., FilterRunner],
+) -> None:
+    """home_dir causes ~ in the path portion to expand."""
+    assert_filter_passes(
+        Volume(home_dir="/root"), "~/.config:ro", VolumeSpec("/root/.config", "ro")
+    )
+
+
+def test_volume_home_dir_bare_path_normalised(
+    assert_filter_passes: Callable[..., FilterRunner],
+) -> None:
+    """A bare path with home_dir still gets :ro appended."""
+    assert_filter_passes(
+        Volume(home_dir="/root"), "/etc/hosts", VolumeSpec("/etc/hosts", "ro")
+    )
+
+
+def test_volume_home_dir_rw_preserved(
+    assert_filter_passes: Callable[..., FilterRunner],
+) -> None:
+    """:rw mode is preserved when home_dir is set."""
+    assert_filter_passes(
+        Volume(home_dir="/root"), "~/.ssh:rw", VolumeSpec("/root/.ssh", "rw")
+    )
+
+
+# ---------------------------------------------------------------------------
+# VolumeMap
+# ---------------------------------------------------------------------------
+
+
+def test_volume_map_pass_none(
+    assert_filter_passes: Callable[..., FilterRunner],
+) -> None:
+    """None is always a pass-through."""
+    assert_filter_passes(VolumeMap, None)
+
+
+def test_volume_map_valid(
+    assert_filter_passes: Callable[..., FilterRunner], tmp_path: Path
+) -> None:
+    """A dict of valid host→container entries is validated and returned."""
+    host = tmp_path / "data"
+    host.mkdir()
+    assert_filter_passes(
+        VolumeMap(),
+        {str(host): "/container/data:ro"},
+        {str(host): VolumeSpec("/container/data", "ro")},
+    )
+
+
+def test_volume_map_tilde_expansion(
+    assert_filter_passes: Callable[..., FilterRunner], tmp_path: Path
+) -> None:
+    """Host paths with ~ are expanded using Path.home()."""
+    target = tmp_path / "work"
+    target.mkdir()
+    assert_filter_passes(
+        VolumeMap(),
+        {"~/work": "/container/work:rw"},
+        {str(target.resolve()): VolumeSpec("/container/work", "rw")},
+    )
+
+
+def test_volume_map_invalid_host_path(
+    assert_filter_errors: Callable[..., FilterRunner], tmp_path: Path
+) -> None:
+    """A host path that does not exist fails validation."""
+    assert_filter_errors(
+        VolumeMap(),
+        {str(tmp_path / "missing"): "/container/data:ro"},
+        expected_codes={str(tmp_path / "missing"): [Filepath.CODE_DOES_NOT_EXIST]},
+    )
+
+
+def test_volume_map_invalid_container_spec(
+    assert_filter_errors: Callable[..., FilterRunner], tmp_path: Path
+) -> None:
+    """A container spec with more than one colon is invalid."""
+    host = tmp_path / "data"
+    host.mkdir()
+    assert_filter_errors(
+        VolumeMap(),
+        {str(host): "not:a:valid:path"},
+        expected_codes={str(host): [f.Len.CODE_TOO_LONG]},
+    )
+
+
+def test_volume_map_container_home_dir(
+    assert_filter_passes: Callable[..., FilterRunner], tmp_path: Path
+) -> None:
+    """container_home_dir causes ~ in container paths to expand."""
+    host = tmp_path / "src"
+    host.mkdir()
+    assert_filter_passes(
+        VolumeMap(container_home_dir="/root"),
+        {str(host): "~/.config:ro"},
+        {str(host): VolumeSpec("/root/.config", "ro")},
+    )
+
+
+def test_filepath_relative_resolves_against_base_dir(
+    assert_filter_passes: Callable[..., FilterRunner],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A relative path joins onto base_dir rather than the cwd."""
+    base = tmp_path / "base"
+    (base / "data").mkdir(parents=True)
+    monkeypatch.chdir(tmp_path)
+    assert_filter_passes(Filepath(base_dir=base), "data", (base / "data").resolve())
+
+
+def test_filepath_relative_parent_resolves_against_base_dir(
+    assert_filter_passes: Callable[..., FilterRunner],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``..`` in a relative path climbs from base_dir, reaching a sibling."""
+    base = tmp_path / "project"
+    base.mkdir()
+    sibling = tmp_path / "sibling"
+    sibling.mkdir()
+    monkeypatch.chdir(tmp_path)
+    assert_filter_passes(Filepath(base_dir=base), "../sibling", sibling.resolve())
+
+
+def test_filepath_absolute_ignores_base_dir(
+    assert_filter_passes: Callable[..., FilterRunner], tmp_path: Path
+) -> None:
+    """An absolute path is unaffected by base_dir."""
+    target = tmp_path / "abs"
+    target.mkdir()
+    assert_filter_passes(
+        Filepath(base_dir=tmp_path / "elsewhere"), str(target), target.resolve()
+    )
+
+
+def test_filepath_tilde_ignores_base_dir(
+    assert_filter_passes: Callable[..., FilterRunner], tmp_path: Path
+) -> None:
+    """A ~-relative path expands against home, not base_dir."""
+    target = tmp_path / "work"
+    target.mkdir()
+    assert_filter_passes(
+        Filepath(base_dir=tmp_path / "elsewhere"), "~/work", target.resolve()
+    )
+
+
+def test_filepath_relative_missing_under_base_dir(
+    assert_filter_errors: Callable[..., FilterRunner],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A relative path that exists only under the cwd fails against base_dir."""
+    (tmp_path / "data").mkdir()
+    monkeypatch.chdir(tmp_path)
+    assert_filter_errors(
+        Filepath(base_dir=tmp_path / "base"),
+        "data",
+        [Filepath.CODE_DOES_NOT_EXIST],
+    )
+
+
+def test_filepath_error_names_checked_path(tmp_path: Path) -> None:
+    """The error names the path checked as well as the value as written."""
+    runner = f.FilterRunner(Filepath(base_dir=tmp_path), "data")
+    assert runner.errors[""][0]["message"] == (
+        f"Path 'data' does not exist or cannot be resolved (checked {tmp_path / 'data'})."
+    )
+
+
+def test_filepath_is_dir_error_names_checked_path(tmp_path: Path) -> None:
+    """An is_dir mismatch names the resolved path as well as the value."""
+    (tmp_path / "data").mkdir()
+    runner = f.FilterRunner(Filepath(base_dir=tmp_path, is_dir=False), "data")
+    assert runner.errors[""][0]["message"] == (
+        f"Expected a file, but 'data' is a directory ({(tmp_path / 'data').resolve()})."
+    )
+
+
+def test_host_path_pass_none(
+    assert_filter_passes: Callable[..., FilterRunner], tmp_path: Path
+) -> None:
+    """None passes through."""
+    assert_filter_passes(HostPath(tmp_path, check_paths=True), None)
+
+
+def test_host_path_pass_checked(
+    assert_filter_passes: Callable[..., FilterRunner], tmp_path: Path
+) -> None:
+    """With check_paths, a relative path resolves against base_dir."""
+    (tmp_path / "data").mkdir()
+    assert_filter_passes(
+        HostPath(tmp_path, check_paths=True), "data", (tmp_path / "data").resolve()
+    )
+
+
+def test_host_path_pass_unchecked(
+    assert_filter_passes: Callable[..., FilterRunner], tmp_path: Path
+) -> None:
+    """Without check_paths, a missing path is kept as written."""
+    assert_filter_passes(HostPath(tmp_path, check_paths=False), "missing")
+
+
+def test_host_path_fail_checked_missing(
+    assert_filter_errors: Callable[..., FilterRunner], tmp_path: Path
+) -> None:
+    """With check_paths, a missing path is invalid."""
+    assert_filter_errors(
+        HostPath(tmp_path, check_paths=True), "missing", [Filepath.CODE_DOES_NOT_EXIST]
+    )
+
+
+def test_host_path_fail_checked_is_dir(
+    assert_filter_errors: Callable[..., FilterRunner], tmp_path: Path
+) -> None:
+    """With check_paths, is_dir reaches Filepath."""
+    (tmp_path / "data").mkdir()
+    assert_filter_errors(
+        HostPath(tmp_path, check_paths=True, is_dir=False),
+        "data",
+        [Filepath.CODE_IS_A_DIRECTORY],
+    )
+
+
+def test_volume_map_host_base_dir(
+    assert_filter_passes: Callable[..., FilterRunner],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Relative host paths resolve against host_base_dir."""
+    base = tmp_path / "base"
+    (base / "data").mkdir(parents=True)
+    monkeypatch.chdir(tmp_path)
+    assert_filter_passes(
+        VolumeMap(host_base_dir=base),
+        {"data": "/data"},
+        {str((base / "data").resolve()): VolumeSpec("/data", "ro")},
+    )
+
+
+def test_agent_table_rejected(
+    assert_filter_errors: Callable[..., FilterRunner],
+) -> None:
+    """A table keyed by an agent name is not a choice of agent.
+
+    ``[agent.claude]`` written for ``[agents.claude]`` must fail at the
+    misplaced key.
+    """
+    assert_filter_errors(
+        Agent, {"claude": {}}, {"claude": [f.FilterMapper.CODE_EXTRA_KEY]}
+    )
+
+
+def test_absolute_host_path_pass_none(
+    assert_filter_passes: Callable[..., FilterRunner],
+) -> None:
+    """``None`` always passes."""
+    assert_filter_passes(AbsoluteHostPath, None)
+
+
+def test_server_volume_map_pass_none(
+    assert_filter_passes: Callable[..., FilterRunner],
+) -> None:
+    """``None`` always passes."""
+    assert_filter_passes(ServerVolumeMap, None)
+
+
+def test_absolute_host_path_keeps_the_value_as_written(
+    assert_filter_passes: Callable[..., FilterRunner],
+) -> None:
+    """The path is validated, not expanded or resolved."""
+    assert_filter_passes(AbsoluteHostPath, "~/Dev", "~/Dev")
+    assert_filter_passes(AbsoluteHostPath, "/abs", "/abs")
+
+
+def test_absolute_host_path_rejects_relative(
+    assert_filter_errors: Callable[..., FilterRunner],
+) -> None:
+    """A relative path, or another user's home, is not absolute."""
+    assert_filter_errors(AbsoluteHostPath, "rel", [AbsoluteHostPath.CODE_NOT_ABSOLUTE])
+    assert_filter_errors(
+        AbsoluteHostPath, "~bob/x", [AbsoluteHostPath.CODE_NOT_ABSOLUTE]
+    )
