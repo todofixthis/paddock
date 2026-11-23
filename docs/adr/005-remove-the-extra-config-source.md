@@ -1,7 +1,7 @@
 ---
 status: Accepted
 date: 2026-09-08
-scope: [docs/usage/project-config.md, src/paddock/cli.py, src/paddock/config/sources/]
+scope: [docs/usage/project-config.rst, src/paddock/cli.py, src/paddock/config/sources/]
 summary: Delete the extra config source (--config-file / PADDOCK_CONFIG_FILE) rather than keep it speculative.
 revisit-when: A concrete need for a runtime-named config file emerges.
 ---
@@ -75,7 +75,7 @@ concrete use case would answer them by construction; today none exists to ask.
 
 ## Consequences
 
-- `docs/usage/project-config.md`'s precedence table drops from six sources to five;
+- `docs/usage/project-config.rst`'s precedence table drops from six sources to five;
   its allowlist section's "sources with no allowlist entry" note drops `extra` from the
   list, leaving `user` and `project_overrides`.
 - [004][]'s subsidiary decision that `extra` and `project_overrides` stay trusted and
@@ -93,7 +93,7 @@ concrete use case would answer them by construction; today none exists to ask.
 [004]: 004-gate-untrusted-config-sources-with-an-allowlist.md
 [`ConfigSource`]: ../../src/paddock/config/sources/base.py
 [`ParsedArgs`]: ../../src/paddock/cli.py
-[project-config]: ../usage/project-config.md
+[project-config]: ../usage/project-config.rst
 [`test/config/sources/test_base.py`]: ../../test/config/sources/test_base.py
 [`test/config/test_loader.py`]: ../../test/config/test_loader.py
 [`test/test_cli.py`]: ../../test/test_cli.py

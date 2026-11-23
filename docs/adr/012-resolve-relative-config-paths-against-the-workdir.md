@@ -19,7 +19,7 @@ source it came from.
 That makes a relative path in a file mean something different depending on where
 paddock is run. `.paddock/config.toml` holding `[volumes] "data" = "/data"` works from the
 project root and fails under `--workdir=<project>` from anywhere else.
-[`docs/usage/configuration.md`][] documents this as a gotcha and tells users to write
+[`docs/usage/configuration.rst`][] documents this as a gotcha and tells users to write
 absolute or `~`-relative paths, which leaves a committed project file no way to name a
 path inside or beside the project — `../sibling` for a sibling repository, say — that
 holds on every developer's machine.
@@ -150,5 +150,5 @@ Concrete semantics:
   relative path means.
 
 [`__main__.py`]: ../../src/paddock/__main__.py
-[`docs/usage/configuration.md`]: ../usage/configuration.md
+[`docs/usage/configuration.rst`]: ../usage/configuration.rst
 [`Filepath`]: ../../src/paddock/config/filters.py

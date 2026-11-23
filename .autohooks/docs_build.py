@@ -23,7 +23,6 @@ _BUILD_TIMEOUT_SECONDS = 120
 # these match nested paths too.
 INCLUDE = (
     "README.rst",
-    "docs/*.md",
     "docs/*.rst",
     "docs/conf.py",
     "pyproject.toml",

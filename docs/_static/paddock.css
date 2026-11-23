@@ -31,7 +31,8 @@
   z-index: 3;
 }
 
-/* Keep directive names such as build.args on one line */
-.rst-content table.paddock-reference code.literal {
+/* Keep directive names such as build.args, and code, on one line */
+.rst-content table.paddock-reference code.literal,
+.rst-content table.paddock-reference tbody td:first-child a {
   white-space: nowrap;
 }
