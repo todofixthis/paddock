@@ -48,9 +48,9 @@ Docs:
 
 - Rewrite the fallback paragraph in `default_user_config_path`'s docstring, which
   points here.
-- `docs/usage/configuration.md`, Where configuration comes from: drop the
+- `docs/usage/configuration.rst`, Where configuration comes from: drop the
   fallback paragraph.
-- `docs/usage/configuration.md` Troubleshooting: replace the fallback warning's
+- `docs/usage/configuration.rst` Troubleshooting: replace the fallback warning's
   entry with the reworded one. Under `[final:image] Non-empty value expected.`
   (`configuration.md`) and `project_toml: dropped non-allowlisted keys …`
   (`project-config.md`), note that with

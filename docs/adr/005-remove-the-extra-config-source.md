@@ -1,7 +1,7 @@
 ---
 status: Accepted
 date: 2026-09-08
-scope: [docs/usage/project-config.md, src/paddock/cli.py, src/paddock/config/sources/]
+scope: [docs/usage/project-config.rst, src/paddock/cli.py, src/paddock/config/sources/]
 summary: Delete the extra config source (--config-file / PADDOCK_CONFIG_FILE) rather than keep it speculative.
 revisit-when: A concrete need for a runtime-named config file emerges.
 ---

@@ -32,7 +32,7 @@
       "description": "Update the Ubuntu tags in the user docs alongside the Dockerfiles' base image (ADR 010)",
       "managerFilePatterns": [
         "/^README\\.rst$/",
-        "/^docs/usage/.+\\.md$/"
+        "/^docs/usage/.+\\.rst$/"
       ],
       "matchStrings": [
         "ubuntu:(?<currentValue>\\d+\\.\\d+)",

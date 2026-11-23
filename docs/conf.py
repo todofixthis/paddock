@@ -14,7 +14,6 @@ author = "Phoenix Zerin"
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
 
 extensions = [
-    "myst_parser",
     "sphinx.ext.autodoc",
     "sphinx.ext.autosectionlabel",
     "sphinx.ext.napoleon",
@@ -38,17 +37,13 @@ nitpicky = True
 # The standard library's types have no target here: there is no intersphinx.
 nitpick_ignore = [("py:class", "collections.abc.Mapping")]
 
-source_suffix = {
-    ".md": "markdown",
-    ".rst": "restructuredtext",
-}
 
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
 
 html_theme = "sphinx_rtd_theme"
 
-# Styles the reference table in usage/configuration.md, which outgrows the
+# Styles the reference table in usage/configuration.rst, which outgrows the
 # theme's content column
 html_css_files = ["paddock.css"]
 html_static_path = ["_static"]
@@ -68,16 +63,6 @@ autodoc_default_options = {
     "special-members": False,
     "undoc-members": True,
 }
-
-# -- Options for MyST parser -------------------------------------------------
-# https://myst-parser.readthedocs.io/en/latest/configuration.html
-# Generates anchors for headings down to h3, so Markdown links such as
-# `[precedence](#precedence)` resolve as they do on GitHub.
-myst_heading_anchors = 3
-
-# Renders GitHub alerts (`> [!NOTE]`) as admonitions, so an aside reads the same
-# on GitHub and on ReadTheDocs
-myst_enable_extensions = ["alert"]
 
 # -- Options for napoleon extension ------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/extensions/napoleon.html#configuration

@@ -1,9 +1,10 @@
 ---
-status: Accepted
+status: Superseded
 date: 2026-10-02
 scope: [.autohooks/docs_build.py, .github/workflows/build.yml, .readthedocs.yaml, README.rst, docs/api.rst, docs/conf.py, docs/index.rst, docs/usage/, pyproject.toml]
 summary: Build the docs with Sphinx and myst-parser (Markdown user pages, not RST, not MkDocs), strictly (-W) in a pre-commit hook, CI and ReadTheDocs, with a landing page that includes README.rst rather than copying it, so the README must render on GitHub, PyPI and Sphinx alike.
 revisit-when: myst-parser stops supporting the current Sphinx major; the docs stop being hosted on ReadTheDocs; a published page needs to cross-reference Python's own documentation; the README needs a construct GitHub, PyPI or Sphinx cannot render; the README stops being RST.
+superseded-by: 23
 ---
 
 # 008: Publish Docs with Sphinx and MyST, Landing on the README
