@@ -1,29 +1,27 @@
 [build-system]
-build-backend = "hatchling.build"
 requires = ["hatchling"]
-
-[dependency-groups]
-dev = [
-    "autohooks>=26.2.0,<27.0.0",
-    "autohooks-plugin-black>=23.10.0,<24.0.0",
-    "autohooks-plugin-mypy>=23.10.0,<24.0.0",
-    "autohooks-plugin-pytest>=23.10.0,<24.0.0",
-    "autohooks-plugin-ruff>=25.3.1,<26.0.0",
-    "mypy>=2.0.0,<3.0.0",
-    "pytest>=9.0.3,<10.0.0",
-    "pytest-mock>=3.15.1,<4.0.0",
-    "tox>=4.64.7,<5.0.0",
-    "tox-uv>=1.36.1,<2.0.0",
-    # Lets the docs_build pre-commit hook run Sphinx from the dev environment
-    { include-group = "docs" },
-]
-docs = [
-    "sphinx>=9.1.0,<10.0.0",
-    "sphinx-rtd-theme>=3.1.0,<4.0.0",
-]
+build-backend = "hatchling.build"
 
 [project]
+name = "phx-paddock"
+dynamic = ["version"]
+description = "Launch coding agents in isolated Docker containers."
 authors = [{ name = "Phoenix Zerin", email = "phx@phx.nz" }]
+requires-python = ">=3.12"
+readme = "README.rst"
+license = "MIT"
+dependencies = [
+    "phx-class-registry>=5.2.1,<6.0.0",
+    "phx-filters>=4.0.0a2,<5",
+]
+
+# :see: https://pypi.org/classifiers/
+keywords = [
+    "agents",
+    "coding",
+    "docker",
+    "isolation",
+]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
@@ -33,22 +31,6 @@ classifiers = [
     "Programming Language :: Python :: 3.14",
     "Topic :: Software Development :: Build Tools",
 ]
-dependencies = [
-    "phx-class-registry>=5.2.1,<6.0.0",
-    "phx-filters>=4.0.0a2,<5",
-]
-description = "Launch coding agents in isolated Docker containers."
-dynamic = ["version"]
-keywords = [
-    "agents",
-    "coding",
-    "docker",
-    "isolation",
-]
-license = "MIT"
-name = "phx-paddock"
-readme = "README.rst"
-requires-python = ">=3.12, <4"
 
 [project.entry-points."paddock.agents"]
 claude = "paddock.agents.claude:ClaudeAgent"
@@ -62,30 +44,68 @@ opencode = "paddock.agents.opencode:OpenCodeServer"
 paddock = "paddock.__main__:main"
 
 [project.urls]
-Documentation = "https://phx-paddock.readthedocs.io/"
 Repository = "https://github.com/todofixthis/paddock"
+Documentation = "https://phx-paddock.readthedocs.io/"
+Changelog = "https://github.com/todofixthis/paddock/releases"
+Issues = "https://github.com/todofixthis/paddock/issues"
+
+[dependency-groups]
+# I'm only one person, so to keep from getting overwhelmed, I'm only committing
+# to supporting the 3 most recent versions of Python (see
+# https://github.com/todofixthis/cookiecutter-py/blob/main/docs/adr/015-propagate-template-changes-with-copier-and-rotate-python-from-agent-sessions.md).
+dev = [
+    "autohooks>=26,<27",
+    "autohooks-plugin-black>=23,<24",
+    "autohooks-plugin-mypy>=23,<24",
+    "autohooks-plugin-pytest>=23,<24",
+    "autohooks-plugin-ruff>=25,<26",
+    "mypy>=2,<3",
+    "pytest>=9,<10",
+    "pytest-mock>=3.15.1,<4",
+    "sphinx>=9,<10",
+    "sphinx_rtd_theme>=3.1,<4",
+    "tox>=4,<5",
+    "tox-uv>=1,<2",
+]
+
+# Used by GitHub Actions and ReadTheDocs.
+ci = [
+    "black>=26,<27",
+    "mypy>=2,<3",
+    "pytest>=9,<10",
+    "pytest-mock>=3.15.1,<4",
+    "ruff>=0.17,<0.18",
+    "sphinx>=9,<10",
+    "sphinx_rtd_theme>=3.1,<4",
+    "tox-uv>=1,<2",
+]
 
 [tool.autohooks]
 mode = "pythonpath"
-pre-commit = [
-    "autohooks.plugins.black",
-    "autohooks.plugins.mypy",
-    "autohooks.plugins.pytest",
-    "autohooks.plugins.ruff",
-    # Strict (-W), full re-read Sphinx build on staged docs, README or docstring
-    # changes; see docs/adr/023-write-the-user-docs-in-restructuredtext.md
-    "docs_build",
+pre-commit = ["autohooks.plugins.black", "autohooks.plugins.mypy", "autohooks.plugins.pytest", "autohooks.plugins.ruff", "docs_build"]
+
+[tool.black]
+# Explicit, because black otherwise infers every version `requires-python`
+# allows, including ones newer than the running interpreter can parse.
+target-version = [
+    "py314",
+    "py313",
+    "py312",
 ]
 
 [tool.hatch.build.targets.sdist]
 include = [
     "src/paddock",
     "LICENCE.txt",
+    "docs",
     "images",
+    "test",
 ]
+exclude = ["docs/_build"]
 
 [tool.hatch.build.targets.wheel]
 include = ["src/paddock"]
+exclude = ["docs/_build"]
 
 [tool.hatch.build.targets.wheel.sources]
 "src/paddock" = "paddock"
@@ -94,7 +114,6 @@ include = ["src/paddock"]
 path = "src/paddock/__init__.py"
 
 [tool.mypy]
-files = ["src", "test"]
 strict = true
 
 # phx-filters rejects a value by returning `_invalid_value()`'s result (`Any`,
@@ -105,7 +124,6 @@ module = ["paddock.config.filters"]
 disable_error_code = ["no-any-return", "return-value"]
 
 [tool.pytest.ini_options]
-pythonpath = ["."]
 testpaths = ["test"]
 
 [tool.ruff.lint]
@@ -115,17 +133,25 @@ testpaths = ["test"]
 ignore = ["RUF012"]
 
 [tool.tox]
-env_list = ["3.12", "3.13", "3.14"]
-# Stops tox writing a stray `.venv` redirect file into the project root
-venv_redirect = false
+env_list = [
+    "py314",
+    "py313",
+    "py312",
+]
 
 [tool.tox.env_run_base]
-commands = [["pytest", { replace = "posargs", default = [], extend = true }]]
-dependency_groups = ["dev"]
-# Installs from uv.lock so each version tests the locked dependencies
+commands = [
+    ["pytest"],
+    ["mypy", "src", "test"],
+]
 runner = "uv-venv-lock-runner"
 
 [tool.uv]
 keyring-provider = "subprocess"
 # Fix SSL errors when running in Leash containers
 system-certs = true
+# Resolve only releases at least 3 days old, so a broken or malicious release
+# is usually yanked before a lock refresh picks it up (ADR 013 in
+# todofixthis/cookiecutter-py). Exempt one package with
+# `exclude-newer-package = { <package> = false }`.
+exclude-newer = "3 days"

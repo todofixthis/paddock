@@ -1,7 +1,7 @@
 ---
 status: Accepted
 date: 2026-11-09
-scope: [images/, renovate.json, README.rst, docs/usage/, .github/scripts/, .github/workflows/build.yml]
+scope: [images/, renovate.json, README.rst, docs/usage/, .github/scripts/, .github/workflows/project.yml, .github/workflows/weekly.yml]
 summary: Pin each version a bundled Dockerfile in images/ installs in an ARG with a renovate annotation, let Renovate bump each pin and its copies in README.rst's list-table (one regex manager per row) and the docs' ubuntu tags in one pull request, and build and smoke-test the image per agent on each change and weekly; not unpinned installs, and not hand-kept or linked-only doc copies.
 revisit-when: Renovate's Dockerfile and docs pull requests outpace review; a pin's datasource stops matching what the Dockerfile installs from, as deadsnakes or NodeSource lagging a new Ubuntu release would; the scheduled build breaks often enough that the unpinned apt, PPA and NodeSource inputs need pinning too; paddock publishes the bundled image to a registry.
 ---

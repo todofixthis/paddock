@@ -1,0 +1,38 @@
+## Getting Started
+
+Also check `docs/future/` for deferred features, and don't re-discuss them.
+
+## Architecture
+
+Paddock launches coding agents in isolated Docker containers. The package is `src/paddock/`: `agents/` holds the agent clients and servers, discovered through the `paddock.agents` and `paddock.servers` entry-point groups; `config/` loads and validates configuration from a registry of sources; `docker/` builds images and runs containers. `images/` holds the bundled Dockerfiles, one per agent.
+
+- **Object-oriented implementation:** implementation code (not tests) uses classes. A standalone function is the exception, not the rule.
+- **Naming:** a method that produces a config dict from a specific source is named `config_from_<source>` (`config_from_env`, `config_from_cli`), not `<source>_to_config`.
+- **Registry-driven extensibility:** where a registry drives behaviour (config sources, agents), adding a member must take only a new class, with no edit to the orchestrator or to a shared constant. Let the registry own instantiation (`registry[key]`, not `cls()`), and put per-member metadata (defaults, weights, flags) on the member class rather than in a central lookup the orchestrator maintains.
+- **Imports:** when two modules form a cycle, extract the shared symbol into a third module (as `errors.py` holds shared exception types); never defer an import into a function body to break it.
+
+Every non-trivial function and method has a docstring explaining its purpose, including one whose implementation is simple but whose reason to exist isn't, such as a wrapper deferring evaluation to runtime.
+
+Never carve a long function into labelled regions with banner or divider comments (`# ----`, `# Phase 3c: …`): extract each region into a well-named method instead.
+
+In the template-owned `pyproject.toml`, paddock's own content is `[project]`'s dependencies, keywords and classifiers, the `paddock.agents` and `paddock.servers` entry points, the `paddock` script, `pytest-mock` in both the `dev` and `ci` groups, `images` in the sdist, the `paddock.config.filters` mypy override, and the RUF012 ignore. Edit them here and keep them through a template-update conflict.
+
+## CI
+
+Paddock's own jobs are in `.github/workflows/project.yml`: `changes` and `image`, which build and smoke-test each bundled Dockerfile when a change touches the image (ADR 016), and `readme`, which checks that PyPI renders `README.rst`. `.github/workflows/weekly.yml` calls the same workflow on a schedule, so a broken upstream input surfaces without a commit. A file that changes what the image contains or how it's tested goes in `changes`' path list.
+
+## Docs
+
+The docs landing page includes `README.rst`, so the README must render on GitHub, PyPI and Sphinx alike (ADR 025). The user pages are RST under `docs/usage/`. Two lines in template-owned files are paddock's own: `README.rst` in the docs pre-commit hook's `INCLUDE`, and `html_css_files` in `docs/conf.py`.
+
+## Tests
+
+Tests are flat functions, never methods on a class, even when testing class behaviour. Never put a lambda in `pytest.mark.parametrize`: cases that need one deserve separate named tests. Isolate a test from the environment by redirecting `$HOME` and stripping `PADDOCK_*` variables, not by patching Python internals such as module-level constants, so tests exercise the path resolution real users hit.
+
+Run `uv run` from the repository root: it resolves the project from the working directory, so a command run from elsewhere fails with `ModuleNotFoundError: No module named 'paddock'`. Reference throwaway files by absolute path.
+
+The existing tests predate `.agents/rules/testing.md`, and many have no docstring or a multi-line one; write new ones to its one-line rule.
+
+## Python versions
+
+The bundled Dockerfiles' `PYTHON_VERSION` (and its copy in `README.rst`) sets the containers' Python, not the range paddock supports: the `rotate-python-versions` skill leaves it alone, and Renovate bumps it.

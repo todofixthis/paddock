@@ -1,22 +1,31 @@
-# Byte-compiled / optimised / DLL files
-*.py[cod]
-__pycache__/
+# Agent worktrees
+.claude/worktrees/
 
-# Coding agent stuffs
-.agents/worktrees/
-.claude/settings.local.json
+# Byte-compiled / optimised / DLL files
+__pycache__
+*.pyc
 
 # Distribution / packaging
-*.egg-info/
-dist/
+build
+dist
+*.egg-info
+
+# dotenv
+.env
+
+# Linting cache
+.ruff_cache
 
 # Release artefacts (local working files)
 release-*-body.md
 release-*.md
 release-*.md.asc
 
-# Sphinx build output
+# Sphinx documentation
 docs/_build/
 
-# tox environments
-.tox/
+# Tox
+.tox
+
+# virtualenv
+.venv.*/

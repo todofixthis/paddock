@@ -1,0 +1,138 @@
+# This project's own CI jobs. build.yml calls this workflow, and its `gate`
+# job requires the call, so a job here blocks merges like any template job.
+# copier writes this file once; template updates never touch it (ADR 021 in
+# todofixthis/cookiecutter-py). Another workflow of this project's, such as a
+# scheduled one, can call it too.
+#
+# Keep this file and at least one job in it: without them build.yml is
+# invalid and none of its jobs run, `gate` included. Ask for no permission
+# beyond `contents: read`, which build.yml grants its call; asking for more
+# fails build.yml's run the same way. A job that may have nothing to do
+# skips its steps, never itself: `gate` sees only this workflow's overall
+# result, which a skipped job doesn't fail.
+name: Project CI
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+# build.yml's own env doesn't reach a called workflow, so this repeats it:
+# every uv command leaves out the default `dev` group, whose tooling can lack
+# wheels for a new Python.
+env:
+  UV_NO_DEFAULT_GROUPS: "1"
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      image: ${{ steps.changes.outputs.image }}
+
+    steps:
+      - name: Clone repo
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      # A branch compares against where it left the default branch, not its
+      # previous push: diffed per push, a push leaving the image alone would
+      # skip the build, and the gate would pass a head commit whose image an
+      # earlier push broke. develop and main compare against the previous push;
+      # a scheduled run has no previous push, so it always builds.
+      - name: Check whether the image changed
+        id: changes
+        env:
+          BEFORE: ${{ github.event.before }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          if [[ "${GITHUB_REF_NAME}" == "${DEFAULT_BRANCH}" || "${GITHUB_REF_NAME}" == main ]]; then
+            base="${BEFORE}"
+          else
+            base=$(git merge-base "origin/${DEFAULT_BRANCH}" HEAD) || base=""
+          fi
+          # A schedule, a new branch's first push or a force-push can leave no
+          # base to diff against, so build
+          if [[ -z "${base}" ]] || ! git cat-file -e "${base}^{commit}" 2>/dev/null; then
+            echo "⚠️ No base commit to diff against; building."
+            echo "image=true" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+          # Anything that changes what the image contains or how it's tested.
+          # --no-renames also lists a file moved out of these paths.
+          changed=$(git diff --no-renames --name-only "${base}" HEAD -- images/ .github/scripts/smoke-test.sh .github/workflows/project.yml)
+          if [[ -n "${changed}" ]]; then
+            echo "▶️ Image changed since ${base}; building."
+            echo "image=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "⏭️ Image unchanged since ${base}; skipping the build."
+            echo "image=false" >> "${GITHUB_OUTPUT}"
+          fi
+
+  # Builds the bundled Dockerfiles, once per agent, and checks that each install
+  # runs, so a Renovate bump that breaks the build fails here rather than for
+  # users. The steps, not the job, skip when nothing changed: the job always
+  # reports a result, so the gate need not tell a justified skip from a broken
+  # condition (ADR 021 in todofixthis/cookiecutter-py). Only an explicit
+  # 'false' skips them, so a missing or misspelt output builds rather than
+  # passing unbuilt.
+  image:
+    name: image (${{ matrix.agent }})
+    needs: changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      # One agent failing shouldn't cancel the others' builds
+      fail-fast: false
+      matrix:
+        # Each agent builds from the Dockerfile that installs it; `none` is
+        # Claude's without the agent.
+        include:
+          - agent: claude
+            dockerfile: images/claude.Dockerfile
+          - agent: none
+            dockerfile: images/claude.Dockerfile
+          - agent: opencode
+            dockerfile: images/opencode.Dockerfile
+
+    steps:
+      - name: Report a skipped build
+        if: needs.changes.outputs.image == 'false'
+        run: echo "⏭️ Image unchanged; skipping the build."
+      - name: Clone repo
+        if: needs.changes.outputs.image != 'false'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Build image
+        if: needs.changes.outputs.image != 'false'
+        env:
+          AGENT: ${{ matrix.agent }}
+          DOCKERFILE: ${{ matrix.dockerfile }}
+        run: docker build --build-arg "AGENT=${AGENT}" -t "paddock-smoke:${AGENT}" -f "${DOCKERFILE}" images
+      - name: Smoke test image
+        if: needs.changes.outputs.image != 'false'
+        timeout-minutes: 5
+        env:
+          AGENT: ${{ matrix.agent }}
+          DOCKERFILE: ${{ matrix.dockerfile }}
+        run: |
+          docker run --rm \
+            -v "${PWD}/.github/scripts/smoke-test.sh:/tmp/smoke-test.sh:ro" \
+            -v "${PWD}/${DOCKERFILE}:/tmp/Dockerfile:ro" \
+            "paddock-smoke:${AGENT}" \
+            bash /tmp/smoke-test.sh /tmp/Dockerfile "${AGENT}"
+
+  # README.rst is both the docs landing page and PyPI's long description,
+  # and Sphinx accepts roles (`:doc:`, `:ref:`) that PyPI's renderer
+  # rejects, so the docs build alone can't vouch for the PyPI page.
+  readme:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Clone repo
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install uv
+        uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
+      - name: Check PyPI renders the README
+        run: |
+          uv build
+          uvx twine@7.0.0 check --strict dist/*

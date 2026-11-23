@@ -1,0 +1,17 @@
+# Changes here will be overwritten by Copier
+_commit: 1.4.0
+_src_path: https://github.com/todofixthis/cookiecutter-py.git
+author_email: phx@phx.nz
+author_name: Phoenix Zerin
+copyright_holder: Phoenix Zerin
+copyright_year: 2026
+docs_site: true
+github_project_name: paddock
+github_username: todofixthis
+package_name: paddock
+project_name: paddock
+project_short_description: Launch coding agents in isolated Docker containers.
+pypi_project_name: phx-paddock
+python_version: '3.14'
+readthedocs_slug: phx-paddock
+version: 1.1.0

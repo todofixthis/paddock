@@ -1,3 +1,6 @@
+# No type checking in this file, please (:
+# type: ignore
+
 # Configuration file for the Sphinx documentation builder.
 #
 # For the full list of built-in configuration values, see the documentation:
@@ -16,32 +19,19 @@ author = "Phoenix Zerin"
 extensions = [
     "sphinx.ext.autodoc",
     "sphinx.ext.autosectionlabel",
+    "sphinx.ext.intersphinx",
     "sphinx.ext.napoleon",
 ]
 
-# ADRs, deferred features and plans are for contributors and coding agents,
-# read on GitHub; only the user-facing pages are published.
-exclude_patterns = [
-    ".DS_Store",
-    "Thumbs.db",
-    "_build",
-    "adr",
-    "future",
-    "superpowers",
-]
+templates_path = ["_templates"]
+exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
 
 language = "en-nz"
-
-# Report unresolved Python cross-references, which -W then fails the build on
-nitpicky = True
-# The standard library's types have no target here: there is no intersphinx.
-nitpick_ignore = [("py:class", "collections.abc.Mapping")]
 
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
 
 html_theme = "sphinx_rtd_theme"
-
 # Styles the reference table in usage/configuration.rst, which outgrows the
 # theme's content column
 html_css_files = ["paddock.css"]
@@ -49,16 +39,23 @@ html_static_path = ["_static"]
 
 # -- Options for autosectionlabel extension ----------------------------------
 # https://www.sphinx-doc.org/en/master/usage/extensions/autosectionlabel.html#configuration
-# Prefixing with the document name keeps same-titled sections on different
-# pages from colliding into duplicate-label warnings.
+# Prefixed, not bare, so a label auto-generated for one page's section can't
+# collide with another page's same-titled section as the docs grow. See
+# https://github.com/todofixthis/cookiecutter-py/blob/main/docs/adr/006-enable-autosectionlabel-with-document-prefixed-labels.md
 autosectionlabel_prefix_document = True
+
+# -- Options for intersphinx extension ---------------------------------------
+# https://www.sphinx-doc.org/en/master/usage/extensions/intersphinx.html#configuration
+intersphinx_mapping = {
+    "python": ("https://docs.python.org/3", None),
+}
 
 # -- Options for autodoc extension -------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/extensions/autodoc.html#configuration
 autoclass_content = "both"
 autodoc_default_options = {
-    "member-order": "alphabetical",
     "members": True,
+    "member-order": "alphabetical",
     "special-members": False,
     "undoc-members": True,
 }
@@ -68,6 +65,7 @@ autodoc_default_options = {
 napoleon_attr_annotations = True
 napoleon_google_docstring = True
 napoleon_numpy_docstring = False
+napoleon_type_aliases = None
 napoleon_use_admonition_for_examples = False
 napoleon_use_admonition_for_notes = False
 napoleon_use_admonition_for_references = False

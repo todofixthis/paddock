@@ -1,9 +1,10 @@
 ---
-status: Accepted
+status: Superseded
 date: 2026-11-09
 scope: [.github/workflows/, .agents/skills/rotate-python-versions/]
 summary: The main and develop ruleset requires only a gate job that runs under always() (not !cancelled()), needs every other CI job, and fails on any result but success, a skip included; a job that may have nothing to do skips its steps, never itself.
 revisit-when: GitHub rulesets can require a check that a condition skipped without passing it unnoticed; CI gains a pull_request or merge_group trigger, or a merge queue; a workflow other than build.yml needs its own required check.
+superseded-by: 24
 ---
 
 # 015: Gate CI on a Single Required Job
