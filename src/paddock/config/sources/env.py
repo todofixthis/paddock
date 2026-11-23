@@ -18,7 +18,7 @@ from paddock.config.sources.base import ConfigSource, LoadResult
 # maps (``build.args``, ``volumes``) have no env form: their keys are user data
 # that the split would break up, and a name's case is lost.
 @filter_macro
-def _env_schema(base_dir: Path):
+def _env_schema(base_dir: Path) -> f.FilterMapper:
     """Macro validating the raw ``PADDOCK_*`` shape.
 
     Args:
@@ -111,7 +111,7 @@ class EnvConfigSource(ConfigSource):
             {},
         )
 
-    def _deep_set(self, node: dict, parts: list[str], value: Any) -> None:
+    def _deep_set(self, node: dict[str, Any], parts: list[str], value: Any) -> None:
         """Deep-set ``value`` in ``node`` at the path described by ``parts``.
 
         Descends into nested dicts, creating sub-dicts as needed. Skips the

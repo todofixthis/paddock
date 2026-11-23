@@ -4,13 +4,14 @@ import shlex
 import subprocess
 import sys
 from pathlib import Path
+from typing import Any
 
 from class_registry.base import BaseRegistry
 
 from paddock.agents import BaseAgent, agent_registry
 from paddock.agents.errors import AgentError
 from paddock.agents.pairing import AgentPairing
-from paddock.agents.servers import ServerConnection, server_registry
+from paddock.agents.servers import BaseServer, ServerConnection, server_registry
 from paddock.cli import parse_args
 from paddock.config.errors import ConfigError, PaddockEnvironmentError
 from paddock.config.loader import ConfigLoader, ResolvedConfig
@@ -68,8 +69,8 @@ def _resolve_pairing(
     agent_key: str,
     server_key: str | None,
     *,
-    agents: BaseRegistry = agent_registry,
-    servers: BaseRegistry = server_registry,
+    agents: BaseRegistry[BaseAgent] = agent_registry,
+    servers: BaseRegistry[BaseServer] = server_registry,
 ) -> AgentPairing:
     """Resolve the chosen client and server, or exit 1 saying why not.
 
@@ -163,7 +164,7 @@ def _start_server(
     return result.connection
 
 
-def _prepare_image(config: dict, agent: BaseAgent) -> None:
+def _prepare_image(config: dict[str, Any], agent: BaseAgent) -> None:
     """Build or pull the image as ``build.policy`` requires, or exit.
 
     A failed build or pull exits with Docker's status, Docker having already
@@ -187,8 +188,8 @@ def _prepare_image(config: dict, agent: BaseAgent) -> None:
 def run(
     argv: list[str] | None = None,
     *,
-    agents: BaseRegistry = agent_registry,
-    servers: BaseRegistry = server_registry,
+    agents: BaseRegistry[BaseAgent] = agent_registry,
+    servers: BaseRegistry[BaseServer] = server_registry,
 ) -> None:
     """Run paddock.
 

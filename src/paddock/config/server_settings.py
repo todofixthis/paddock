@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 import filters as f
 from filters.base import BaseFilter
@@ -19,7 +20,7 @@ class ServerSettings:
     image: str
     """The image to run."""
 
-    build: dict | None
+    build: dict[str, Any] | None
     """The ``build`` table with its defaults applied, or ``None`` when unset."""
 
     port: int | None
@@ -30,7 +31,7 @@ class ServerSettings:
 
     @classmethod
     def from_config(
-        cls, settings: dict, *, key: str, default_image: str | None
+        cls, settings: dict[str, Any], *, key: str, default_image: str | None
     ) -> "ServerSettings":
         """Check a merged ``agents.<key>.server`` table against the disk.
 
@@ -78,8 +79,8 @@ class ServerSettings:
 
     @classmethod
     def _build(
-        cls, build: dict | None, label: str, errors: list[ConfigError]
-    ) -> dict | None:
+        cls, build: dict[str, Any] | None, label: str, errors: list[ConfigError]
+    ) -> dict[str, Any] | None:
         """Apply top-level ``build``'s defaults and resolve its paths.
 
         Args:
@@ -107,7 +108,7 @@ class ServerSettings:
 
     @staticmethod
     def _host_path(
-        value: str, path_filter: BaseFilter, label: str, errors: list[ConfigError]
+        value: str, path_filter: BaseFilter[Path], label: str, errors: list[ConfigError]
     ) -> Path | None:
         """Expand, resolve and check one host path.
 

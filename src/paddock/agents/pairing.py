@@ -37,8 +37,8 @@ class AgentPairing:
         client_key: str,
         server_key: str | None,
         *,
-        agents: BaseRegistry = agent_registry,
-        servers: BaseRegistry = server_registry,
+        agents: BaseRegistry[BaseAgent] = agent_registry,
+        servers: BaseRegistry[BaseServer] = server_registry,
     ) -> "AgentPairing":
         """Look up the chosen client and server and check they can run together.
 
@@ -85,6 +85,6 @@ class AgentPairing:
         return cls(client=client, server=server)
 
     @staticmethod
-    def _installed(registry: BaseRegistry) -> str:
+    def _installed[T](registry: BaseRegistry[T]) -> str:
         """List a registry's keys for a message, or ``none`` when empty."""
         return ", ".join(sorted(str(key) for key in registry)) or "none"

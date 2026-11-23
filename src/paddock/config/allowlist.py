@@ -52,7 +52,7 @@ class Allowlist:
             return value
         return len(value) > 0
 
-    def filter(self, config: dict, source_key: str) -> dict:
+    def filter(self, config: dict[str, Any], source_key: str) -> dict[str, Any]:
         """Return only the config keys permitted for a given source.
 
         Args:
@@ -66,8 +66,8 @@ class Allowlist:
         return self.filter_with_report(config, source_key)[0]
 
     def filter_with_report(
-        self, config: dict, source_key: str
-    ) -> tuple[dict, list[str]]:
+        self, config: dict[str, Any], source_key: str
+    ) -> tuple[dict[str, Any], list[str]]:
         """Return the permitted config plus a report of what was dropped.
 
         Mirrors the ``user``-always-enabled behaviour of :meth:`is_enabled`:
@@ -96,7 +96,7 @@ class Allowlist:
         dropped = sorted(set(self._leaf_paths(config)) - set(self._leaf_paths(kept)))
         return kept, dropped
 
-    def _leaf_paths(self, config: dict, prefix: str = "") -> list[str]:
+    def _leaf_paths(self, config: dict[str, Any], prefix: str = "") -> list[str]:
         """List every leaf of ``config`` as a dotted path.
 
         Descends only where :data:`CONFIG_FIELDS` declares children, so a
@@ -122,7 +122,7 @@ class Allowlist:
                 paths.append(path)
         return paths
 
-    def _project(self, config: dict, paths: list[str]) -> dict:
+    def _project(self, config: dict[str, Any], paths: list[str]) -> dict[str, Any]:
         """Build a new dict from ``config`` containing only the given dotted paths.
 
         Args:
@@ -132,12 +132,14 @@ class Allowlist:
         Returns:
             A new dict containing only the specified paths.
         """
-        out: dict = {}
+        out: dict[str, Any] = {}
         for path in paths:
             self._copy_path(config, out, path.split("."))
         return out
 
-    def _copy_path(self, src: dict, dst: dict, parts: list[str]) -> None:
+    def _copy_path(
+        self, src: dict[str, Any], dst: dict[str, Any], parts: list[str]
+    ) -> None:
         """Copy a single dotted path from ``src`` into ``dst``.
 
         Descends into nested dicts, creating sub-dicts in ``dst`` as needed.

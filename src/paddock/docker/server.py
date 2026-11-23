@@ -5,6 +5,7 @@ import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
+from typing import Any
 
 from paddock.agents.servers import BaseServer, ServerConnection
 from paddock.config.errors import PaddockEnvironmentError
@@ -304,7 +305,7 @@ class ServerLauncher:
             container.remove_stopped(status.container_id)
         return container.start()
 
-    def _prepare_image(self, build: dict) -> None:
+    def _prepare_image(self, build: dict[str, Any]) -> None:
         """Build or pull the server's image under its ``build`` settings.
 
         Docker's own output is the report.

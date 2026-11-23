@@ -44,7 +44,7 @@ class LoadResult:
     """
 
     instance: "f.FilterRunner"
-    meta: dict
+    meta: dict[str, Any]
     discarded: list[Discarded] = field(default_factory=list)
 
 
@@ -54,7 +54,7 @@ class LoadResult:
 # into ``getattr(cls, "WEIGHT")``. A callable here would receive a
 # ``(key, class, lookup_key)`` tuple, not just the class, so a one-arg lambda
 # would break — verified against the installed ``class_registry`` source.
-source_registry: SortedClassRegistry = SortedClassRegistry(
+source_registry: SortedClassRegistry["ConfigSource"] = SortedClassRegistry(
     attr_name="SOURCE_KEY",
     sort_key="WEIGHT",
 )
@@ -108,7 +108,9 @@ class ConfigSource(AutoRegister(source_registry), ABC):  # type: ignore[misc]
             meta return ``meta = {}``.
         """
 
-    def _annotate_source(self, data: dict, source: str | None = None) -> dict[str, Any]:
+    def _annotate_source(
+        self, data: dict[str, Any], source: str | None = None
+    ) -> dict[str, Any]:
         """Wrap each leaf in ``data`` with ``{"value": ..., "source": source}``.
 
         Available to subclasses that want to attach provenance to their raw

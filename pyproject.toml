@@ -102,6 +102,13 @@ files = ["src"]
 module = ["filters", "filters.*"]
 ignore_missing_imports = true
 
+# phx-filters rejects a value by returning `_invalid_value()`'s result (`Any`,
+# `None` by default) from a non-Optional `_apply`. Re-enable both codes once
+# todofixthis/filters#121 makes rejection raise instead.
+[[tool.mypy.overrides]]
+module = ["paddock.config.filters"]
+disable_error_code = ["no-any-return", "return-value"]
+
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["test"]

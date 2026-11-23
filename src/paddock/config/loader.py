@@ -1,13 +1,13 @@
 import logging
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 import filters as f
-
 from class_registry.base import BaseRegistry
 
-from paddock.agents import agent_registry
-from paddock.agents.servers import server_registry
+from paddock.agents import BaseAgent, agent_registry
+from paddock.agents.servers import BaseServer, server_registry
 from paddock.cli import ParsedArgs
 from paddock.config.agent_choice import UNNAMED_SERVER
 from paddock.config.allowlist import Allowlist
@@ -40,7 +40,7 @@ class ResolvedConfig:
             (ADR 019); ``None`` with no server, or one that is not installed.
     """
 
-    config: dict
+    config: dict[str, Any]
     agent_key: str
     server_key: str | None
     extra_args: list[str]
@@ -61,8 +61,8 @@ class ConfigLoader:
         self,
         user_config_path: Path | None = None,
         *,
-        agents: BaseRegistry = agent_registry,
-        servers: BaseRegistry = server_registry,
+        agents: BaseRegistry[BaseAgent] = agent_registry,
+        servers: BaseRegistry[BaseServer] = server_registry,
     ) -> None:
         """Initialises the loader with an optional user config path override.
 
@@ -129,7 +129,7 @@ class ConfigLoader:
         )
 
     def _server_settings(
-        self, config: dict, server_key: str | None
+        self, config: dict[str, Any], server_key: str | None
     ) -> ServerSettings | None:
         """Check the chosen server's settings on disk (ADR 019).
 
@@ -167,7 +167,7 @@ class ConfigLoader:
         """
         return "false" if configured is False else str(configured)
 
-    def _resolve_server(self, agent: dict, agent_key: str) -> str | None:
+    def _resolve_server(self, agent: dict[str, Any], agent_key: str) -> str | None:
         """Resolve the server half of the merged ``agent``, in place.
 
         An unnamed server becomes the merged client's ``DEFAULT_SERVER``
@@ -190,7 +190,7 @@ class ConfigLoader:
         agent["server"] = server
         return server or None
 
-    def _extra_args(self, config: dict, agent_key: str) -> list[str]:
+    def _extra_args(self, config: dict[str, Any], agent_key: str) -> list[str]:
         """Return the configured ``extra_args`` for one agent (ADR 017).
 
         Args:
@@ -201,9 +201,12 @@ class ConfigLoader:
             The arguments to place after the agent's command and before the
             command line's own; empty when the agent has none configured.
         """
-        return config.get("agents", {}).get(agent_key, {}).get("extra_args", [])
+        extra_args: list[str] = (
+            config.get("agents", {}).get(agent_key, {}).get("extra_args", [])
+        )
+        return extra_args
 
-    def _warn_unknown_agent_settings(self, config: dict) -> None:
+    def _warn_unknown_agent_settings(self, config: dict[str, Any]) -> None:
         """Warn about ``agents`` settings that name nothing installed.
 
         ``extra_args`` needs a client of that name and ``server`` a server of
@@ -232,7 +235,7 @@ class ConfigLoader:
                     self._installed(self._servers),
                 )
 
-    def _installed(self, registry: BaseRegistry) -> str:
+    def _installed[T](self, registry: BaseRegistry[T]) -> str:
         """List a registry's keys for a message, or ``none`` when empty."""
         return ", ".join(sorted(str(key) for key in registry)) or "none"
 
@@ -314,7 +317,7 @@ class ConfigLoader:
         self,
         results: dict[str, LoadResult],
         allowlist: Allowlist,
-    ) -> dict[str, dict]:
+    ) -> dict[str, dict[str, Any]]:
         """Filter every source's cleaned data through the allowlist.
 
         Consolidates the dropped keys into a single warning per source.
@@ -328,7 +331,7 @@ class ConfigLoader:
         Returns:
             The allowlisted config data keyed by source key.
         """
-        sanitised: dict[str, dict] = {}
+        sanitised: dict[str, dict[str, Any]] = {}
         for key, result in results.items():
             # dict() coercion drops once todofixthis/filters#98 types
             # cleaned_data.
@@ -355,7 +358,7 @@ class ConfigLoader:
                 )
         return sanitised
 
-    def _merge(self, sanitised: dict[str, dict]) -> dict:
+    def _merge(self, sanitised: dict[str, dict[str, Any]]) -> dict[str, Any]:
         """Deep-merge sanitised source data in registry (= WEIGHT) order.
 
         Args:
@@ -364,7 +367,7 @@ class ConfigLoader:
         Returns:
             The merged config dict with defaults applied.
         """
-        merged: dict = {}
+        merged: dict[str, Any] = {}
         for key in sanitised:
             merged = self._deep_merge(merged, sanitised[key])
         return self._apply_defaults(merged)
@@ -381,7 +384,7 @@ class ConfigLoader:
         user_meta = results["user"].meta
         po_meta = results["project_overrides"].meta
 
-        def _explicit(allowlist: dict | None) -> dict:
+        def _explicit(allowlist: dict[str, Any] | None) -> dict[str, Any]:
             # Keep only keys the user actually set; drop the None placeholders
             # the mapper injects for unset keys so class defaults survive the
             # overlay.
@@ -424,7 +427,9 @@ class ConfigLoader:
                     errors.append(ConfigError(f"[{label}] {msg['message']}"))
         return ExceptionGroup("config validation failed", errors)
 
-    def _deep_merge(self, base: dict, override: dict) -> dict:
+    def _deep_merge(
+        self, base: dict[str, Any], override: dict[str, Any]
+    ) -> dict[str, Any]:
         """Recursively merge ``override`` into ``base``.
 
         Args:
@@ -446,7 +451,7 @@ class ConfigLoader:
                 result[key] = value
         return result
 
-    def _apply_defaults(self, config: dict) -> dict:
+    def _apply_defaults(self, config: dict[str, Any]) -> dict[str, Any]:
         """Apply default values for omitted config keys.
 
         Mutates and returns ``config``.
