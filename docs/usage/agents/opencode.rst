@@ -200,9 +200,9 @@ server:
 - **The host directory must exist.** If you have never run OpenCode on the host, the run
   stops:
 
-   ::
+  .. code:: text
 
-      [agents.opencode.server.volumes.~/.local/share/opencode] Path '~/.local/share/opencode' does not exist or cannot be resolved (checked /home/alice/.local/share/opencode).
+     [agents.opencode.server.volumes.~/.local/share/opencode] Path '~/.local/share/opencode' does not exist or cannot be resolved (checked /home/alice/.local/share/opencode).
 
 Only the data directory can be shared. The interface's state, prompt history and open
 tabs, stays in the client's volume.
@@ -243,12 +243,12 @@ Sharing has three further costs:
   ``opencode`` on the host, run as an ordinary user, then failed with ``PermissionDenied
   … makeDirectory (…/opencode/log)``. Take the files back before using the host's:
 
-   .. code:: bash
+  .. code:: bash
 
-      sudo chown -R "$(id -u):$(id -g)" ~/.local/share/opencode
+     sudo chown -R "$(id -u):$(id -g)" ~/.local/share/opencode
 
-   So the way back to the host's OpenCode is: stop the server, take the files back, then
-   run ``opencode``.
+  So the way back to the host's OpenCode is: stop the server, take the files back, then
+  run ``opencode``.
 
 The client's image
 ------------------

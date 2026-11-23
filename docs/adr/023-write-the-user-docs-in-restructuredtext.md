@@ -107,7 +107,8 @@ drops content from the docs site while the build passes.
   in CI.
 - The README links to other docs pages by absolute URL on `/en/latest/`, and to
   repository files by GitHub URL, since a relative path resolves differently in each
-  renderer. Nothing checks these links.
+  renderer. Nothing checks these links, and a PyPI page for an older release links to
+  the latest docs.
 - The README's headings are the landing page's sections and anchors, and its `contents`
   directive the landing page's only in-page navigation. [`autosectionlabel`][] gives
   every heading a document-prefixed label, so two headings with the same text in one
@@ -121,8 +122,10 @@ drops content from the docs site while the build passes.
 - The reference table's `paddock-reference` class keeps the styling in
   `docs/_static/paddock.css`, which pins its header row and directive column.
 - Renovate's manager for the Ubuntu tags in the user docs matches `.rst` pages.
-- The adoption of the template decides which of these settings converge with its
-  `docs/conf.py`, intersphinx and `nitpicky` among them, in an ADR of its own.
+- The template also owns `docs/conf.py` and `docs/index.rst`, whose versions have
+  intersphinx, no `nitpicky`, and a landing page with no README include or `usage/**`
+  toctree. The adoption decides, in an ADR of its own, which of this ADR's settings
+  converge with them and which the project keeps.
 
 [ADR 008]: 008-publish-docs-with-sphinx-and-myst-landing-on-the-readme.md
 [`autosectionlabel`]: https://www.sphinx-doc.org/en/master/usage/extensions/autosectionlabel.html
