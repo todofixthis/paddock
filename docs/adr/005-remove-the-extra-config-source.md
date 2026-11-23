@@ -75,7 +75,7 @@ concrete use case would answer them by construction; today none exists to ask.
 
 ## Consequences
 
-- `docs/usage/project-config.md`'s precedence table drops from six sources to five;
+- `docs/usage/project-config.rst`'s precedence table drops from six sources to five;
   its allowlist section's "sources with no allowlist entry" note drops `extra` from the
   list, leaving `user` and `project_overrides`.
 - [004][]'s subsidiary decision that `extra` and `project_overrides` stay trusted and
@@ -93,7 +93,7 @@ concrete use case would answer them by construction; today none exists to ask.
 [004]: 004-gate-untrusted-config-sources-with-an-allowlist.md
 [`ConfigSource`]: ../../src/paddock/config/sources/base.py
 [`ParsedArgs`]: ../../src/paddock/cli.py
-[project-config]: ../usage/project-config.md
+[project-config]: ../usage/project-config.rst
 [`tests/config/sources/test_base.py`]: ../../tests/config/sources/test_base.py
 [`tests/config/test_loader.py`]: ../../tests/config/test_loader.py
 [`tests/test_cli.py`]: ../../tests/test_cli.py

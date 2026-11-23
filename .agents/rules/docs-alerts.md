@@ -35,4 +35,4 @@ alone whether the admonition applies to them:
 ```
 
 RST can't nest inline markup, so a code span in that line sits between bold runs, as
-above, not inside one.
+above, not inside one; a title that is all code stays an unbolded literal.

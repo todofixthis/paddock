@@ -52,8 +52,8 @@ Docs:
   fallback paragraph.
 - `docs/usage/configuration.rst` Troubleshooting: replace the fallback warning's
   entry with the reworded one. Under `[final:image] Non-empty value expected.`
-  (`configuration.md`) and `project_toml: dropped non-allowlisted keys …`
-  (`project-config.md`), note that with
+  (`configuration.rst`) and `project_toml: dropped non-allowlisted keys …`
+  (`project-config.rst`), note that with
   `XDG_CONFIG_HOME` set, paddock reads only `$XDG_CONFIG_HOME/paddock/`, since
   those are the errors a skipped legacy file produces.
 - Release notes (written through the `release` skill, published as the GitHub

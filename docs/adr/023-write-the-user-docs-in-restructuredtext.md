@@ -1,9 +1,9 @@
 ---
 status: Accepted
 date: 2026-11-23
-scope: [.agents/rules/docs-alerts.md, .autohooks/docs_build.py, .github/workflows/build.yml, .readthedocs.yaml, README.rst, docs/api.rst, docs/conf.py, docs/index.rst, docs/usage/, pyproject.toml, renovate.json]
-summary: Write the user pages under docs/usage/ in reStructuredText, built by Sphinx without myst-parser, with asides as RST admonitions (`.. caution::`), not GitHub alerts; otherwise ADR 008 stands, restated here, with README.rst included as the landing page, strict (-W) builds in the pre-commit hook, CI and ReadTheDocs, nitpicky on, and twine check on the README in CI.
-revisit-when: The docs stop being hosted on ReadTheDocs; the README needs a construct GitHub, PyPI or Sphinx cannot render; the README stops being RST.
+scope: [.agents/rules/docs-alerts.md, .autohooks/docs_build.py, .github/workflows/build.yml, .readthedocs.yaml, README.rst, docs/_static/, docs/api.rst, docs/conf.py, docs/index.rst, docs/usage/, pyproject.toml, renovate.json]
+summary: Build the docs with Sphinx (not MkDocs), with the user pages under docs/usage/ in reStructuredText (not Markdown through myst-parser), asides as RST admonitions, and a landing page that includes README.rst rather than copying it, so the README must render on GitHub, PyPI and Sphinx alike; build strictly (-W, nitpicky) in a pre-commit hook, CI and ReadTheDocs, without intersphinx.
+revisit-when: The docs stop being hosted on ReadTheDocs; a published page needs to cross-reference Python's own documentation; the README needs a construct GitHub, PyPI or Sphinx cannot render; the README stops being RST.
 ---
 
 # 023: Write the User Docs in reStructuredText
@@ -25,58 +25,112 @@ their own here:
   and asides use GitHub alerts, which need myst-parser's `alert` extension.
 - The configuration reference table needs code blocks in its cells, which Markdown
   tables can't hold, so it is a raw HTML table with Markdown inside each cell.
-- The pages, the README and the API page are written in two markup languages.
+- The user pages, the README and the API page are written in two markup languages.
 
-The unpublished parts of `docs/` aren't built by Sphinx, so they can stay Markdown.
+This ADR restates ADR 008 with the user pages' markup changed, and supersedes it. The
+unpublished parts of `docs/` aren't built by Sphinx, so they stay Markdown.
 
 ## Options
 
 ### Option 1: Do nothing
 
-Keep the user pages Markdown.
+Keep the user pages Markdown, through myst-parser.
 
+**Pros:** GitHub renders the pages, links included, as it does any Markdown file.
 **Cons:** Converging with the template's docs would mean keeping myst-parser and its
-configuration in a `docs/conf.py` the template owns, a divergence on every template
-update.
+settings in a `docs/conf.py` the template owns, a divergence on every template update.
 
 ### Option 2: Convert the user pages to RST (Accepted)
 
 Convert the five pages under `docs/usage/` to RST and drop myst-parser.
 
-**Cons:** A one-off rewrite of every page, mechanical but large. Cross-page links become
-`:ref:` and `:doc:` roles, whose link text can't hold inline code, so a link to
-`` `image` `` renders as plain linked text. A heading whose text holds inline code gets
-an explicit label, since `autosectionlabel` names it after its raw source.
+**Cons:** A one-off rewrite of every page, mechanical but large. On GitHub, the pages'
+`:ref:` and `:doc:` links show as raw roles rather than links. Link text can't hold
+inline code, so a link to `image` renders as plain linked text. A heading whose text
+holds inline code needs an explicit label, since `autosectionlabel` names it after its
+raw source.
 
 ## Decision
 
-Option 2. The template's docs are RST, so converting now removes the one docs divergence
-that would otherwise outlive the adoption, and the reference table becomes a plain
-`list-table` rather than raw HTML. The Markdown elsewhere in `docs/` isn't published, so
-it never needed one markup with the pages.
+Option 2. The template's docs are RST, so converting now removes the docs divergence
+that would otherwise outlive the adoption, and the reference table becomes a
+`list-table` rather than raw HTML. The Markdown elsewhere in `docs/` isn't published,
+so it never needed one markup with the pages. GitHub is not where readers read the user
+pages: the docs site is.
 
-Everything else ADR 008 decided stands, restated here:
+What ADR 008 decided otherwise stands, restated here.
 
-- The landing page is a single `.. include:: ../README.rst` plus hidden toctrees, so the
-  README renders on GitHub, PyPI and Sphinx alike, from one source.
-- The pre-commit hook, CI and ReadTheDocs (`fail_on_warning`) all build strictly
-  (`-W`), and `nitpicky` is on. CI also runs `twine check --strict` on the built
-  package, since Sphinx accepts roles PyPI's renderer rejects.
-- The published pages are the README, everything under `docs/usage/` and the API page;
-  ADRs, deferred features and plans stay unpublished.
+**Toolchain.** Sphinx with the [`sphinx_rtd_theme`][], and autodoc with napoleon for the
+[`paddock.agents`][] extension point, mirroring [todofixthis/filters][filters] so
+conventions carry between projects. MkDocs would be a second toolchain across the
+maintainer's projects, with no autodoc equivalent short of a plugin.
+
+**Strict builds.** A pre-commit hook, CI and ReadTheDocs (`fail_on_warning`) all build
+with `-W`; CI does too because `--no-verify` and editor commits skip the hook. `nitpicky`
+is on, since without it an unresolved Python cross-reference renders as plain text and
+the build stays green. There is no intersphinx: nothing published cites Python's docs,
+and fetching its inventory makes every docs-affecting commit depend on the network.
+
+**Published pages.** The README as the landing page, everything under `docs/usage/`, and
+the API page. ADRs, deferred features and plans stay unpublished: they are for
+contributors and coding agents, read on GitHub.
+
+**The landing page includes the README.** [`docs/index.rst`][] is a single
+`.. include:: ../README.rst` followed by hidden toctrees, which drive the sidebar
+without rendering on the page. It is the only option with one source and no generator
+that keeps the full reference on GitHub and PyPI, where most readers first land.
+Copying the README into the docs gives two copies nothing keeps in step; slimming the
+README to a pointer moves the quick start away from where readers land; generating the
+README from the docs needs a generator, a currency check and a PyPI-safe rendering
+Sphinx doesn't produce. RST comment markers could keep the README's link to the docs
+site off the docs site, by including the README twice around them. That was tried and
+dropped: a link to the page you're on is harmless, and a misplaced marker silently
+drops content from the docs site while the build passes.
 
 ## Consequences
 
 - An aside is an RST admonition (`.. caution::`, `.. warning::` or `.. note::`), chosen
-  as `.agents/rules/docs-alerts.md` says; GitHub no longer renders the user pages as
-  styled Markdown.
-- The `docs` dependency group drops myst-parser, `docs/conf.py` drops its MyST settings
-  and `source_suffix`, and the pre-commit hook no longer builds the docs for a staged
-  `docs/*.md`, so ADR-only commits skip the Sphinx build.
+  and titled as `.agents/rules/docs-alerts.md` says. Troubleshooting entries are a
+  definition list, whose terms the theme sets in bold even when a term is all code.
+- The `docs` dependency group holds Sphinx and the theme; `dev` includes it so the
+  pre-commit hook can build. CI and ReadTheDocs sync with
+  `--no-default-groups --group docs`: the project, for autodoc, plus the docs tools.
+  Dropping the project (`--only-group`) breaks autodoc.
+- A commit staging `README.rst`, `docs/*.rst`, `docs/conf.py`, `pyproject.toml` or
+  `src/*.py` runs a full (`-E`), strict Sphinx build; ADR-only commits don't. The hook
+  builds the working tree, not the staged snapshot, so an unstaged fix can mask a
+  broken staged page; CI builds the commit and catches it.
+- Sphinx accepts roles such as `:doc:` and `:ref:` that PyPI's [`readme_renderer`][]
+  rejects, so the strict build can't vouch for the PyPI page. CI's `docs` job also
+  builds the package and runs [`twine check --strict`][twine] on it. The pre-commit
+  hook doesn't, so a README that breaks PyPI's renderer passes locally and fails only
+  in CI.
+- The README links to other docs pages by absolute URL on `/en/latest/`, and to
+  repository files by GitHub URL, since a relative path resolves differently in each
+  renderer. Nothing checks these links.
+- The README's headings are the landing page's sections and anchors, and its `contents`
+  directive the landing page's only in-page navigation. [`autosectionlabel`][] gives
+  every heading a document-prefixed label, so two headings with the same text in one
+  document fail the strict build, though GitHub and PyPI accept them.
+- Sphinx applies smart quotes and docutils does not, so a bare `--` or `'` in prose,
+  link text included, renders differently on the docs site.
+- Every type the API page's signatures name must itself be documented there, which is
+  why the page carries `VolumeSpec`.
+- Any page under `docs/usage/`, nested or not, is published through the landing page's
+  `usage/**` glob toctree.
+- The reference table's `paddock-reference` class keeps the styling in
+  `docs/_static/paddock.css`, which pins its header row and directive column.
 - Renovate's manager for the Ubuntu tags in the user docs matches `.rst` pages.
-- Converging the rest of the Sphinx configuration with the template, intersphinx and
-  `nitpicky` included, belongs to the adoption.
+- The adoption of the template decides which of these settings converge with its
+  `docs/conf.py`, intersphinx and `nitpicky` among them, in an ADR of its own.
 
 [ADR 008]: 008-publish-docs-with-sphinx-and-myst-landing-on-the-readme.md
+[`autosectionlabel`]: https://www.sphinx-doc.org/en/master/usage/extensions/autosectionlabel.html
 [cookiecutter-py]: https://github.com/todofixthis/cookiecutter-py
+[`docs/index.rst`]: ../index.rst
+[filters]: https://github.com/todofixthis/filters
 [myst-parser]: https://myst-parser.readthedocs.io/
+[`paddock.agents`]: ../../src/paddock/agents/__init__.py
+[`readme_renderer`]: https://github.com/pypa/readme_renderer
+[`sphinx_rtd_theme`]: https://sphinx-rtd-theme.readthedocs.io/
+[twine]: https://twine.readthedocs.io/

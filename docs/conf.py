@@ -37,7 +37,6 @@ nitpicky = True
 # The standard library's types have no target here: there is no intersphinx.
 nitpick_ignore = [("py:class", "collections.abc.Mapping")]
 
-
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
 
