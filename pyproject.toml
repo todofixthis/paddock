@@ -36,7 +36,7 @@ classifiers = [
 ]
 dependencies = [
     "phx-class-registry>=5.2.1,<6.0.0",
-    "phx-filters>=3.7.0,<4.0.0",
+    "phx-filters>=4.0.0a2,<5",
 ]
 description = "Launch coding agents in isolated Docker containers."
 dynamic = ["version"]
@@ -104,7 +104,7 @@ ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
-testpaths = ["tests"]
+testpaths = ["test"]
 
 [tool.tox]
 env_list = ["3.12", "3.13", "3.14"]
