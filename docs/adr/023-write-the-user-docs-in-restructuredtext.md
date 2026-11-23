@@ -117,8 +117,9 @@ drops content from the docs site while the build passes.
   link text included, renders differently on the docs site.
 - Every type the API page's signatures name must itself be documented there, which is
   why the page carries `VolumeSpec`.
-- Any page under `docs/usage/`, nested or not, is published through the landing page's
-  `usage/**` glob toctree.
+- A page directly under `docs/usage/` or `docs/usage/agents/` is published through the
+  landing page's `usage/*` and `usage/agents/*` glob toctree; a page nested any deeper
+  needs a glob of its own.
 - The reference table's `paddock-reference` class keeps the styling in
   `docs/_static/paddock.css`, which pins its header row and directive column.
 - Renovate's manager for the Ubuntu tags in the user docs matches `.rst` pages.
