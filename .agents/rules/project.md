@@ -15,15 +15,15 @@ Every non-trivial function and method has a docstring explaining its purpose, in
 
 Never carve a long function into labelled regions with banner or divider comments (`# ----`, `# Phase 3c: …`): extract each region into a well-named method instead.
 
-In the template-owned `pyproject.toml`, paddock's own content is `[project]`'s dependencies, keywords and classifiers, the `paddock.agents` and `paddock.servers` entry points, the `paddock` script, `pytest-mock` in both the `dev` and `ci` groups, `images` in the sdist, the `paddock.config.filters` mypy override, and the RUF012 ignore. Edit them here and keep them through a template-update conflict.
+In the template-owned `pyproject.toml`, paddock's own content is `[project]`'s dependencies, keywords and classifiers, the `paddock.agents` and `paddock.servers` entry points, the `paddock` script, `pytest-mock` in both the `dev` and `ci` groups, `images` in the sdist, the `paddock.config.filters` mypy override, and the RUF012 ignore. In the template-owned `renovate.json`, it is every custom manager but the phx-adr one, and every package rule but the template's "Never bump Python" rule. The `PYTHON_VERSION` rule must stay after that one, which it overrides for the Dockerfiles and `README.rst`: moved above it, the Dockerfiles' Python silently stops being bumped. Edit all of these here and keep them through a template-update conflict.
 
 ## CI
 
-Paddock's own jobs are in `.github/workflows/project.yml`: `changes` and `image`, which build and smoke-test each bundled Dockerfile when a change touches the image (ADR 016), and `readme`, which checks that PyPI renders `README.rst`. `.github/workflows/weekly.yml` calls the same workflow on a schedule, so a broken upstream input surfaces without a commit. A file that changes what the image contains or how it's tested goes in `changes`' path list.
+Paddock's own jobs are in `.github/workflows/project.yml`: `changes` and `image`, which build and smoke-test each bundled Dockerfile when a change touches the bundled images (ADR 016), and `readme`, which checks that PyPI renders `README.rst`. `.github/workflows/weekly.yml` calls the same workflow on a schedule, so a broken upstream input surfaces without a commit. A file that changes what the bundled images contain or how they're tested goes in `changes`' path list. A new bundled agent also needs, beside its `images/<agent>.Dockerfile` (ADR 022), an entry in `image`'s matrix, a `case` in `.github/scripts/smoke-test.sh` and Renovate managers for its pins: without the matrix entry its Dockerfile is never built, and the check still passes.
 
 ## Docs
 
-The docs landing page includes `README.rst`, so the README must render on GitHub, PyPI and Sphinx alike (ADR 025). The user pages are RST under `docs/usage/`. Two lines in template-owned files are paddock's own: `README.rst` in the docs pre-commit hook's `INCLUDE`, and `html_css_files` in `docs/conf.py`.
+The docs landing page includes `README.rst`, so the README must render on GitHub, PyPI and Sphinx alike (ADR 025): link from it to a docs page by absolute URL on `/en/latest/`, and to a repository file by GitHub URL, never by relative path, which resolves differently in each. The user pages are RST under `docs/usage/`. Two changes in template-owned files are paddock's own, each with its comment: `README.rst` in the docs pre-commit hook's `INCLUDE`, and `html_css_files` in `docs/conf.py`.
 
 ## Tests
 
@@ -35,4 +35,4 @@ The existing tests predate `.agents/rules/testing.md`, and many have no docstrin
 
 ## Python versions
 
-The bundled Dockerfiles' `PYTHON_VERSION` (and its copy in `README.rst`) sets the containers' Python, not the range paddock supports: the `rotate-python-versions` skill leaves it alone, and Renovate bumps it.
+The bundled Dockerfiles' `PYTHON_VERSION` (and its copy in `README.rst`) sets the containers' Python, not the range paddock supports: leave it alone when rotating Python versions, since Renovate bumps it.
