@@ -34,6 +34,8 @@ class AgentHalf(BaseFilter[str | bool]):
 
         # Anything else must already be a string: f.Unicode would stringify
         # a table or a number into a name.
+        # Assigned first: returned directly, mypy infers the chain against
+        # this filter's own output type and rejects it.
         name = self._filter(value, f.Type(str) | f.Unicode | f.NotEmpty)
         return name
 

@@ -83,10 +83,10 @@ concrete use case would answer them by construction; today none exists to ask.
   change, since `project_overrides` still stands as its subject.
 - `--config-file` and `PADDOCK_CONFIG_FILE` become unrecognised; no deprecation path is
   provided, since neither had a known production caller.
-- `tests/config/sources/test_extra.py` is deleted along with the source it tests. Every
+- `test/config/sources/test_extra.py` is deleted along with the source it tests. Every
   test elsewhere naming `config_file` or `extra` directly — CLI parsing
-  ([`tests/test_cli.py`][]), loader precedence ([`tests/config/test_loader.py`][]),
-  registry weight order ([`tests/config/sources/test_base.py`][]) — is updated to drop
+  ([`test/test_cli.py`][]), loader precedence ([`test/config/test_loader.py`][]),
+  registry weight order ([`test/config/sources/test_base.py`][]) — is updated to drop
   it; every other source test's `ParsedArgs` fixture drops its `config_file=None` field.
 
 [003]: 003-load-config-through-a-registry-of-sources.md
@@ -94,6 +94,6 @@ concrete use case would answer them by construction; today none exists to ask.
 [`ConfigSource`]: ../../src/paddock/config/sources/base.py
 [`ParsedArgs`]: ../../src/paddock/cli.py
 [project-config]: ../usage/project-config.md
-[`tests/config/sources/test_base.py`]: ../../tests/config/sources/test_base.py
-[`tests/config/test_loader.py`]: ../../tests/config/test_loader.py
-[`tests/test_cli.py`]: ../../tests/test_cli.py
+[`test/config/sources/test_base.py`]: ../../test/config/sources/test_base.py
+[`test/config/test_loader.py`]: ../../test/config/test_loader.py
+[`test/test_cli.py`]: ../../test/test_cli.py
