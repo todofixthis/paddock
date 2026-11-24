@@ -1,0 +1,18 @@
+# Weekly, so an upstream change that breaks the image build (an apt package,
+# the deadsnakes PPA, NodeSource's setup script, the Ubuntu tag) surfaces
+# without waiting for a commit to touch images/. Runs on the default branch.
+# A scheduled run has no previous push to diff against, so project.yml's
+# `changes` job always builds.
+name: Weekly image build
+
+on:
+  schedule:
+    - cron: "43 19 * * 0"
+
+permissions:
+  contents: read
+
+jobs:
+  project:
+    uses: ./.github/workflows/project.yml
+    secrets: inherit

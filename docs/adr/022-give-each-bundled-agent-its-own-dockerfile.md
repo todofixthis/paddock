@@ -1,7 +1,7 @@
 ---
 status: Accepted
 date: 2026-11-17
-scope: [images/, src/paddock/agents/, pyproject.toml, .github/workflows/build.yml, .github/scripts/, renovate.json, README.rst, docs/usage/]
+scope: [images/, src/paddock/agents/, pyproject.toml, .github/workflows/project.yml, .github/scripts/, renovate.json, README.rst, docs/usage/]
 summary: images/ holds one Dockerfile per bundled agent, named <agent>.Dockerfile (claude.Dockerfile, opencode.Dockerfile), each complete in itself and pinned and smoke-tested as ADR 016 requires; not one Dockerfile holding every agent's install, not a shared base image, and not one multi-stage file with a target per agent; every bundled agent still passes AGENT to its build, so each file declares it, and claude.Dockerfile keeps its claude and none cases, none being what agent = false builds; OpenCode's one file serves both its client and its server.
 revisit-when: The toolchain steps the Dockerfiles repeat are found to have drifted apart; paddock publishes images to a registry; a bundled agent needs more than one image, as OpenCode's client and server might.
 ---

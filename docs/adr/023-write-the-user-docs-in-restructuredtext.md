@@ -1,9 +1,10 @@
 ---
-status: Accepted
+status: Superseded
 date: 2026-11-23
-scope: [.agents/rules/docs-alerts.md, .autohooks/docs_build.py, .github/workflows/build.yml, .readthedocs.yaml, README.rst, docs/_static/, docs/api.rst, docs/conf.py, docs/index.rst, docs/usage/, pyproject.toml, renovate.json]
+scope: [.agents/rules/docs-admonitions.md, .autohooks/docs_build.py, .github/workflows/build.yml, .readthedocs.yaml, README.rst, docs/_static/, docs/api.rst, docs/conf.py, docs/index.rst, docs/usage/, pyproject.toml, renovate.json]
 summary: Build the docs with Sphinx (not MkDocs), with the user pages under docs/usage/ in reStructuredText (not Markdown through myst-parser), asides as RST admonitions, and a landing page that includes README.rst rather than copying it, so the README must render on GitHub, PyPI and Sphinx alike; build strictly (-W, nitpicky) in a pre-commit hook, CI and ReadTheDocs, without intersphinx.
 revisit-when: The docs stop being hosted on ReadTheDocs; a published page needs to cross-reference Python's own documentation; the README needs a construct GitHub, PyPI or Sphinx cannot render; the README stops being RST.
+superseded-by: 25
 ---
 
 # 023: Write the User Docs in reStructuredText
