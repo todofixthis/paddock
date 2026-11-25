@@ -39,16 +39,19 @@ from filters.base import BaseFilter
 
 
 @f.filter_macro
-def Text() -> f.FilterChain[str]:
-    return f.Unicode | f.Strip | f.NotEmpty
+def Text(max_length: int | None = None) -> f.FilterChain[str]:
+    # Annotated, or mypy reads `f.Unicode | f.Strip` as a union of types
+    chain: f.FilterChain[str] = f.Unicode | f.Strip | f.NotEmpty
+    return chain if max_length is None else chain | f.MaxLength(max_length)
 
 
 @f.filter_macro
 def PostSchema() -> BaseFilter[dict[str, Any]]:
     return f.FilterMapper(
         {
-            "summary": Text | f.MaxLength(500),
-            "title": f.Required | Text | f.MaxLength(80),
+            "summary": Text(max_length=500),
+            "tag": Text,
+            "title": f.Required | Text(max_length=80),
         },
         allow_extra_keys=False,
     )
@@ -59,8 +62,9 @@ runner = f.FilterRunner(PostSchema, data)
 ```
 
 - **A macro is a filter class.** Each place that uses it, bare or in `|`, builds a new chain, and `FilterRunner(PostSchema, data)` builds one per run.
-- **Name a new macro without parameters like a filter class** (`Text`), as filters are named. Where existing code or the task already fixes the name, such as `create_post_schema`, keep it: casing doesn't change how a macro composes, and an alias only adds a second name. A macro with parameters is called with its arguments (`BoundedText(max_length=80)`), and `f.filter_macro(f.MaxLength, 80)` presets an existing filter's arguments.
-- **Annotate the return type with the output type** (`-> f.FilterChain[str]`, `-> BaseFilter[dict[str, Any]]`). Without it, the macro's output types as `Any`.
+- **Name a new macro like a filter class** (`Text`), as filters are named. Where existing code or the task already fixes the name, such as `create_post_schema`, keep it: casing doesn't change how a macro composes, and an alias only adds a second name.
+- **Give every macro parameter a default.** The macro then composes bare like a filter class (`"tag": Text`), and a caller passes only what differs (`Text(max_length=80)`). Calling a macro builds a filter instance, so call it only inside a macro body, including a schema built there. A module-level schema holding a macro call is itself a shared instance. For a named variant, preset the macro instead: `ShortText = f.filter_macro(Text, max_length=80)` is another macro, and `f.filter_macro(f.MaxLength, 80)` presets a built-in filter the same way. mypy doesn't check a macro's arguments, so a misspelt keyword or a missing required argument raises `TypeError` only when the schema is built: test each schema by running it at least once.
+- **Annotate the return type with the output type** (`-> f.FilterChain[str]`, `-> BaseFilter[dict[str, Any]]`). Without it, the macro's output types as `Any`. Annotate a chain assigned to a variable too, as `Text` does: mypy reads an unannotated `f.Unicode | f.Strip` as a union of the two classes, not a chain.
 - **Build every filter inside the macro's body.** A macro that returns, nests or `|`-extends a module-level filter instance shares that instance on every call. Likewise, a custom filter's `__init__` stores a macro class or a new instance, never a module-level filter instance. Constants that aren't filters, such as a frozenset of choices or a compiled regex, can stay at module level.
 - `f.filter_macro` and `filters.macros.filter_macro` are the same function.
 
