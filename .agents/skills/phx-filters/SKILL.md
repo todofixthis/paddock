@@ -1,6 +1,6 @@
 ---
 name: phx-filters
-description: Use when writing or debugging phx-filters validation code in this project — covers filter composition, custom filters, FilterMapper, FilterRepeater, and the project's ordering conventions
+description: Use when writing or debugging phx-filters validation code in this project, including reusing a chain or schema in several places or running one from several threads — covers filter composition, filter_macro, custom filters, FilterMapper, FilterRepeater, and the project's ordering conventions
 ---
 
 # Working with phx-filters
@@ -26,6 +26,51 @@ f.Unicode | Filepath
 # Non-default args always require brackets
 f.Unicode | Filepath(home_dir="...")
 ```
+
+## Share a chain or schema as a `filter_macro`
+
+Define a chain or schema as a filter macro wherever one instance of it would otherwise be held by more than one chain, schema or run. That includes two fields, two schemas, a schema plus a direct `FilterRunner` call, and one schema run from several threads. It also includes a module-level instance referenced only once, if that reference is in a macro body, a custom filter's `__init__` or any function called more than once. A filter instance built and used by exactly one run is fine. Where you can't tell, as in library or web code that may run on several threads, use a macro.
+
+```python
+from typing import Any
+
+import filters as f
+from filters.base import BaseFilter
+
+
+@f.filter_macro
+def Text() -> f.FilterChain[str]:
+    return f.Unicode | f.Strip | f.NotEmpty
+
+
+@f.filter_macro
+def PostSchema() -> BaseFilter[dict[str, Any]]:
+    return f.FilterMapper(
+        {
+            "summary": Text | f.MaxLength(500),
+            "title": f.Required | Text | f.MaxLength(80),
+        },
+        allow_extra_keys=False,
+    )
+
+
+# Each FilterRunner gets its own schema, so this is safe from any thread
+runner = f.FilterRunner(PostSchema, data)
+```
+
+- **A macro is a filter class.** Each place that uses it, bare or in `|`, builds a new chain, and `FilterRunner(PostSchema, data)` builds one per run.
+- **Name a new macro without parameters like a filter class** (`Text`), as filters are named. Where existing code or the task already fixes the name, such as `create_post_schema`, keep it: casing doesn't change how a macro composes, and an alias only adds a second name. A macro with parameters is called with its arguments (`BoundedText(max_length=80)`), and `f.filter_macro(f.MaxLength, 80)` presets an existing filter's arguments.
+- **Annotate the return type with the output type** (`-> f.FilterChain[str]`, `-> BaseFilter[dict[str, Any]]`). Without it, the macro's output types as `Any`.
+- **Build every filter inside the macro's body.** A macro that returns, nests or `|`-extends a module-level filter instance shares that instance on every call. Likewise, a custom filter's `__init__` stores a macro class or a new instance, never a module-level filter instance. Constants that aren't filters, such as a frozenset of choices or a compiled regex, can stay at module level.
+- `f.filter_macro` and `filters.macros.filter_macro` are the same function.
+
+An instance is unsafe to share because it holds per-run state: `parent`, `key`, its handler and its error flag. `|` copies a chain's list of filters but not the filters in it, and `FilterMapper`, `FilterRepeater` and a chain each hold the instance itself. So a shared instance:
+
+- files its errors under another holder's key, even on one thread. Building a `FilterMapper` around it sets its key, and a plain chain never clears it.
+- gives wrong valid-or-invalid verdicts when one module-level schema is run by `FilterRunner` from several threads at once.
+- can be left sending its errors to a finished `FilterRunner`'s handler, after which `apply()` swallows errors instead of raising.
+
+todofixthis/filters#175 tracks the fix in phx-filters.
 
 ## When to use a custom `BaseFilter` subclass
 
@@ -148,14 +193,15 @@ runner = f.FilterRunner(schema, data)
 Use `allow_extra_keys=False` in all project schemas so typos in config files are caught.
 
 For optional nested dicts (e.g. `build`), pass the sub-schema directly — `None` passes through
-`FilterMapper` automatically, so no `f.Optional(None)` prefix is needed:
+`FilterMapper` automatically, so no `f.Optional(None)` prefix is needed. Make the sub-schema a
+macro (see "Share a chain or schema as a `filter_macro`"):
 ```python
-'build': _build_schema
+'build': BuildSchema
 ```
 
 ## `f.FilterRepeater`
 
-Applies a filter to every **value** in a mapping (dict). Keys are left unchanged.
+Applies a filter to every item in a list, or every **value** in a mapping (dict). A mapping's keys are left unchanged.
 
 ```python
 # Apply Volume filter to each value in the volumes dict
