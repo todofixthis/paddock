@@ -92,7 +92,8 @@ alternatives.
   glob of its own.
 - The template's release skill wires a migration guide into an
   upgrade-alert listing in both `docs/index.rst` and `README.rst`, linked
-  from the README by relative path. Paddock's index includes the README, so
+  from the README ~~by relative path~~ by absolute URL from cookiecutter-py
+  1.6.0. Paddock's index includes the README, so
   the listing goes in the README alone, linked by absolute URL;
   `.agents/rules/project.md` overrides the skill to say so.
 - The reference table's `paddock-reference` class keeps the styling in
