@@ -123,8 +123,23 @@ Running commands
 
 .. code-block:: text
 
+<<<<<<< before updating
    paddock [FLAGS] [COMMAND...]
    paddock [FLAGS] -- [ARGS...]
+=======
+1. Build the Project
+~~~~~~~~~~~~~~~~~~~~~
+#. Set ``__version__`` in ``src/paddock/__init__.py`` to the new version,
+   and merge that change into ``main`` through ``develop``. Hatch reads the version
+   from there, since ``pyproject.toml`` declares it dynamic.
+
+#. Check out ``main`` and pull, so the build and the tag below both carry the new
+   version::
+
+      git checkout main && git pull
+
+#. Delete artefacts from previous builds, if applicable::
+>>>>>>> after updating
 
 paddock exits with the container's exit status; ``--dry-run`` exits 0, a
 config error exits 1 and an unknown flag exits 2.
@@ -178,6 +193,7 @@ sessions.
 
 ``false`` (shell)
 ~~~~~~~~~~~~~~~~~
+<<<<<<< before updating
 
 Runs ``/bin/bash``.  Useful for exploring the container environment or
 running ad-hoc commands without a coding agent.
@@ -193,6 +209,9 @@ mounted; see the
 
 Adding agents
 ~~~~~~~~~~~~~
+=======
+#. Upload build artefacts to PyPI::
+>>>>>>> after updating
 
 Additional agents can be registered via the ``paddock.agents`` entry-point
 group in any installed package:
@@ -202,6 +221,7 @@ group in any installed package:
    [project.entry-points."paddock.agents"]
    my-agent = "mypackage.agents:MyAgent"
 
+<<<<<<< before updating
 Each agent must subclass ``paddock.agents.BaseAgent`` and implement
 ``get_command()`` and ``get_volumes()``.
 
@@ -212,6 +232,23 @@ the same ``PROTOCOL``.
 
 Docker Image
 ------------
+=======
+   ``<version>`` must match ``__version__`` on ``main``.
+
+#. Go to the `Releases page for the repo`_.
+#. Click ``Draft a new release``.
+#. Select the tag that you created above.
+#. Specify the title of the release (e.g., ``paddock v1.2.3``).
+#. Write a description for the release.  Make sure to include:
+
+   - Credit for code contributed by community members.
+   - Significant functionality that was added/changed/removed.
+   - Any backwards-incompatible changes and/or migration instructions.
+   - SHA256 hashes of the build artefacts.
+#. GPG-sign the description for the release (ASCII-armoured).
+#. Attach the build artefacts to the release.
+#. Click ``Publish release``.
+>>>>>>> after updating
 
 A ready-to-use Dockerfile for each bundled agent is included in
 `images/ <https://github.com/todofixthis/paddock/tree/main/images>`__.  Each
