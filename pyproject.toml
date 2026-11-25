@@ -22,6 +22,10 @@ keywords = [
     "docker",
     "isolation",
 ]
+
+# Leave out `Development Status`: the version's pre-release segment states it,
+# and a hand-kept classifier goes stale (see
+# https://github.com/todofixthis/cookiecutter-py/blob/main/docs/adr/023-leave-the-development-status-classifier-out-of-generated-projects.md).
 classifiers = [
     "Intended Audience :: Developers",
     "Programming Language :: Python :: 3",
