@@ -109,7 +109,9 @@ routinely authored outside Claude Code, and a fix that can't wait for
   through a pull request, and its rebase of `develop` onto `main` is
   skipped: with the bump already on `develop`, the next release pull
   request doesn't conflict on the version, which was the old back-merge's
-  reason to exist. `.agents/rules/project.md` says so.
+  reason to exist. ~~`.agents/rules/project.md` says so.~~ From cookiecutter-py
+  1.6.0 the template's release skill bumps through a pull request and has
+  no rebase, so `project.md` no longer overrides it.
 
 [ADR 009]: 009-rely-on-the-phx-plugin-for-adr-tooling.md
 [ADR 010]: 010-keep-dependencies-current-with-renovate.md

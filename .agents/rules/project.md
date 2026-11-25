@@ -27,7 +27,7 @@ The docs landing page includes `README.rst`, so the README must render on GitHub
 
 ## Releases
 
-The `main and develop` ruleset requires a pull request for every change and allows only merge commits. So in the `release` skill, open the version bump as a pull request into `develop` rather than pushing it, and open the release pull request only once it merges; skip the final rebase of `develop` onto `main`, which the ruleset rejects and the bump on `develop` makes unnecessary (ADR 024). A migration guide's upgrade-alert bullet goes in `README.rst` alone, which `docs/index.rst` includes, linked by absolute URL on `/en/latest/` like any README link (ADR 025); `docs/index.rst` lists the guide only in its toctree.
+Where the `release` skill puts a migration guide's upgrade-alert bullet in both `README.rst` and `docs/index.rst`, put it in `README.rst` alone, linked by absolute URL on `/en/latest/` like any README link: `docs/index.rst` includes the README, so it lists the guide only in its `Reference` toctree (ADR 025), and the skill's check for the guide's name finds it there once, as a toctree entry, not an alert. The first guide creates the listing: a bullet list above the README's `contents` directive.
 
 ## Tests
 
