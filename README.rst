@@ -232,7 +232,7 @@ installs Python (via the deadsnakes PPA), Node.js and its agent.
      - ``none``
      - ``claude``, or ``none`` for the image without an agent
    * - ``CLAUDE_CODE_VERSION``
-     - ``2.1.325``
+     - ``2.1.326``
      - Claude Code version, for ``AGENT=claude``
    * - ``NODE_VERSION``
      - ``26``
