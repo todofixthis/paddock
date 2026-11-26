@@ -2,8 +2,9 @@
 status: Accepted
 date: 2026-11-23
 scope: [.agents/rules/project.md, .agents/skills/release/, .autohooks/docs_build.py, .github/workflows/project.yml, README.rst, docs/]
-summary: Publish the docs with Sphinx (not MkDocs), the user pages under docs/usage/ in reStructuredText (not Markdown through myst-parser), and a landing page that includes README.rst rather than copying it, so the README must render on GitHub, PyPI and Sphinx alike, which project.yml's readme job checks with twine; strict builds, intersphinx and the rest of docs/conf.py follow cookiecutter-py's template (its ADR 020), which has no nitpicky.
-revisit-when: The docs stop being hosted on ReadTheDocs; the README needs a construct GitHub, PyPI or Sphinx cannot render; the README stops being RST; the template's docs/conf.py gains nitpicky; cookiecutter-py declines nitpicky; an unresolved cross-reference reaches the published docs.
+summary: Publish the docs with Sphinx (not MkDocs), the user pages under docs/usage/ in reStructuredText (not Markdown through myst-parser), and a landing page that includes README.rst rather than copying it, so the README must render on GitHub, PyPI and Sphinx alike, which project.yml's readme job checks with twine; strict builds, intersphinx and the rest of docs/conf.py follow cookiecutter-py's template (its ADR 020).
+revisit-when: The docs stop being hosted on ReadTheDocs; the README needs a construct GitHub, PyPI or Sphinx cannot render; the README stops being RST.
+revisit-discharged-by: [26]
 ---
 
 # 025: Publish RST User Docs Landing on the README
@@ -18,9 +19,9 @@ converge with the template's.
 
 The template now owns `docs/conf.py`, the docs pre-commit hook and the
 docs CI job. Its `conf.py` enables intersphinx for Python's docs and has
-no `nitpicky`; its hook and CI job build with `-W` ([cookiecutter-py ADR
-020][]). `docs/index.rst` and `README.rst` are seed files, which paddock
-owns.
+no `nitpicky` (until 1.7.0: [ADR 026][]); its hook and CI job build with
+`-W` ([cookiecutter-py ADR 020][]). `docs/index.rst` and `README.rst` are
+seed files, which paddock owns.
 
 ## Options
 
@@ -38,17 +39,18 @@ Keep paddock's own decisions (Sphinx, RST pages, the README landing page,
 its PyPI check) and take the template's `conf.py` whole, adding only the
 stylesheet for the reference table.
 
-**Cons:** An unresolved Python cross-reference renders as plain text and
-the build stays green until the template turns `nitpicky` on. Every
+**Cons:** ~~An unresolved Python cross-reference renders as plain text and
+the build stays green until the template turns `nitpicky` on.~~ The
+template turned it on in 1.7.0 (ADR 026). Every
 docs-affecting build fetches Python's intersphinx inventory, so it needs
 the network.
 
 ## Decision
 
 Option 2. Nothing in `nitpicky` or intersphinx is specific to paddock, so
-each belongs to the template; `nitpicky` is proposed to it, and paddock
-builds without warnings with it on. What ADR 023 decided otherwise stands,
-restated here.
+each belongs to the template; ~~`nitpicky` is proposed to it, and paddock
+builds without warnings with it on~~ the template adopted `nitpicky`, which
+ADR 026 keeps. What ADR 023 decided otherwise stands, restated here.
 
 **Toolchain.** Sphinx with the `sphinx_rtd_theme`, and autodoc with
 napoleon for the [`paddock.agents`][] extension point, as the template
@@ -101,6 +103,7 @@ alternatives.
   adds to the template-owned file.
 
 [ADR 023]: 023-write-the-user-docs-in-restructuredtext.md
+[ADR 026]: 026-build-the-docs-with-the-template-s-nitpicky.md
 [cookiecutter-py ADR 020]: https://github.com/todofixthis/cookiecutter-py/blob/1.4.0/docs/adr/020-fail-generated-docs-builds-on-sphinx-warnings-in-ci-and-before-commit.md
 [cookiecutter-py's template]: https://github.com/todofixthis/cookiecutter-py
 [`docs/index.rst`]: ../index.rst
