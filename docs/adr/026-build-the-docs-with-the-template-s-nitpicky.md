@@ -2,7 +2,7 @@
 status: Accepted
 date: 2026-11-26
 scope: [docs/conf.py]
-summary: "Keep the template's nitpicky = True in docs/conf.py, not a local opt-out; fix a warning about paddock's own object in its docs, never in nitpick_ignore, which lists only a third-party target no mapped inventory resolves and never ADR 023's collections.abc.Mapping entry."
+summary: "Keep the template's nitpicky = True in docs/conf.py, not a local opt-out; fix a warning about paddock's own object in its docs, never in nitpick_ignore, which lists only a third-party target no mapped inventory resolves and never the collections.abc.Mapping entry docs/conf.py carried under ADR 023."
 revisit-when: The template drops nitpicky; nitpick_ignore grows beyond a few entries; an unresolved cross-reference reaches the published docs despite nitpicky.
 ---
 
@@ -28,9 +28,9 @@ Keep the template's lines as they arrived.
 **Cons:** a change that adds an unresolved target fails the build until it
 documents the target or adds an ignore entry.
 
-### Option 2: Restore ADR 023's ignore list
+### Option 2: Restore the ignore list kept under ADR 023
 
-[ADR 023][]'s build ignored
+Under [ADR 023][], `docs/conf.py` ignored
 `("py:class", "collections.abc.Mapping")` because it mapped no inventory.
 
 **Cons:** Python's inventory now resolves that target, so the entry ignores
