@@ -42,5 +42,5 @@ RUN curl -fsSL "https://deb.nodesource.com/setup_${NODE_VERSION}.x" | bash - \
 # it went unused.
 ARG AGENT=opencode
 # renovate: datasource=npm depName=@opencode/cli
-ARG OPENCODE_VERSION=2.3.2
+ARG OPENCODE_VERSION=2.4.1
 RUN npm install -g "@opencode/cli@${OPENCODE_VERSION}"
