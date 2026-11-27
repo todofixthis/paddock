@@ -316,7 +316,40 @@ as `-e` flags by the same rule, and the command `[*get_command(), *get_server_ar
 
 ### Omnigent (provisional)
 
-Built after a throwaway spike. Intended shape:
+Two spikes have run (2026-11-21 in a sandbox, 2026-11-23 on a workstation, both against
+omnigent 0.23.0). Decided since, with Phoenix, and superseding the intended shape below
+where they differ:
+
+- **The harness is part of the client**, not an argument: client `omnigent-claude`,
+  command `omnigent claude`. `--server` must follow the subcommand, which the existing
+  placement of server arguments then gives; `OMNIGENT_SERVER` is not read.
+- **An account per project.** The server's secret is its admin password and never
+  enters a client. Paddock creates an account for each project and gives the client
+  that account's token file, in a `~/.omnigent` directory it keeps per project. With
+  one shared admin, any project's client could run a shell in any other's.
+- **Claude's config lives in a named volume of paddock's own**, with
+  `CLAUDE_CONFIG_DIR` pointing at it, not in the host's `~/.claude`: Omnigent rewrites
+  `.claude.json` by rename, which a single-file mount refuses, and a new `.claude.json`
+  appearing in the host's directory would surprise its owner.
+- **Telemetry and other defaults are left as Omnigent ships them**
+  (`docs/future/agent-environment-settings.md`).
+- **The release that carries it is a beta** until it has been used in the field.
+
+The spikes answered the four questions below: a client gets a token without an
+interactive login by paddock logging in over HTTP and writing Omnigent's token file;
+`bwrap` does not run in an unprivileged container, and the Claude harness never calls
+it; `omnigent claude` attaches correctly under `docker run -it`; and the server is
+named by `--server` after the subcommand.
+
+Still open, and the account-per-project decision rests on the first:
+
+- A full turn on a non-admin account's own login token has not been run.
+- Whether two containers can share one `~/.omnigent` at once, which decides whether
+  that directory is kept per project or per run.
+- Whether Claude Code can be signed in, and stays signed in, from an empty config
+  volume through `omnigent claude`.
+
+The intended shape before the spikes:
 
 - **Client `omnigent`:** `DEFAULT_SERVER = "omnigent"`, `PROTOCOL = "omnigent"`, command
   `omnigent`. The harness is the first `extra_args` entry (`["claude"]`). It mounts
