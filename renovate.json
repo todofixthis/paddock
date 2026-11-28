@@ -101,7 +101,7 @@
   ],
   "lockFileMaintenance": {
     "automerge": true,
-    "description": "Refresh uv.lock weekly, merging once CI passes, so transitive dependencies reach the project without a direct pin (ADR 013 in todofixthis/cookiecutter-py).",
+    "description": "Refresh uv.lock, and infra/github/.terraform.lock.hcl once committed, weekly, merging once CI passes, so transitive dependencies reach the project without a direct pin (ADR 013 in todofixthis/cookiecutter-py); the Terraform lock needs no plan (ADR 025).",
     "enabled": true
   },
   "packageRules": [
@@ -138,6 +138,12 @@
         "README.rst",
         "images/*.Dockerfile"
       ]
+    },
+    {
+      "description": "Never bump the GitHub provider's major: the todofixthis Terraform module owns that constraint, so a new major arrives through a module release (ADR 001 in todofixthis/terraform-github-repository; ADR 025 in todofixthis/cookiecutter-py).",
+      "enabled": false,
+      "matchPackageNames": ["integrations/github"],
+      "matchUpdateTypes": ["major"]
     }
   ]
 }
