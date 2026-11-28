@@ -11,7 +11,7 @@ requires-python = ">=3.12"
 readme = "README.rst"
 license = "MIT"
 dependencies = [
-    "phx-class-registry>=5.2.1,<6.0.0",
+    "phx-class-registry>=6.0.0,<6.1.0",
     "phx-filters>=4.0.0a2,<5",
 ]
 
