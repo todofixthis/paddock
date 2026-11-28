@@ -111,7 +111,6 @@
       "matchDepNames": ["python"]
     },
     {
-<<<<<<< before updating
       "description": "Track Claude Code's stable channel rather than latest, which moves almost daily",
       "followTag": "stable",
       "matchPackageNames": [
@@ -139,12 +138,12 @@
         "README.rst",
         "images/*.Dockerfile"
       ]
-=======
+    },
+    {
       "description": "Never bump the GitHub provider's major: the todofixthis Terraform module owns that constraint, so a new major arrives through a module release (ADR 001 in todofixthis/terraform-github-repository; ADR 025 in todofixthis/cookiecutter-py).",
       "enabled": false,
       "matchPackageNames": ["integrations/github"],
       "matchUpdateTypes": ["major"]
->>>>>>> after updating
     }
   ]
 }
